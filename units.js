@@ -298,7 +298,10 @@ function inferKindDiv(a,b,resultDim){
 }
 
 function ensureNotAbsoluteForProduct(q){
-  if(q instanceof Quantity&&q.kind==="absolute-temperature")throw new AffineUnitError("Absolute temperatures cannot be multiplied, divided, or exponentiated; use a temperature difference or convert explicitly");
+  if(q instanceof Quantity&&q.kind==="absolute-temperature"){
+    if(q.displayUnit&&q.displayUnit.id==="K"&&M.isZero(q.displayUnit.offset))return;
+    throw new AffineUnitError("Affine absolute temperatures cannot be multiplied, divided, or exponentiated; convert to kelvin or use a temperature difference");
+  }
 }
 function asQuantityOrScalar(x){return x;}
 function qAdd(a,b){
