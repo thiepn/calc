@@ -13,7 +13,7 @@ Calc currently includes:
 - canonical Matrix/Vector/subspace objects and certified numerical decompositions;
 - typed Dataset/probability/inference/regression systems;
 - Graph V2 with explicit, piecewise, parametric, polar, implicit and inequality plots;
-- a registry-driven specialized calculator system with finance, geometry, date, programmer and number-theory tools;
+- a registry-driven specialized calculator system with finance, geometry, date, programmer and number-theory tools;\n- a safe declarative Custom Formula Builder with Draft/Active/Archived lifecycle, tests, quantities, relations, revision history, and strict `.calctool.json` import/export;
 - persistent history/worksheets;
 - offline/installable PWA support.
 
@@ -119,6 +119,74 @@ Prime factorization
 Divisors
 ```
 
+## Custom Formula Builder
+
+Custom Builder lives inside the Tools workspace.
+
+It supports three safe modes:
+
+```text
+Formula
+Relation
+Built-in proxy
+```
+
+Formula example:
+
+```text
+variables:
+  distance · quantity · km
+  time     · quantity · hr
+
+expression:
+  distance / time
+
+output:
+  km/hr
+```
+
+Activation requires:
+
+```text
+schema validation
+→ AST / identifier validation
+→ semantic / dimensional validation
+→ deterministic tests
+→ Active
+```
+
+Custom tools cannot execute JavaScript, `eval`, network requests, DOM code, or browser APIs.
+
+Lifecycle:
+
+```text
+Draft
+Active
+Archived
+```
+
+Active custom tools compile into ordinary `ToolDefinition` objects under stable IDs such as:
+
+```text
+custom.<id>
+```
+
+and then participate in the normal Tools list, search, command palette, and history.
+
+Other builder features include:
+
+- exact Rational scalar inputs where possible;
+- quantity variables and dimensional output validation;
+- scalar relation solving through the certified algebra engine;
+- structured min/max/positive/nonzero constraints;
+- required passing tests before activation;
+- revision history and restore-as-new-Draft;
+- safe duplication of compatible built-in tools;
+- IndexedDB persistence;
+- strict `.calctool.json` import/export;
+- forced-Draft imports with new local IDs;
+- startup isolation for invalid old/corrupt Active manifests.
+
 ## Graph V2
 
 Graph supports:
@@ -168,7 +236,7 @@ eng(ohm, V=12 V, R=6 ohm)
 - `linear-algebra.js` — Phase 5 linear algebra.
 - `statistics.js` / `statistics-worker.js` — Phase 6 probability/statistics/data.
 - `graph.js` / `graph-worker.js` — Phase 7 graph models, geometry and analysis.
-- `tools.js` — Phase 8 Tool Registry, finance, dates, geometry, programmer and number theory.
+- `tools.js` — Phase 8 Tool Registry, finance, dates, geometry, programmer and number theory.\n- `custom-tools.js` — Phase 9 safe custom formulas, relations, validation, lifecycle and import/export.
 - `app.js` — application state, persistence, workspaces and UI routing.
 - `styles.css` — responsive design system.
 - `sw.js` + `manifest.webmanifest` — offline/installable PWA runtime.
@@ -189,8 +257,8 @@ GitHub Actions runs cumulative certification for:
 - Linear Algebra V2;
 - Probability/Statistics/Data V2;
 - Graphing V2;
-- Specialized Calculators V2.
+- Specialized Calculators V2;\n- Custom Formula Builder.
 
 The Phase 8 registry-wide test executes every enabled generic tool with its declared defaults in addition to deterministic boundary/reference cases.
 
-See the files under `docs/math/` and `docs/release/` for the exact supported semantics, verification scope and deliberate limitations.
+See the files under `docs/math/` and `docs/release/` for the exact supported semantics, verification scope and deliberate limitations. Custom Tools are specified in `docs/math/CUSTOM_TOOLS_SEMANTICS.md`.
