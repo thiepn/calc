@@ -1,0 +1,21 @@
+{
+  "name": "Calc",
+  "short_name": "Calc",
+  "description": "Local-first universal calculator and mathematical workstation.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#111317",
+  "theme_color": "#111317",
+  "orientation": "any",
+  "icons": [
+    {"src":"./icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
+  ],
+  "shortcuts": [
+    {"name":"Calculate","short_name":"Calculate","url":"./#calculate"},
+    {"name":"Graph","short_name":"Graph","url":"./#graph"},
+    {"name":"Matrix","short_name":"Matrix","url":"./#matrix"},
+    {"name":"Worksheet","short_name":"Worksheet","url":"./#worksheet"}
+  ]
+}
