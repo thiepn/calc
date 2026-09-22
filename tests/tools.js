@@ -1,6 +1,7 @@
 "use strict";
 global.window=global;
 require("../math.js");
+require("../algebra.js");
 require("../calculus.js");
 require("../units.js");
 require("../tools.js");
