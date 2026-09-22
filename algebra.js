@@ -715,7 +715,7 @@ function commandResult(display,kind,details){
 }
 function runCommand(raw,options){
   raw=String(raw).trim();options=options||{};
-  var m=raw.match(/^(simplify|expand|factor|solve|inequality|substitute)\s*\((.*)\)$/s);if(!m)return null;
+  var m=raw.match(/^(simplify|expand|collect|factor|solve|system|inequality|substitute)\s*\((.*)\)$/s);if(!m)return null;
   var cmd=m[1],args=splitArgs(m[2]);
   if(cmd==="simplify"){if(args.length<1||args.length>2)throw new M.ArityError("simplify",1,args.length);var se=simplify(args[0],args[1]),sd=se.toString();if(se.restrictions.length)sd+="   where "+se.restrictions.map(r=>r.toString()).join(", ");return commandResult(sd,"symbolic",{value:se,metadata:{operation:"simplify",restrictions:se.restrictions.map(r=>r.toString())}});}
   if(cmd==="expand"){var ex=expand(args[0],args[1]),ed=ex.toString();if(ex.restrictions.length)ed+="   where "+ex.restrictions.map(r=>r.toString()).join(", ");return commandResult(ed,"symbolic",{value:ex,metadata:{operation:"expand",restrictions:ex.restrictions.map(r=>r.toString())}});}
