@@ -955,22 +955,38 @@ function bindEvents(){
   $$("[data-result-action]").forEach(function(b){b.onclick=function(){if(b.dataset.resultAction==="copy")copyText($("#exactResult").textContent+($("#approxResult").textContent?" "+$("#approxResult").textContent:""));else if(b.dataset.resultAction==="graph")graphCurrent();else if(state.lastResult){state.env.ans=state.lastResult.value;toast("Saved as ans");}};});
   $$("[data-quick]").forEach(function(b){b.onclick=function(){state.selectedTool=b.dataset.quick;renderToolList();renderTool();switchView("tools");};});
 
-  $("#graphPlotBtn").onclick=plotGraph;$("#graphReset").onclick=resetGraph;
+  $("#graphPlotBtn").onclick=plotGraph;$("#graphReset").onclick=resetGraph;$("#graphExport").onclick=exportGraphPng;$("#graphPiTicks").onchange=drawGraph;
+  $("#graphRoots").onclick=analyzeGraphRoots;$("#graphIntersections").onclick=analyzeGraphIntersections;$("#graphExtrema").onclick=analyzeGraphExtrema;$("#graphTangent").onclick=analyzeGraphTangent;$("#graphIntegral").onclick=analyzeGraphIntegral;
+  $("#graphScatter").onclick=graphAddScatter;$("#graphRegression").onclick=graphAddRegression;$("#graphHistogram").onclick=graphAddHistogram;$("#graphBoxplot").onclick=graphAddBoxplot;$("#graphDistribution").onclick=graphAddDistribution;
   $("#graphCanvas").addEventListener("wheel",function(e){
-    e.preventDefault();var rect=graphCanvas.getBoundingClientRect(),px=e.clientX-rect.left,py=e.clientY-rect.top,p=screenToWorld(px,py),factor=Math.exp(e.deltaY*.0012),g=state.graph;
-    g.xMin=p[0]+(g.xMin-p[0])*factor;g.xMax=p[0]+(g.xMax-p[0])*factor;g.yMin=p[1]+(g.yMin-p[1])*factor;g.yMax=p[1]+(g.yMax-p[1])*factor;drawGraph();
+    e.preventDefault();var rect=graphCanvas.getBoundingClientRect(),s=graphSize(),world=graphSession().viewport.screenToWorld(e.clientX-rect.left,e.clientY-rect.top,s.w,s.h),factor=Math.exp(e.deltaY*.0012);
+    graphSession().setViewport(graphSession().viewport.zoomAt(world[0],world[1],factor));drawGraph();
   },{passive:false});
-  $("#graphCanvas").addEventListener("pointerdown",function(e){graphCanvas.setPointerCapture(e.pointerId);state.graph.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(state.graph.pointers.size===1)state.graph.drag={x:e.clientX,y:e.clientY,v:{xMin:state.graph.xMin,xMax:state.graph.xMax,yMin:state.graph.yMin,yMax:state.graph.yMax}};});
-  $("#graphCanvas").addEventListener("pointermove",function(e){
-    var rect=graphCanvas.getBoundingClientRect(),wx=screenToWorld(e.clientX-rect.left,e.clientY-rect.top);$("#graphReadout").textContent="x: "+M.formatNumber(wx[0],7)+" · y: "+M.formatNumber(wx[1],7);
-    if(!state.graph.pointers.has(e.pointerId))return;
-    state.graph.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
-    if(state.graph.pointers.size===1&&state.graph.drag){
-      var s=graphSize(),g=state.graph,d=state.graph.drag,dx=e.clientX-d.x,dy=e.clientY-d.y,spanX=d.v.xMax-d.v.xMin,spanY=d.v.yMax-d.v.yMin;
-      g.xMin=d.v.xMin-dx/s.w*spanX;g.xMax=d.v.xMax-dx/s.w*spanX;g.yMin=d.v.yMin+dy/s.h*spanY;g.yMax=d.v.yMax+dy/s.h*spanY;drawGraph();
+  $("#graphCanvas").addEventListener("pointerdown",function(e){
+    graphCanvas.setPointerCapture(e.pointerId);state.graph.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(state.graph.pointers.size===1)state.graph.drag={x:e.clientX,y:e.clientY,viewport:graphSession().viewport};
+    if(state.graph.pointers.size===2){
+      var pts=Array.from(state.graph.pointers.values()),dx=pts[1].x-pts[0].x,dy=pts[1].y-pts[0].y;
+      state.graph.pinch={distance:Math.hypot(dx,dy),cx:(pts[0].x+pts[1].x)/2,cy:(pts[0].y+pts[1].y)/2,viewport:graphSession().viewport};state.graph.drag=null;
     }
   });
-  function endPointer(e){state.graph.pointers.delete(e.pointerId);state.graph.drag=null;}
+  $("#graphCanvas").addEventListener("pointermove",function(e){
+    var rect=graphCanvas.getBoundingClientRect(),s=graphSize(),world=graphSession().viewport.screenToWorld(e.clientX-rect.left,e.clientY-rect.top,s.w,s.h),read="x: "+M.formatNumber(world[0],7)+" · y: "+M.formatNumber(world[1],7);
+    try{var selected=selectedGraphSeries(1),trace=selected.trace(world[0],graphSession().sliderEnv());if(trace&&trace.finite)read="x: "+M.formatNumber(trace.x,7)+" · "+selected.label+": "+M.formatNumber(trace.y,7);}catch(err){}
+    $("#graphReadout").textContent=read;
+    if(!state.graph.pointers.has(e.pointerId))return;state.graph.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(state.graph.pointers.size===1&&state.graph.drag){
+      var d=state.graph.drag;graphSession().setViewport(d.viewport.panPixels(e.clientX-d.x,e.clientY-d.y,s.w,s.h));drawGraph();
+    }else if(state.graph.pointers.size===2&&state.graph.pinch){
+      var pts=Array.from(state.graph.pointers.values()),dx=pts[1].x-pts[0].x,dy=pts[1].y-pts[0].y,dist=Math.max(1,Math.hypot(dx,dy)),cx=(pts[0].x+pts[1].x)/2,cy=(pts[0].y+pts[1].y)/2,p=state.graph.pinch,base=p.viewport,localX=p.cx-rect.left,localY=p.cy-rect.top,anchor=base.screenToWorld(localX,localY,s.w,s.h),zoomed=base.zoomAt(anchor[0],anchor[1],p.distance/dist);
+      graphSession().setViewport(zoomed.panPixels(cx-p.cx,cy-p.cy,s.w,s.h));drawGraph();
+    }
+  });
+  function endPointer(e){
+    state.graph.pointers.delete(e.pointerId);
+    if(state.graph.pointers.size===0){state.graph.drag=null;state.graph.pinch=null;}
+    else if(state.graph.pointers.size===1){var p=Array.from(state.graph.pointers.values())[0];state.graph.drag={x:p.x,y:p.y,viewport:graphSession().viewport};state.graph.pinch=null;}
+  }
   $("#graphCanvas").addEventListener("pointerup",endPointer);$("#graphCanvas").addEventListener("pointercancel",endPointer);
 
   $("#matrixRows").onchange=function(){renderMatrixGrid(true);};$("#matrixCols").onchange=function(){renderMatrixGrid(true);};
@@ -988,7 +1004,7 @@ function bindEvents(){
 }
 
 async function init(){
-  setTheme(state.theme);bindEvents();renderMatrixGrid(false);renderToolList();renderTool();renderDistributionParams();populateDataControls();
+  setTheme(state.theme);state.graph.session=new G.GraphSession({viewport:new G.Viewport(-10,10,-10,10),env:state.env});bindEvents();renderMatrixGrid(false);renderToolList();renderTool();renderDistributionParams();populateDataControls();
   $("#graphExpressions").value="sin(x)\nx^2 / 5";plotGraph();
   try{state.history=(await dbAll("history")).sort(function(a,b){return b.time-a.time;});}catch(e){}
   await loadWorksheets();
