@@ -39,6 +39,15 @@ function exactFold(op,a,b){
 }
 function astKey(n){return printAst(n);}
 function sameAst(a,b){return astKey(a)===astKey(b);}
+function canonicalCompare(a,b,op){
+  var al=isLit(a),bl=isLit(b);
+  if(al!==bl){
+    if(op==="*")return al?-1:1;
+    if(op==="+")return al?1:-1;
+  }
+  var ak=astKey(a),bk=astKey(b);
+  return ak<bk?-1:ak>bk?1:0;
+}
 
 function precedence(n){
   if(!n)return 100;
@@ -147,6 +156,7 @@ function simplifyAst(ast){
       if(isZeroNode(l))return r;if(isZeroNode(r))return l;
       if(isLit(r)&&isRat(r.value)&&r.value.n<0n)return simplifyAst(bin("-",l,lit(r.value.neg())));
       if(sameAst(l,r))return bin("*",lit(rat(2)),l);
+      if(canonicalCompare(l,r,"+")>0){var at=l;l=r;r=at;}
     }else if(ast.op==="-"){
       if(isZeroNode(r))return l;if(isZeroNode(l))return simplifyAst(unary("-",r));if(sameAst(l,r))return lit(rat(0));
       if(isLit(r)&&isRat(r.value)&&r.value.n<0n)return simplifyAst(bin("+",l,lit(r.value.neg())));
@@ -154,6 +164,7 @@ function simplifyAst(ast){
       if(isZeroNode(l)||isZeroNode(r))return lit(rat(0));if(isOneNode(l))return r;if(isOneNode(r))return l;
       if(isMinusOneNode(l))return simplifyAst(unary("-",r));if(isMinusOneNode(r))return simplifyAst(unary("-",l));
       if(sameAst(l,r))return bin("^",l,lit(rat(2)));
+      if(canonicalCompare(l,r,"*")>0){var mt=l;l=r;r=mt;}
     }else if(ast.op==="/"){
       if(isZeroNode(l))return lit(rat(0));if(isOneNode(r))return l;if(sameAst(l,r))return lit(rat(1));
     }else if(ast.op==="^"){
