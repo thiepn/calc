@@ -309,7 +309,7 @@ function rootCandidates(plot,viewport,env,options){
     const x=i===options.samples?viewport.xMax:viewport.xMin+i*dx,y=plot.evaluate(x,env);
     if(Number.isFinite(prevY)&&Number.isFinite(y)){
       if(Math.abs(prevY)<=options.residual)roots.push(prevX);
-      if(Math.sign(prevY)!==Math.sign(y)){try{roots.push(C.hybridRoot(plot.source,plot.variable,prevX,x,{absTol:1e-12,relTol:1e-10}).root);}catch(e){}}
+      if(Math.sign(prevY)!==Math.sign(y)){try{roots.push(C.hybridRoot(plot.source,plot.variable,prevX,x,{absTol:1e-12,relTol:1e-10,env:env}).root);}catch(e){}}
     }
     prevX=x;prevY=y;
   }
@@ -322,7 +322,7 @@ function rootCandidates(plot,viewport,env,options){
 }
 function rootCandidatesSimple(plot,viewport,env,samples){
   const roots=[],dx=viewport.xSpan/samples;let x0=viewport.xMin,y0=plot.evaluate(x0,env);
-  for(let i=1;i<=samples;i++){const x1=i===samples?viewport.xMax:viewport.xMin+i*dx,y1=plot.evaluate(x1,env);if(Number.isFinite(y0)&&Number.isFinite(y1)&&Math.sign(y0)!==Math.sign(y1)){try{roots.push(C.hybridRoot(plot.source,plot.variable,x0,x1).root);}catch(e){}}x0=x1;y0=y1;}return dedupeNumbers(roots,1e-8);
+  for(let i=1;i<=samples;i++){const x1=i===samples?viewport.xMax:viewport.xMin+i*dx,y1=plot.evaluate(x1,env);if(Number.isFinite(y0)&&Number.isFinite(y1)&&Math.sign(y0)!==Math.sign(y1)){try{roots.push(C.hybridRoot(plot.source,plot.variable,x0,x1,{env:env}).root);}catch(e){}}x0=x1;y0=y1;}return dedupeNumbers(roots,1e-8);
 }
 function findRoots(plot,viewport,env,options){if(!(plot instanceof FunctionPlot))throw new GraphUnsupportedError("Root analysis currently requires FunctionPlot");return rootCandidates(plot,viewport,env,options).map(x=>({x:x,y:plot.evaluate(x,env),kind:"root"}));}
 function findIntersections(a,b,viewport,env,options){
@@ -333,7 +333,7 @@ function findIntersections(a,b,viewport,env,options){
 function findExtrema(plot,viewport,env,options){
   if(!(plot instanceof FunctionPlot))throw new GraphUnsupportedError("Extrema analysis requires FunctionPlot");
   const d=C.differentiate(plot.source,plot.variable,1),dp=new FunctionPlot(d.toString(),{variable:plot.variable}),crit=findRoots(dp,viewport,env,options),second=C.differentiate(plot.source,plot.variable,2),out=[];
-  for(const r of crit){let kind="stationary";try{const v=finiteEval(second.ast,{[plot.variable]:r.x});if(v>1e-9)kind="minimum";else if(v<-1e-9)kind="maximum";}catch(e){}out.push({x:r.x,y:plot.evaluate(r.x,env),kind:kind});}
+  for(const r of crit){let kind="stationary";try{const v=finiteEval(second.ast,envWith(env,{[plot.variable]:r.x}));if(v>1e-9)kind="minimum";else if(v<-1e-9)kind="maximum";}catch(e){}out.push({x:r.x,y:plot.evaluate(r.x,env),kind:kind});}
   return out;
 }
 function tangentAt(plot,x,env){
