@@ -125,8 +125,11 @@ assert(tris.every(t=>Math.abs(t.A+t.B+t.C-180)<1e-8),"SSA angle sums");
 tris=T.solveTriangle({a:5,b:11,c:null,A:30,B:null,C:null});
 eq(tris.length,0,"SSA impossible zero solutions");
 
-const circle=T.REGISTRY.execute("circle",{radius:3}).value;
+const circle=T.REGISTRY.execute("circle",{radius:3,diameter:"",circumference:"",area:""}).value;
 approx(circle.area,9*Math.PI,1e-12,"circle area");
+const circleFromArea=T.solveCircle({radius:null,diameter:null,circumference:null,area:Math.PI*25});
+approx(circleFromArea.radius,5,1e-12,"circle solve from area");
+throwsCode(()=>T.solveCircle({radius:2,diameter:4}),"GEOMETRY_ERROR","circle requires one known measure");
 const rect=T.REGISTRY.execute("rectangle",{width:3,height:4}).value;
 approx(rect.diagonal,5,1e-12,"rectangle diagonal");
 
@@ -145,6 +148,8 @@ eq(T.BitInteger.parse("80",16,8,true).shrLogical(1).format(16),"40","logical rig
 eq(T.BitInteger.parse("81",16,8,true).rol(1).format(16),"3","rotate left wraps");
 eq(T.BitInteger.parse("1",16,8,true).ror(1).format(16),"80","rotate right wraps");
 eq(T.BitInteger.parse("FF",16,8,true).add(T.BitInteger.parse("02",16,8,true)).format(16),"1","width-aware addition wraps");
+throwsCode(()=>T.BitInteger.parse("128",10,8,true,"strict"),"PROGRAMMER_ERROR","strict signed overflow rejected");
+eq(T.BitInteger.parse("128",10,8,true,"wrap").value(),-128n,"wrap signed overflow explicit");
 
 // Number theory.
 const eg=T.extGcd(240n,46n);
@@ -165,5 +170,27 @@ eq(T.divisors(12n).join(","),"1,2,3,4,6,12","divisors");
 // Specialized tools are present in the same registry even though their UI runtime is custom.
 assert(T.REGISTRY.get("unit-converter").specialized,"unit converter registered specialized");
 assert(T.REGISTRY.get("engineering-relations").specialized,"engineering registered specialized");
+
+// Structured ToolResult serialization retains non-JSON-native types.
+const richResult={
+  toolResult:true,
+  toolId:"serialization-fixture",
+  value:{
+    bigint:12345678901234567890n,
+    money:T.Money.fromMajor(12.34,"EUR"),
+    date:T.DateValue.parse("2026-09-22"),
+    period:new T.CalendarPeriod(1,2,3),
+    bits:T.BitInteger.parse("FF",16,8,true),
+    rational:new M.Rational(1n,3n)
+  }
+};
+const encoded=JSON.parse(JSON.stringify(T.serializeToolResult(richResult)));
+const decoded=T.deserializeToolResult(encoded);
+eq(decoded.value.bigint,12345678901234567890n,"tool result BigInt round trip");
+eq(decoded.value.money.toString(),"EUR 12.34","tool result Money round trip");
+eq(decoded.value.date.toString(),"2026-09-22","tool result Date round trip");
+eq(decoded.value.period.toString(),"1y 2m 3d","tool result period round trip");
+eq(decoded.value.bits.value(),-1n,"tool result BitInteger round trip");
+eq(decoded.value.rational.toString(),"1/3","tool result Rational round trip");
 
 console.log("Specialized calculators V2 certification tests passed");
