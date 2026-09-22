@@ -193,15 +193,27 @@ function deserializeScalar(d){
 }
 
 function pivotAbs(v){const a=sAbs(v);return Number.isFinite(a)?a:0;}
+function choosePivot(rows,start,col,domain,tol){
+  if(domain==="symbolic"){
+    for(let r=start;r<rows.length;r++)if(!sZero(rows[r][col],tol))return r;
+    return -1;
+  }
+  let p=start,best=-1;
+  for(let r=start;r<rows.length;r++){
+    const a=pivotAbs(rows[r][col]);if(a>best){best=a;p=r;}
+  }
+  if(best<=(tol||0))return -1;
+  return p;
+}
+
 function determinant(A){
   if(!(A instanceof Matrix))A=new Matrix(A);
   if(!A.isSquare())throw new MatrixShapeError("Determinant requires a square matrix");
   const n=A.rows;if(n===0)return rat(1);
   const R=A.toRows();let sign=1,det=rat(1);
   for(let c=0;c<n;c++){
-    let p=c,best=pivotAbs(R[c][c]);
-    for(let r=c+1;r<n;r++){const a=pivotAbs(R[r][c]);if(a>best){best=a;p=r;}}
-    if(sZero(R[p][c],DEFAULT_NUMERICAL.absTol))return rat(0);
+    let p=choosePivot(R,c,c,A.domain,A.exact?0:DEFAULT_NUMERICAL.absTol);
+    if(p<0)return rat(0);
     if(p!==c){const t=R[p];R[p]=R[c];R[c]=t;sign*=-1;}
     const pivot=R[c][c];det=sMul(det,pivot);
     for(let r=c+1;r<n;r++){
@@ -217,9 +229,8 @@ function rref(A,options){
   if(!(A instanceof Matrix))A=new Matrix(A);options=Object.assign({},DEFAULT_NUMERICAL,options||{});
   const R=A.toRows(),ops=[],pivots=[];let lead=0;
   for(let r=0;r<A.rows&&lead<A.cols;r++){
-    let p=r,best=pivotAbs(R[r][lead]);
-    for(let i=r+1;i<A.rows;i++){const x=pivotAbs(R[i][lead]);if(x>best){best=x;p=i;}}
-    if(sZero(R[p][lead],A.exact?0:options.rankTol)){lead++;r--;continue;}
+    let p=choosePivot(R,r,lead,A.domain,A.exact?0:options.rankTol);
+    if(p<0){lead++;r--;continue;}
     if(p!==r){const t=R[p];R[p]=R[r];R[r]=t;ops.push({type:"swap",a:r,b:p});}
     const pv=R[r][lead];
     if(!sOne(pv,A.exact?0:options.rankTol)){
@@ -441,6 +452,14 @@ function A2solve(p,domain){return A.solveEquation(p.toString()+" = 0","lambda",{
 function solutionValueNumeric(v){
   try{return M.evaluateAst(v.expression.ast,{}, {complex:true,angle:"RAD"},0);}catch(e){return null;}
 }
+function polynomialRootMultiplicity(poly,root){
+  if(!(root instanceof M.Rational))return 1;
+  let p=poly.clone(),m=0,factor=new A.Polynomial(poly.variable);factor.set(1,rat(1));factor.set(0,root.neg());
+  while(p.degree>=1){
+    const dm=p.divmod(factor);if(!dm.remainder.isZero())break;p=dm.quotient;m++;
+  }
+  return Math.max(1,m);
+}
 function eigenspace(A,lambda,options){
   if(!(A instanceof Matrix))A=new Matrix(A);const B=A.sub(Matrix.identity(A.rows).scale(lambda));return nullSpace(B,options);
 }
@@ -453,9 +472,15 @@ function eigenAnalysis(A,options){
     const e=jacobiEigenSymmetric(A,options);
     return {mode:"numeric-symmetric",values:e.values,eigenvectors:e.vectors,residual:e.residual,method:e.method};
   }
-  const vals=exactEigenvalues(A,options.domain||"complex"),spaces=[];
-  if(vals.type==="finite")for(const sv of vals.values){const l=solutionValueNumeric(sv);if(l!==null)spaces.push({value:sv,scalar:l,space:eigenspace(A,l,options)});}
-  return {mode:"exact",characteristicPolynomial:characteristicPolynomial(A),solutions:vals,eigenspaces:spaces};
+  const charpoly=characteristicPolynomial(A),vals=exactEigenvalues(A,options.domain||"complex"),spaces=[];
+  if(vals.type==="finite")for(const sv of vals.values){
+    const l=solutionValueNumeric(sv);
+    if(l!==null){
+      const space=eigenspace(A,l,options),alg=polynomialRootMultiplicity(charpoly,l);
+      spaces.push({value:sv,scalar:l,space:space,algebraicMultiplicity:alg,geometricMultiplicity:space.dimension()});
+    }
+  }
+  return {mode:"exact",characteristicPolynomial:charpoly,solutions:vals,eigenspaces:spaces,diagonalizable:spaces.reduce((s,x)=>s+x.geometricMultiplicity,0)===A.rows};
 }
 function diagonalize(A,options){
   const e=eigenAnalysis(A,options);if(e.mode==="numeric-symmetric"){
