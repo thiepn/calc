@@ -315,7 +315,28 @@ function projectionOntoBasis(v,basis){
   for(const q of Q){const coeff=q.dot(v),term=q.scale(coeff);out=out.add(term);}
   return out;
 }
+function projectionMatrix(basis){
+  if(!(basis instanceof Basis))throw new MatrixShapeError("Projection matrix requires a Basis");
+  const Q=modifiedGramSchmidt(basis.vectors).vectors;
+  if(!Q.length)return Matrix.zeros(basis.ambientDimension,basis.ambientDimension);
+  const Qm=Matrix.fromColumns(Q);return Qm.multiply(Qm.conjugateTranspose());
+}
+function scalarTriple(u,v,w){return u.dot(v.cross(w));}
 function orthogonalComplement(A,options){return nullSpace(A.conjugateTranspose(),options);}
+
+function solveLinearSystem(B,b,options){
+  if(!(B instanceof Matrix))B=new Matrix(B);if(!(b instanceof Vector))b=new Vector(b);
+  if(B.rows!==b.length)throw new MatrixShapeError("Linear-system dimensions do not match");
+  const aug=new Matrix(B.data.map((row,i)=>row.concat([b.values[i]]))),rr=rref(aug,options),n=B.cols;
+  for(let i=0;i<rr.matrix.rows;i++){
+    let zero=true;for(let j=0;j<n;j++)if(!sZero(rr.matrix.data[i][j],B.exact?0:DEFAULT_NUMERICAL.rankTol)){zero=false;break;}
+    if(zero&&!sZero(rr.matrix.data[i][n],B.exact?0:DEFAULT_NUMERICAL.rankTol))return {type:"inconsistent",particular:null,nullSpace:nullSpace(B,options),rank:B.rank(options),augmentedRank:B.rank(options)+1};
+  }
+  const piv=rr.pivots.filter(c=>c<n),x=Array.from({length:n},()=>rat(0));
+  piv.forEach((col,row)=>{x[col]=rr.matrix.data[row][n];});
+  const ns=nullSpace(B,options),type=ns.dimension()===0?"unique":"infinite";
+  return {type:type,particular:new Vector(x),nullSpace:ns,rank:piv.length,augmentedRank:piv.length,freeVariables:Array.from({length:n},(_,i)=>i).filter(i=>piv.indexOf(i)<0)};
+}
 
 function modifiedGramSchmidt(vectors){
   const Q=[];const R=Array.from({length:vectors.length},()=>Array.from({length:vectors.length},()=>0));
@@ -594,7 +615,7 @@ global.CalcLinearAlgebra={
   LinearAlgebraError:LinearAlgebraError,MatrixShapeError:MatrixShapeError,SingularMatrixError:SingularMatrixError,NumericalStabilityError:NumericalStabilityError,UnsupportedLinearAlgebraError:UnsupportedLinearAlgebraError,PositiveDefiniteError:PositiveDefiniteError,
   Vector:Vector,Matrix:Matrix,Basis:Basis,LinearTransformation:LinearTransformation,
   determinant:determinant,rref:rref,rank:rank,inverse:inverse,nullSpace:nullSpace,columnSpace:columnSpace,rowSpace:rowSpace,orthogonalComplement:orthogonalComplement,
-  changeOfBasis:changeOfBasis,projectionOntoBasis:projectionOntoBasis,modifiedGramSchmidt:modifiedGramSchmidt,
+  changeOfBasis:changeOfBasis,projectionOntoBasis:projectionOntoBasis,projectionMatrix:projectionMatrix,scalarTriple:scalarTriple,solveLinearSystem:solveLinearSystem,modifiedGramSchmidt:modifiedGramSchmidt,
   luDecomposition:luDecomposition,qrDecomposition:qrDecomposition,cholesky:cholesky,svd:svd,pseudoinverse:pseudoinverse,leastSquares:leastSquares,conditionNumber:conditionNumber,numericalRank:numericalRank,
   jacobiEigenSymmetric:jacobiEigenSymmetric,characteristicPolynomial:characteristicPolynomial,cayleyHamiltonResidual:cayleyHamiltonResidual,eigenspace:eigenspace,eigenAnalysis:eigenAnalysis,diagonalize:diagonalize,minimalPolynomial:minimalPolynomial,jordanFormExact:jordanFormExact,
   isSymmetric:isSymmetric,isHermitian:isHermitian,isOrthogonal:isOrthogonal,isUnitary:isUnitary,isPositiveDefinite:isPositiveDefinite,
