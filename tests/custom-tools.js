@@ -153,6 +153,10 @@ assert(revised.history.length===2,"revision snapshot retained");
 const archived=CT.archive(revised);
 eq(archived.status,"archived","archive status");
 assert(archived.history.length===3,"archive snapshot retained");
+const restoredRevision=CT.restoreRevision(archived,0);
+eq(restoredRevision.status,"draft","restored revision returns to draft");
+eq(restoredRevision.id,archived.id,"restored revision keeps stable ID");
+assert(restoredRevision.revision===archived.revision+1,"restoring creates a new revision");
 
 // Built-in duplication is a safe proxy, not copied JavaScript.
 const proxy=CT.duplicateBuiltIn("percentage-of");
@@ -165,6 +169,9 @@ const proxyOut=T.REGISTRY.execute("custom."+proxy.id,{value:300,percent:10},{});
 eq(proxyOut.display,"30","proxy delegates to certified built-in runtime");
 CT.uninstall(proxyActive,T.REGISTRY);
 throwsCode(()=>CT.duplicateBuiltIn("unit-converter"),"CUSTOM_TOOL_VALIDATION_ERROR","specialized built-in proxy blocked");
+assert(CT.canDuplicateBuiltIn("percentage-of"),"compatible built-in duplicate allowed");
+assert(!CT.canDuplicateBuiltIn("split-tip"),"unsupported select-schema duplicate blocked");
+throwsCode(()=>CT.duplicateBuiltIn("split-tip"),"CUSTOM_TOOL_VALIDATION_ERROR","unsafe built-in proxy rejected");
 
 // Strict export/import.
 const exported=CT.exportManifest(activated.manifest);
@@ -179,6 +186,8 @@ assert(CT.validationReport(imported).ok,"imported manifest validates");
 const malicious=JSON.parse(JSON.stringify(exported));
 malicious.evil=true;
 throwsCode(()=>CT.importManifest(JSON.stringify(malicious)),"CUSTOM_TOOL_IMPORT_ERROR","unknown import root key rejected");
+const nested=JSON.parse(JSON.stringify(exported));nested.tool.variables[0].evil=true;
+throwsCode(()=>CT.importManifest(JSON.stringify(nested)),"CUSTOM_TOOL_IMPORT_ERROR","unknown nested variable key rejected");
 
 const badSchema=JSON.parse(JSON.stringify(exported));badSchema.schema="other/v9";
 throwsCode(()=>CT.importManifest(JSON.stringify(badSchema)),"CUSTOM_TOOL_IMPORT_ERROR","unknown schema rejected");
@@ -190,9 +199,16 @@ throwsCode(()=>CT.importManifest(JSON.stringify({schema:CT.SCHEMA,tool:{name:"x"
 const library=new CT.CustomToolLibrary([activated.manifest,imported]);
 eq(library.list().length,2,"library count");
 eq(library.list("active").length,1,"library status filter");
-library.installAll(T.REGISTRY);
+const installReport=library.installAll(T.REGISTRY);
 assert(T.REGISTRY.get("custom."+activated.manifest.id),"library installs active tools");
+assert(installReport.failed.length===0,"valid library install has no failures");
 CT.uninstall(activated.manifest,T.REGISTRY);
+
+const brokenActive=Object.assign({},activated.manifest,{id:"broken-active",expression:"fetch(x)",status:"active"});
+const brokenLibrary=new CT.CustomToolLibrary([brokenActive]);
+const brokenReport=brokenLibrary.installAll(T.REGISTRY);
+eq(brokenReport.installed.length,0,"invalid active tool not installed");
+eq(brokenReport.failed.length,1,"invalid active tool startup failure isolated");
 
 // Compiler does not use Function/eval and formula source remains declarative.
 const compiled=CT.compile(activated.manifest,{skipTests:true});
