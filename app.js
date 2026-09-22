@@ -6,6 +6,7 @@ const C=window.CalcCalculus;
 const U=window.CalcUnits;
 const LA=window.CalcLinearAlgebra;
 const S=window.CalcStatistics;
+const G=window.CalcGraph;
 const $=function(s,r){return (r||document).querySelector(s);};
 const $$=function(s,r){return Array.from((r||document).querySelectorAll(s));};
 const uid=function(){return crypto.randomUUID?crypto.randomUUID():"id-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);};
@@ -24,7 +25,7 @@ const state={
   view:"calculate",angle:localStorage.getItem("calc.angle")||"RAD",precision:12,
   env:{},lastResult:null,theme:localStorage.getItem("calc.theme")||"system",
   installPrompt:null,history:[],worksheets:[],activeWorksheet:null,
-  graph:{xMin:-10,xMax:10,yMin:-10,yMax:10,asts:[],lines:[],drag:null,pointers:new Map()},
+  graph:{session:null,drag:null,pinch:null,pointers:new Map(),geometries:[],worker:null},
   selectedTool:"percent",dataset:null,statisticsWorker:null,dataRevision:0
 };
 
@@ -191,67 +192,175 @@ function graphCurrent(){
 }
 
 const graphCanvas=$("#graphCanvas"),gctx=graphCanvas.getContext("2d");
+function graphSession(){
+  if(!state.graph.session)state.graph.session=new G.GraphSession({viewport:new G.Viewport(-10,10,-10,10),env:state.env});
+  return state.graph.session;
+}
 function resizeGraph(){
-  var rect=graphCanvas.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,3);
-  var w=Math.max(1,Math.round(rect.width*dpr)),h=Math.max(1,Math.round(rect.height*dpr));
+  var rect=graphCanvas.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,3),w=Math.max(1,Math.round(rect.width*dpr)),h=Math.max(1,Math.round(rect.height*dpr));
   if(graphCanvas.width!==w||graphCanvas.height!==h){graphCanvas.width=w;graphCanvas.height=h;}
   gctx.setTransform(dpr,0,0,dpr,0,0);
 }
-function graphSize(){var r=graphCanvas.getBoundingClientRect();return {w:r.width,h:r.height};}
-function worldToScreen(x,y){
-  var s=graphSize(),g=state.graph;
-  return [(x-g.xMin)/(g.xMax-g.xMin)*s.w,s.h-(y-g.yMin)/(g.yMax-g.yMin)*s.h];
-}
-function screenToWorld(px,py){
-  var s=graphSize(),g=state.graph;
-  return [g.xMin+px/s.w*(g.xMax-g.xMin),g.yMax-py/s.h*(g.yMax-g.yMin)];
-}
-function niceStep(span,target){
-  var raw=span/target,p=Math.pow(10,Math.floor(Math.log10(raw))),n=raw/p;
-  return (n<1.5?1:n<3?2:n<7?5:10)*p;
-}
+function graphSize(){var r=graphCanvas.getBoundingClientRect();return {w:Math.max(1,r.width),h:Math.max(1,r.height)};}
+function worldToScreen(x,y){var s=graphSize();return graphSession().viewport.worldToScreen(x,y,s.w,s.h);}
+function screenToWorld(px,py){var s=graphSize();return graphSession().viewport.screenToWorld(px,py,s.w,s.h);}
 function css(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim();}
-function drawGraph(){
-  resizeGraph();var s=graphSize(),g=state.graph,ctx=gctx;
+function graphPalette(index){var palette=[css("--accent"),"#d95f59","#2f9e67","#9166cc","#cc8129","#168fa1","#a65c8d","#6b7fce"];return palette[index%palette.length];}
+function drawGraphAxes(ctx,s,viewport){
   ctx.clearRect(0,0,s.w,s.h);ctx.fillStyle=css("--surface");ctx.fillRect(0,0,s.w,s.h);
-  var xStep=niceStep(g.xMax-g.xMin,10),yStep=niceStep(g.yMax-g.yMin,8);
+  var piMode=$("#graphPiTicks")&&$("#graphPiTicks").checked,xTicks=G.axisTicks(viewport.xMin,viewport.xMax,10,piMode?"pi":"numeric"),yTicks=G.axisTicks(viewport.yMin,viewport.yMax,8,"numeric");
   ctx.lineWidth=1;ctx.strokeStyle=css("--line");ctx.fillStyle=css("--muted");ctx.font="11px "+getComputedStyle(document.body).fontFamily;
   ctx.beginPath();
-  for(var x=Math.ceil(g.xMin/xStep)*xStep;x<=g.xMax;x+=xStep){var sx=worldToScreen(x,0)[0];ctx.moveTo(sx,0);ctx.lineTo(sx,s.h);}
-  for(var y=Math.ceil(g.yMin/yStep)*yStep;y<=g.yMax;y+=yStep){var sy=worldToScreen(0,y)[1];ctx.moveTo(0,sy);ctx.lineTo(s.w,sy);}
+  xTicks.forEach(function(t){var p=viewport.worldToScreen(t.value,0,s.w,s.h);ctx.moveTo(p[0],0);ctx.lineTo(p[0],s.h);});
+  yTicks.forEach(function(t){var p=viewport.worldToScreen(0,t.value,s.w,s.h);ctx.moveTo(0,p[1]);ctx.lineTo(s.w,p[1]);});
   ctx.stroke();
   ctx.strokeStyle=css("--line-strong");ctx.lineWidth=1.2;ctx.beginPath();
-  if(g.xMin<=0&&g.xMax>=0){var ax=worldToScreen(0,0)[0];ctx.moveTo(ax,0);ctx.lineTo(ax,s.h);}
-  if(g.yMin<=0&&g.yMax>=0){var ay=worldToScreen(0,0)[1];ctx.moveTo(0,ay);ctx.lineTo(s.w,ay);}
+  if(viewport.xMin<=0&&viewport.xMax>=0){var ax=viewport.worldToScreen(0,0,s.w,s.h)[0];ctx.moveTo(ax,0);ctx.lineTo(ax,s.h);}
+  if(viewport.yMin<=0&&viewport.yMax>=0){var ay=viewport.worldToScreen(0,0,s.w,s.h)[1];ctx.moveTo(0,ay);ctx.lineTo(s.w,ay);}
   ctx.stroke();
-
-  var palette=[css("--accent"),"#e45649","#2f9e67","#a264d8","#dc8b21","#17a2b8"];
-  g.asts.forEach(function(ast,index){
-    ctx.strokeStyle=palette[index%palette.length];ctx.lineWidth=2;ctx.beginPath();
-    var started=false,prevY=null,samples=Math.max(320,Math.floor(s.w*1.2));
-    for(var i=0;i<=samples;i++){
-      var px=i/samples*s.w,wx=screenToWorld(px,0)[0],wy;
-      try{wy=M.toNumber(M.evaluateAst(ast,Object.assign(Object.create(state.env),{x:new M.Rational(BigInt(Math.round(wx*1e9)),1000000000n)}),calcOptions(false),0));}
-      catch(e){wy=NaN;}
-      if(!Number.isFinite(wy)){started=false;prevY=null;continue;}
-      var py=worldToScreen(wx,wy)[1];
-      var jump=prevY!==null&&Math.abs(py-prevY)>s.h*1.5;
-      if(!started||jump){ctx.moveTo(px,py);started=true;}else ctx.lineTo(px,py);
-      prevY=py;
-    }
-    ctx.stroke();
+  ctx.fillStyle=css("--muted");ctx.font="10px "+getComputedStyle(document.body).fontFamily;
+  var yAxis=viewport.yMin<=0&&viewport.yMax>=0?viewport.worldToScreen(0,0,s.w,s.h)[1]:s.h-2;
+  xTicks.forEach(function(t){if(t.value===0)return;var p=viewport.worldToScreen(t.value,0,s.w,s.h);ctx.fillText(t.label,p[0]+3,Math.min(s.h-4,Math.max(11,yAxis-4)));});
+  var xAxis=viewport.xMin<=0&&viewport.xMax>=0?viewport.worldToScreen(0,0,s.w,s.h)[0]:2;
+  yTicks.forEach(function(t){if(t.value===0)return;var p=viewport.worldToScreen(0,t.value,s.w,s.h);ctx.fillText(t.label,Math.min(s.w-42,Math.max(3,xAxis+4)),p[1]-3);});
+}
+function drawPolyline(ctx,segments,viewport,s,color,width){
+  ctx.strokeStyle=color;ctx.lineWidth=width||2;ctx.setLineDash([]);
+  segments.forEach(function(seg){if(seg.length<2)return;ctx.beginPath();seg.forEach(function(p,i){var q=viewport.worldToScreen(p.x,p.y,s.w,s.h);if(i===0)ctx.moveTo(q[0],q[1]);else ctx.lineTo(q[0],q[1]);});ctx.stroke();});
+}
+function drawPointMarker(ctx,p,viewport,s,color,open,radius){
+  var q=viewport.worldToScreen(p.x,p.y,s.w,s.h);ctx.beginPath();ctx.arc(q[0],q[1],radius||4,0,Math.PI*2);ctx.fillStyle=open?css("--surface"):color;ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=1.8;ctx.stroke();
+}
+function renderGeometry(ctx,geometry,series,index,viewport,s){
+  var color=series.style&&series.style.color||graphPalette(index);
+  if(geometry.type==="polyline"||geometry.type==="parametric"){
+    drawPolyline(ctx,geometry.segments,viewport,s,color,2);
+    (geometry.holes||[]).forEach(function(p){drawPointMarker(ctx,p,viewport,s,color,true,4);});
+    (geometry.endpoints||[]).forEach(function(p){drawPointMarker(ctx,p,viewport,s,color,p.open,4);});
+  }else if(geometry.type==="segments"){
+    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.setLineDash([]);geometry.segments.forEach(function(seg){var a=viewport.worldToScreen(seg[0].x,seg[0].y,s.w,s.h),b=viewport.worldToScreen(seg[1].x,seg[1].y,s.w,s.h);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();});
+  }else if(geometry.type==="inequality"){
+    ctx.save();ctx.fillStyle=color;ctx.globalAlpha=.12;geometry.cells.forEach(function(cell){var a=viewport.worldToScreen(cell.x,cell.y+cell.h,s.w,s.h),b=viewport.worldToScreen(cell.x+cell.w,cell.y,s.w,s.h);ctx.fillRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);});ctx.restore();
+    ctx.save();ctx.strokeStyle=color;ctx.lineWidth=2;if(!geometry.boundaryIncluded)ctx.setLineDash([6,5]);geometry.boundary.forEach(function(seg){var a=viewport.worldToScreen(seg[0].x,seg[0].y,s.w,s.h),b=viewport.worldToScreen(seg[1].x,seg[1].y,s.w,s.h);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();});ctx.restore();
+  }else if(geometry.type==="scatter"){
+    ctx.fillStyle=color;geometry.points.forEach(function(p){var q=viewport.worldToScreen(p.x,p.y,s.w,s.h);if(q[0]<-5||q[0]>s.w+5||q[1]<-5||q[1]>s.h+5)return;ctx.beginPath();ctx.arc(q[0],q[1],3.2,0,Math.PI*2);ctx.fill();});
+  }else if(geometry.type==="histogram"){
+    ctx.save();ctx.fillStyle=color;ctx.globalAlpha=.28;ctx.strokeStyle=color;geometry.bins.forEach(function(b){var a=viewport.worldToScreen(b.lo,0,s.w,s.h),q=viewport.worldToScreen(b.hi,b.count,s.w,s.h);ctx.fillRect(a[0],q[1],q[0]-a[0],a[1]-q[1]);ctx.strokeRect(a[0],q[1],q[0]-a[0],a[1]-q[1]);});ctx.restore();
+  }else if(geometry.type==="boxplot"){
+    var y=viewport.yMin+viewport.ySpan*.14,qMin=viewport.worldToScreen(geometry.min,y,s.w,s.h),q1=viewport.worldToScreen(geometry.q1,y,s.w,s.h),med=viewport.worldToScreen(geometry.median,y,s.w,s.h),q3=viewport.worldToScreen(geometry.q3,y,s.w,s.h),qMax=viewport.worldToScreen(geometry.max,y,s.w,s.h),h=26;
+    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.strokeRect(q1[0],q1[1]-h/2,q3[0]-q1[0],h);ctx.beginPath();ctx.moveTo(qMin[0],qMin[1]);ctx.lineTo(q1[0],q1[1]);ctx.moveTo(q3[0],q3[1]);ctx.lineTo(qMax[0],qMax[1]);ctx.moveTo(med[0],med[1]-h/2);ctx.lineTo(med[0],med[1]+h/2);ctx.stroke();(geometry.outliers||[]).forEach(function(x){drawPointMarker(ctx,{x:x,y:y},viewport,s,color,true,3);});
+  }else if(geometry.type==="distribution"){
+    if(geometry.discrete){
+      ctx.strokeStyle=color;ctx.lineWidth=2;geometry.points.forEach(function(p){var a=viewport.worldToScreen(p.x,0,s.w,s.h),b=viewport.worldToScreen(p.x,p.y,s.w,s.h);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();drawPointMarker(ctx,p,viewport,s,color,false,2.5);});
+    }else drawPolyline(ctx,[geometry.points],viewport,s,color,2);
+  }else if(geometry.type==="vector"){
+    var a=viewport.worldToScreen(geometry.origin.x,geometry.origin.y,s.w,s.h),b=viewport.worldToScreen(geometry.end.x,geometry.end.y,s.w,s.h),ang=Math.atan2(b[1]-a[1],b[0]-a[0]);ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();ctx.beginPath();ctx.moveTo(b[0],b[1]);ctx.lineTo(b[0]-9*Math.cos(ang-.45),b[1]-9*Math.sin(ang-.45));ctx.lineTo(b[0]-9*Math.cos(ang+.45),b[1]-9*Math.sin(ang+.45));ctx.closePath();ctx.fill();
+  }
+}
+function renderGraphMarkers(ctx,session,s){
+  session.markers.forEach(function(m){
+    var series=session.series.find(function(x){return x.id===m.seriesId;})||session.series[0],index=Math.max(0,session.series.indexOf(series)),color=graphPalette(index);
+    if(m.kind==="integral"&&series instanceof G.FunctionPlot){
+      var steps=100,points=[];for(var i=0;i<=steps;i++){var x=m.a+(m.b-m.a)*i/steps,y=series.evaluate(x,session.sliderEnv());if(Number.isFinite(y))points.push({x:x,y:y});}
+      if(points.length>1){ctx.save();ctx.fillStyle=color;ctx.globalAlpha=.12;ctx.beginPath();var z=worldToScreen(points[0].x,0);ctx.moveTo(z[0],z[1]);points.forEach(function(p){var q=worldToScreen(p.x,p.y);ctx.lineTo(q[0],q[1]);});z=worldToScreen(points[points.length-1].x,0);ctx.lineTo(z[0],z[1]);ctx.closePath();ctx.fill();ctx.restore();}
+    }else if(Number.isFinite(m.x)&&Number.isFinite(m.y))drawPointMarker(ctx,m,session.viewport,s,color,false,4.5);
   });
 }
+function drawGraph(){
+  resizeGraph();var s=graphSize(),session=graphSession(),viewport=session.viewport,ctx=gctx;
+  drawGraphAxes(ctx,s,viewport);
+  var env=session.sliderEnv(),geometries=[];
+  session.series.forEach(function(series,index){
+    if(!series.visible)return;
+    try{var geometry=series.geometry(viewport,s.w,s.h,env,{});geometries.push({series:series,geometry:geometry});renderGeometry(ctx,geometry,series,index,viewport,s);}
+    catch(e){geometries.push({series:series,error:e});}
+  });
+  state.graph.geometries=geometries;renderGraphMarkers(ctx,session,s);renderGraphA11y();
+}
 function plotGraph(){
-  var lines=$("#graphExpressions").value.split(/\n/).map(function(x){return x.trim();}).filter(Boolean),asts=[],valid=[];
-  lines.forEach(function(line){try{asts.push(M.parseExpression(line.replace(/^\s*[A-Za-z_]\w*\s*\(x\)\s*=\s*/,"")));valid.push(line);}catch(e){toast("Graph: "+errorMessage(e));}});
-  state.graph.asts=asts;state.graph.lines=valid;renderGraphLegend();drawGraph();
+  var parsed=G.parseGraphText($("#graphExpressions").value,{env:state.env,viewport:graphSession().viewport}),oldViewport=graphSession().viewport;
+  parsed.session.setViewport(oldViewport);state.graph.session=parsed.session;
+  if(parsed.errors.length)toast("Graph: "+parsed.errors.length+" line"+(parsed.errors.length===1?"":"s")+" could not be plotted");
+  renderGraphSliders();renderGraphLegend();populateGraphSeriesSelects();drawGraph();
 }
 function renderGraphLegend(){
-  var box=$("#graphLegend");box.innerHTML="";
-  state.graph.lines.forEach(function(line){var d=document.createElement("div");d.className="legend-item";var sw=document.createElement("span");sw.className="legend-swatch";var t=document.createElement("span");t.textContent=line;d.append(sw,t);box.appendChild(d);});
+  var box=$("#graphLegend"),session=graphSession();box.innerHTML="";
+  session.series.forEach(function(series,index){
+    var d=document.createElement("label");d.className="legend-item";var check=document.createElement("input");check.type="checkbox";check.checked=series.visible;check.setAttribute("aria-label","Toggle "+series.label);
+    var sw=document.createElement("span");sw.className="legend-swatch";sw.style.background=graphPalette(index);var t=document.createElement("span");t.textContent=series.label+" · "+series.type;
+    check.onchange=function(){series.visible=check.checked;session.revision++;drawGraph();};d.append(check,sw,t);box.appendChild(d);
+  });
 }
-function resetGraph(){Object.assign(state.graph,{xMin:-10,xMax:10,yMin:-10,yMax:10});drawGraph();}
+function renderGraphSliders(){
+  var box=$("#graphSliders"),session=graphSession();box.innerHTML="";
+  session.sliders.forEach(function(slider){
+    var wrap=document.createElement("div");wrap.className="graph-slider";var label=document.createElement("label");label.textContent=slider.name+" = ";
+    var value=document.createElement("span");value.textContent=M.formatNumber(slider.value,8);label.appendChild(value);
+    var input=document.createElement("input");input.type="range";input.min=slider.min;input.max=slider.max;input.step=slider.step;input.value=slider.value;
+    input.oninput=function(){session.setSliderValue(slider.name,Number(input.value));value.textContent=M.formatNumber(Number(input.value),8);drawGraph();};
+    wrap.append(label,input);box.appendChild(wrap);
+  });
+}
+function graphFunctionSeries(){return graphSession().series.filter(function(s){return s instanceof G.FunctionPlot;});}
+function populateGraphSeriesSelects(){
+  var series=graphFunctionSeries();
+  ["#graphSeriesA","#graphSeriesB"].forEach(function(sel,index){var el=$(sel),old=el.value;el.innerHTML="";series.forEach(function(s,i){var o=document.createElement("option");o.value=s.id;o.textContent=s.label;if(s.id===old||(!old&&i===Math.min(index,series.length-1)))o.selected=true;el.appendChild(o);});});
+}
+function selectedGraphSeries(which){
+  var id=$(which==2?"#graphSeriesB":"#graphSeriesA").value,series=graphSession().series.find(function(s){return s.id===id;});
+  if(!(series instanceof G.FunctionPlot))throw new G.GraphUnsupportedError("Choose an explicit function series");
+  return series;
+}
+function graphAnalysisText(lines){
+  var box=$("#graphAnalysisResult");box.innerHTML="";box.classList.remove("muted","ws-error");var pre=document.createElement("pre");pre.textContent=Array.isArray(lines)?lines.join("\n"):String(lines);box.appendChild(pre);renderGraphA11y();
+}
+function clearAnalysisMarkers(kinds){graphSession().markers=graphSession().markers.filter(function(m){return kinds.indexOf(m.kind)<0;});}
+function analyzeGraphRoots(){
+  try{var s=selectedGraphSeries(1),roots=G.findRoots(s,graphSession().viewport,graphSession().sliderEnv());clearAnalysisMarkers(["root"]);roots.forEach(function(r){graphSession().markers.push(Object.assign({seriesId:s.id},r));});graphAnalysisText(roots.length?roots.map(function(r){return "root: x = "+M.formatNumber(r.x,state.precision)+" · residual "+M.formatNumber(Math.abs(r.y),6);}):["No certified roots found in viewport."]);drawGraph();}catch(e){graphAnalysisError(e);}
+}
+function analyzeGraphIntersections(){
+  try{var a=selectedGraphSeries(1),b=selectedGraphSeries(2),hits=G.findIntersections(a,b,graphSession().viewport,graphSession().sliderEnv());clearAnalysisMarkers(["intersection"]);hits.forEach(function(r){graphSession().markers.push(Object.assign({seriesId:a.id},r));});graphAnalysisText(hits.length?hits.map(function(r){return "intersection: ("+M.formatNumber(r.x,state.precision)+", "+M.formatNumber(r.y,state.precision)+")";}):["No certified intersections found in viewport."]);drawGraph();}catch(e){graphAnalysisError(e);}
+}
+function analyzeGraphExtrema(){
+  try{var s=selectedGraphSeries(1),hits=G.findExtrema(s,graphSession().viewport,graphSession().sliderEnv());clearAnalysisMarkers(["minimum","maximum","stationary"]);hits.forEach(function(r){graphSession().markers.push(Object.assign({seriesId:s.id},r));});graphAnalysisText(hits.length?hits.map(function(r){return r.kind+": ("+M.formatNumber(r.x,state.precision)+", "+M.formatNumber(r.y,state.precision)+")";}):["No certified stationary points found in viewport."]);drawGraph();}catch(e){graphAnalysisError(e);}
+}
+function analyzeGraphTangent(){
+  try{var s=selectedGraphSeries(1),x=Number($("#graphPointX").value),t=G.tangentAt(s,x,graphSession().sliderEnv()),line=new G.FunctionPlot(t.source,{label:"tangent @ "+M.formatNumber(x,6)});graphSession().add(line);graphSession().markers.push({seriesId:s.id,kind:"tangent-point",x:t.x,y:t.y});renderGraphLegend();populateGraphSeriesSelects();graphAnalysisText(["point = ("+M.formatNumber(t.x,state.precision)+", "+M.formatNumber(t.y,state.precision)+")","slope = "+M.formatNumber(t.slope,state.precision),"line = "+t.source]);drawGraph();}catch(e){graphAnalysisError(e);}
+}
+function analyzeGraphIntegral(){
+  try{var s=selectedGraphSeries(1),a=Number($("#graphBoundA").value),b=Number($("#graphBoundB").value),r=G.integralBetween(s,a,b),value=r.exact?M.formatValue(r.value):"≈ "+M.formatNumber(Number(r.value),state.precision);graphSession().markers.push({seriesId:s.id,kind:"integral",a:a,b:b,value:value});graphAnalysisText(["∫["+M.formatNumber(a,8)+", "+M.formatNumber(b,8)+"] "+s.label+" dx = "+value,"method = "+r.method+(r.errorEstimate?" · error estimate "+M.formatNumber(r.errorEstimate,6):"")]);drawGraph();}catch(e){graphAnalysisError(e);}
+}
+function graphAnalysisError(e){var box=$("#graphAnalysisResult");box.textContent=errorMessage(e);box.classList.add("ws-error");box.classList.remove("muted");}
+function fitGraphPoints(points,includeZeroY){
+  if(!points.length)return;var xs=points.map(function(p){return p.x;}).filter(Number.isFinite),ys=points.map(function(p){return p.y;}).filter(Number.isFinite);if(!xs.length||!ys.length)return;
+  if(includeZeroY)ys.push(0);var xmin=Math.min.apply(null,xs),xmax=Math.max.apply(null,xs),ymin=Math.min.apply(null,ys),ymax=Math.max.apply(null,ys),dx=Math.max(1e-9,xmax-xmin),dy=Math.max(1e-9,ymax-ymin);
+  graphSession().setViewport(new G.Viewport(xmin-dx*.12,xmax+dx*.12,ymin-dy*.15,ymax+dy*.15));
+}
+function graphAddScatter(){
+  try{var ds=requireDataset(),cols=selectedDataColumns(),model=S.scatterModel(ds,cols.x,cols.y),series=new G.ScatterPlot(model,{label:cols.y+" vs "+cols.x});graphSession().add(series);fitGraphPoints(model.points,false);renderGraphLegend();drawGraph();}catch(e){toast(errorMessage(e));}
+}
+function graphAddRegression(){
+  try{var ds=requireDataset(),cols=selectedDataColumns(),model=S.fitRegression(ds,cols.y,[cols.x]),scatter=S.scatterModel(ds,cols.x,cols.y);graphSession().add(new G.ScatterPlot(scatter,{label:cols.y+" vs "+cols.x}));var src=M.formatNumber(model.coefficients[0],15)+" + ("+M.formatNumber(model.coefficients[1],15)+")*x";graphSession().add(new G.FunctionPlot(src,{label:"regression: "+cols.y+" ~ "+cols.x}));fitGraphPoints(scatter.points,false);renderGraphLegend();populateGraphSeriesSelects();drawGraph();}catch(e){toast(errorMessage(e));}
+}
+function graphAddHistogram(){
+  try{var ds=requireDataset(),name=$("#dataXSelect").value,model=S.histogramModel(ds.column(name).values),series=new G.HistogramPlot(model,{label:"histogram: "+name});graphSession().add(series);fitGraphPoints(model.bins.map(function(b){return {x:b.lo,y:b.count};}).concat(model.bins.map(function(b){return {x:b.hi,y:b.count};})),true);renderGraphLegend();drawGraph();}catch(e){toast(errorMessage(e));}
+}
+function graphAddBoxplot(){
+  try{var ds=requireDataset(),name=$("#dataXSelect").value,model=S.boxPlotModel(ds.column(name).values);graphSession().add(new G.BoxPlot(model,{label:"box: "+name}));var y0=graphSession().viewport.yMin,y1=graphSession().viewport.yMax;graphSession().setViewport(new G.Viewport(model.min-(model.max-model.min||1)*.12,model.max+(model.max-model.min||1)*.12,y0,y1));renderGraphLegend();drawGraph();}catch(e){toast(errorMessage(e));}
+}
+function graphAddDistribution(){
+  try{var dist=selectedDistribution(),model=S.distributionPlotModel(dist),series=new G.DistributionPlot(model,{label:dist.name});graphSession().add(series);fitGraphPoints(model.points,true);renderGraphLegend();drawGraph();}catch(e){toast(errorMessage(e));}
+}
+function renderGraphA11y(){
+  var box=$("#graphA11y"),session=graphSession(),parts=[session.series.length+" graph series."];
+  session.series.forEach(function(s){parts.push((s.visible?"Visible ":"Hidden ")+s.type+": "+s.label+".");});
+  if(session.markers.length)parts.push(session.markers.length+" analysis markers.");
+  box.textContent=parts.join(" ");
+}
+function resetGraph(){graphSession().setViewport(new G.Viewport(-10,10,-10,10));graphSession().markers=[];drawGraph();}
+function exportGraphPng(){
+  graphCanvas.toBlob(function(blob){if(!blob)return;var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="calc-graph.png";a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},1000);},"image/png");
+}
 
 function matrixValues(){
   var rows=parseInt($("#matrixRows").value,10),cols=parseInt($("#matrixCols").value,10),grid=[];
