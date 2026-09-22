@@ -125,8 +125,13 @@ function buildDependencies(doc){
   return {document:doc,indexById:indexById,dependents:dependents,errors:errors};
 }
 function markDirty(doc,blockId){
-  doc=normalizeNotebook(doc);const graph=buildDependencies(doc),queue=[blockId],seen=new Set();
-  while(queue.length){const id=queue.shift();if(seen.has(id))continue;seen.add(id);const b=doc.blocks.find(x=>x.id===id);if(b){b.status=id===blockId?"dirty":"stale";b.updatedAt=now();}const ds=graph.dependents.get(id);if(ds)ds.forEach(x=>queue.push(x));}
+  doc=normalizeNotebook(doc);
+  const oldDependents=new Map();doc.blocks.forEach(function(b){(b.dependencies||[]).forEach(function(id){if(!oldDependents.has(id))oldDependents.set(id,new Set());oldDependents.get(id).add(b.id);});});
+  const graph=buildDependencies(doc),queue=[blockId],seen=new Set();
+  while(queue.length){
+    const id=queue.shift();if(seen.has(id))continue;seen.add(id);const b=doc.blocks.find(x=>x.id===id);if(b){b.status=id===blockId?"dirty":"stale";b.updatedAt=now();}
+    const sets=[oldDependents.get(id),graph.dependents.get(id)];sets.forEach(function(ds){if(ds)ds.forEach(x=>queue.push(x));});
+  }
   return doc;
 }
 
@@ -207,6 +212,11 @@ function evaluateBlock(block,ctx){
   }
   throw new NotebookSchemaError("Unsupported block type '"+block.type+"'");
 }
+function replayCachedBlock(block,env){
+  if(block.type!=="math"||!block.producedSymbols||!block.producedSymbols.length||!block.result||!block.result.serialized)return false;
+  const info=assignmentInfo(block.source);if(info.functionDefinition)return false;
+  try{const value=deserializeValue(block.result.serialized);block.producedSymbols.forEach(function(name){env[name]=value;});return true;}catch(e){return false;}
+}
 function evaluateNotebook(raw,options){
   const doc=normalizeNotebook(raw),graph=buildDependencies(doc),blockMap=new Map(doc.blocks.map(b=>[b.id,b])),env={},evaluations=[],depErrors=new Map();graph.errors.forEach(e=>depErrors.set(e.blockId,e));
   for(let i=0;i<doc.blocks.length;i++){
@@ -214,6 +224,12 @@ function evaluateNotebook(raw,options){
     if(depErrors.has(block.id)){const e=depErrors.get(block.id);block.status="error";block.result={status:"error",kind:"error",display:"",approx:"",error:e.message,value:null,serialized:null,metadata:{code:e.code}};evaluations.push({blockId:block.id,status:"error"});continue;}
     if(dependencyFailure){block.status="blocked";block.result={status:"blocked",kind:"blocked",display:"",approx:"",error:"Blocked by "+dependencyFailure,value:null,serialized:null,metadata:{dependency:dependencyFailure}};evaluations.push({blockId:block.id,status:"blocked"});continue;}
     if(block.type==="text"){block.status="clean";block.result={status:"clean",kind:"text",display:"",approx:"",error:null,value:null,serialized:null,metadata:{}};evaluations.push({blockId:block.id,status:"clean"});continue;}
+    if(block.status==="clean"&&block.result&&block.result.serialized){
+      const info=block.type==="math"?assignmentInfo(block.source):null;
+      if(block.type!=="math"||!info.functionDefinition){
+        if(block.type!=="math"||!block.producedSymbols.length||replayCachedBlock(block,env)){evaluations.push({blockId:block.id,status:"clean",kind:block.result.kind,cached:true});continue;}
+      }
+    }
     try{const out=evaluateBlock(block,{blockMap:blockMap,env:env,options:options||{}});block.status="clean";block.result={status:"clean",kind:out.kind,display:out.display,approx:out.approx||"",error:null,value:null,serialized:serializeValue(out.value),metadata:out.metadata||{}};evaluations.push({blockId:block.id,status:"clean",kind:out.kind});}
     catch(e){block.status="error";block.result={status:"error",kind:"error",display:"",approx:"",error:e.message,value:null,serialized:null,metadata:{code:e.code||"ERROR"}};evaluations.push({blockId:block.id,status:"error",code:e.code||"ERROR"});}
   }
@@ -224,16 +240,16 @@ function applyEdit(raw,blockId,patch){
   doc.versions=(doc.versions||[]).concat([{reason:"edit "+blockId,snapshot:notebookSnapshot(doc)}]).slice(-MAX_VERSIONS);Object.assign(block,clone(patch||{}));block.updatedAt=now();doc.revision++;doc.updatedAt=now();return markDirty(doc,blockId);
 }
 function addBlock(raw,type,index,seed){
-  const doc=normalizeNotebook(raw),b=newBlock(type,seed),at=index===undefined?doc.blocks.length:Math.max(0,Math.min(doc.blocks.length,index));doc.versions=(doc.versions||[]).concat([{reason:"add block",snapshot:notebookSnapshot(doc)}]).slice(-MAX_VERSIONS);doc.blocks.splice(at,0,b);doc.revision++;doc.updatedAt=now();return doc;
+  const doc=normalizeNotebook(raw),b=newBlock(type,seed),at=index===undefined?doc.blocks.length:Math.max(0,Math.min(doc.blocks.length,index));doc.versions=(doc.versions||[]).concat([{reason:"add block",snapshot:notebookSnapshot(doc)}]).slice(-MAX_VERSIONS);doc.blocks.splice(at,0,b);for(let i=at+1;i<doc.blocks.length;i++)if(doc.blocks[i].type!=="text")doc.blocks[i].status="stale";doc.revision++;doc.updatedAt=now();return doc;
 }
 function removeBlock(raw,id){
-  const doc=normalizeNotebook(raw),i=doc.blocks.findIndex(b=>b.id===id);if(i<0)return doc;doc.versions=(doc.versions||[]).concat([{reason:"remove block",snapshot:notebookSnapshot(doc)}]).slice(-MAX_VERSIONS);doc.blocks.splice(i,1);doc.revision++;doc.updatedAt=now();buildDependencies(doc).errors.forEach(e=>{const b=doc.blocks.find(x=>x.id===e.blockId);if(b)b.status="stale";});return doc;
+  const doc=normalizeNotebook(raw),i=doc.blocks.findIndex(b=>b.id===id);if(i<0)return doc;doc.versions=(doc.versions||[]).concat([{reason:"remove block",snapshot:notebookSnapshot(doc)}]).slice(-MAX_VERSIONS);doc.blocks.splice(i,1);doc.blocks.forEach(function(b){if(b.type!=="text")b.status="stale";});doc.revision++;doc.updatedAt=now();return doc;
 }
 function moveBlock(raw,id,toIndex){
   const doc=normalizeNotebook(raw),i=doc.blocks.findIndex(b=>b.id===id);if(i<0)return doc;const [b]=doc.blocks.splice(i,1),at=Math.max(0,Math.min(doc.blocks.length,toIndex));doc.versions=(doc.versions||[]).concat([{reason:"move block",snapshot:notebookSnapshot(doc)}]).slice(-MAX_VERSIONS);doc.blocks.splice(at,0,b);doc.revision++;doc.updatedAt=now();doc.blocks.forEach(x=>x.status=x.type==="text"?"clean":"stale");return doc;
 }
 function duplicateBlock(raw,id){
-  const doc=normalizeNotebook(raw),i=doc.blocks.findIndex(b=>b.id===id);if(i<0)throw new NotebookSchemaError("Unknown block");const copy=clone(doc.blocks[i]);copy.id=makeId("block");copy.title=copy.title?copy.title+" copy":"";copy.status="dirty";copy.dependencies=[];copy.result=blankResult();doc.blocks.splice(i+1,0,normalizeBlock(copy,i+1));doc.revision++;doc.updatedAt=now();return doc;
+  const doc=normalizeNotebook(raw),i=doc.blocks.findIndex(b=>b.id===id);if(i<0)throw new NotebookSchemaError("Unknown block");const copy=clone(doc.blocks[i]);copy.id=makeId("block");copy.title=copy.title?copy.title+" copy":"";copy.status="dirty";copy.dependencies=[];copy.result=blankResult();doc.blocks.splice(i+1,0,normalizeBlock(copy,i+1));for(let j=i+2;j<doc.blocks.length;j++)if(doc.blocks[j].type!=="text")doc.blocks[j].status="stale";doc.revision++;doc.updatedAt=now();return doc;
 }
 
 function exportNotebook(raw){
