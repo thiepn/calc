@@ -57,12 +57,12 @@ function printAst(n,parentPrec,side){
   else if(n.type==="unary")out=n.op+printAst(n.arg,p,"right");
   else if(n.type==="postfix")out=printAst(n.arg,p,"left")+n.op;
   else if(n.type==="binary"){
-    var left=printAst(n.left,p,"left"),right=printAst(n.right,n.op==="^"?p-1:p,"right");
+    var left=printAst(n.left,n.op==="^"?p+1:p,"left"),right=printAst(n.right,n.op==="^"?p-1:p,"right");
     if(n.op==="+"&&n.right.type==="unary"&&n.right.op==="-")out=left+" - "+printAst(n.right.arg,p,"right");
     else if(n.op==="-"&&n.right.type==="unary"&&n.right.op==="-")out=left+" + "+printAst(n.right.arg,p,"right");
     else out=left+" "+n.op+" "+right;
   }else out="?";
-  var need=p<parentPrec||(side==="right"&&(n.type==="binary"&&(n.op==="-"||n.op==="/")))||(side==="left"&&n.type==="binary"&&n.op==="^");
+  var need=p<parentPrec||(side==="right"&&(n.type==="binary"&&(n.op==="-"||n.op==="/")));
   return need?"("+out+")":out;
 }
 
