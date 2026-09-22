@@ -181,6 +181,13 @@ class PiecewisePlot extends PlotSeries{
   }
 }
 
+PiecewisePlot.prototype.definition=function(){
+  return Object.assign(PlotSeries.prototype.definition.call(this),{
+    variable:this.variable,
+    pieces:this.pieces.map(p=>({source:p.source,lo:p.lo,hi:p.hi,loClosed:p.loClosed,hiClosed:p.hiClosed,label:p.label}))
+  });
+};
+
 class ParametricPlot extends PlotSeries{
   constructor(xSource,ySource,tMin,tMax,options){
     options=options||{};super("parametric",options);this.xSource=String(xSource);this.ySource=String(ySource);this.parameter=options.parameter||"t";this.xAst=M.parseExpression(this.xSource);this.yAst=M.parseExpression(this.ySource);this.tMin=Number(tMin);this.tMax=Number(tMax);if(!(Number.isFinite(this.tMin)&&Number.isFinite(this.tMax)&&this.tMax>this.tMin))throw new GraphDomainError("Parametric range must be finite and increasing");
@@ -266,6 +273,7 @@ class InequalityPlot extends PlotSeries{
     return {type:"inequality",seriesId:this.id,cells:cells,boundary:boundary.segments,boundaryIncluded:this.op.indexOf("=")>=0};
   }
   trace(xy,env){return {seriesId:this.id,type:this.type,x:xy.x,y:xy.y,inside:this.contains(xy.x,xy.y,env),difference:this.difference(xy.x,xy.y,env)};}
+  definition(){return Object.assign(super.definition(),{source:this.source});}
 }
 
 class ScatterPlot extends PlotSeries{
@@ -344,9 +352,25 @@ function tangentAt(plot,x,env){
 function integralBetween(plot,a,b,options){if(!(plot instanceof FunctionPlot))throw new GraphUnsupportedError("Integral analysis requires FunctionPlot");return C.definiteIntegral(plot.source,plot.variable,String(a),String(b),options);}
 function traceSeries(series,input,env){return series.trace(input,env);}
 
+function splitTopLevelText(text,separator){
+  const out=[];let depth=0,start=0;
+  for(let i=0;i<text.length;i++){if(text[i]==="(")depth++;else if(text[i]===")")depth--;else if(text[i]===separator&&depth===0){out.push(text.slice(start,i).trim());start=i+1;}}
+  out.push(text.slice(start).trim());return out.filter(Boolean);
+}
+function parsePiecewiseBody(body,env){
+  return splitTopLevelText(body,"|").map(function(part){
+    const a=splitTopLevelText(part,";");if(a.length<3||a.length>4)throw new GraphDomainError("Each piecewise part uses expression; lower; upper; optional endpoint flags");
+    const lo=/^-inf(?:inity)?$/i.test(a[1])?null:parseFiniteScalar(a[1],env),hi=/^\+?inf(?:inity)?$/i.test(a[2])?null:parseFiniteScalar(a[2],env),flags=(a[3]||"[)").trim();
+    if(!/^[[(][\]) ]$/.test(flags.replace(/\s/g,""))&&["[]","[)","(]","()"].indexOf(flags.replace(/\s/g,""))<0)throw new GraphDomainError("Piecewise endpoint flags must be [], [), (], or ()");
+    const f=flags.replace(/\s/g,"");return {source:a[0],lo:lo,hi:hi,loClosed:f[0]==="[",hiClosed:f[1]==="]"};
+  });
+}
+
 function parseGraphLine(line,options){
   options=options||{};line=String(line).trim();if(!line)return null;
-  let m=line.match(/^parametric\((.*);(.*);\s*([A-Za-z_]\w*)\s*;\s*([^;]+)\s*;\s*([^;]+)\)$/);
+  let m=line.match(/^piecewise\((.*)\)$/);
+  if(m)return new PiecewisePlot(parsePiecewiseBody(m[1],options.env||{}),{variable:"x",label:line});
+  m=line.match(/^parametric\((.*);(.*);\s*([A-Za-z_]\w*)\s*;\s*([^;]+)\s*;\s*([^;]+)\)$/);
   if(m)return new ParametricPlot(m[1].trim(),m[2].trim(),parseFiniteScalar(m[4],options.env),parseFiniteScalar(m[5],options.env),{parameter:m[3],label:line});
   m=line.match(/^polar\((.*);\s*([A-Za-z_]\w*)\s*;\s*([^;]+)\s*;\s*([^;]+)\)$/);
   if(m)return new PolarPlot(m[1].trim(),parseFiniteScalar(m[3],options.env),parseFiniteScalar(m[4],options.env),{parameter:m[2],label:line});
@@ -354,7 +378,21 @@ function parseGraphLine(line,options){
   m=line.match(/^ineq\((.*)\)$/);if(m)return new InequalityPlot(m[1].trim(),{label:line});
   const fn=line.replace(/^\s*[A-Za-z_]\w*\s*\(x\)\s*=\s*/,"");return new FunctionPlot(fn,{label:line});
 }
-function parseGraphText(text,options){const session=new GraphSession(options),errors=[];String(text).split(/\r?\n/).map(s=>s.trim()).filter(Boolean).forEach((line,i)=>{try{session.add(parseGraphLine(line,options));}catch(e){errors.push({line:i+1,source:line,error:e});}});return {session:session,errors:errors};}
+function parseGraphText(text,options){
+  options=options||{};const session=new GraphSession(options),errors=[];
+  String(text).split(/\r?\n/).map(s=>s.trim()).filter(Boolean).forEach((line,i)=>{
+    try{
+      const sm=line.match(/^slider\(\s*([A-Za-z_]\w*)\s*;\s*([^;]+)\s*;\s*([^;]+)\s*;\s*([^;]+)(?:\s*;\s*([^;]+))?\s*\)$/);
+      if(sm){
+        const value=parseFiniteScalar(sm[2],options.env),min=parseFiniteScalar(sm[3],options.env),max=parseFiniteScalar(sm[4],options.env),step=sm[5]?parseFiniteScalar(sm[5],options.env):(max-min)/100;
+        if(!(max>min))throw new GraphDomainError("Slider max must exceed min");
+        session.setSlider(sm[1],value,min,max,step);return;
+      }
+      session.add(parseGraphLine(line,options));
+    }catch(e){errors.push({line:i+1,source:line,error:e});}
+  });
+  return {session:session,errors:errors};
+}
 
 class GraphWorkerClient{
   constructor(url){this.url=url||"./graph-worker.js";this.worker=null;this.seq=0;this.pending=new Map();}
