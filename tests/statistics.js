@@ -81,6 +81,9 @@ approx(S.erf(0),0,1e-12,"erf zero");
 const prob=new S.Probability(0.25);
 approx(prob.complement().value,0.75,1e-12,"probability complement");
 throwsCode(()=>new S.Probability(1.2),"INVALID_PROBABILITY","probability bounds");
+const event=new S.Event("A",0.25);
+eq(event.name,"A","event name");
+approx(event.complement().probability.value,0.75,1e-12,"event complement");
 
 // Distributions: PMF/PDF/CDF/SF/quantiles.
 const bern=new S.Bernoulli(0.3);
@@ -181,6 +184,9 @@ const wil=S.wilsonInterval(5,10,0.95);
 approx(wil.estimate,0.5,1e-12,"Wilson estimate");
 approx(wil.lower,0.2365930905,5e-7,"Wilson lower");
 approx(wil.upper,0.7634069095,5e-7,"Wilson upper");
+const propz=S.oneProportionZ(60,100,0.5);
+approx(propz.statistic,2,1e-12,"one-proportion z statistic");
+approx(propz.pValue.value,0.04550026,5e-6,"one-proportion z p");
 
 const gof=S.chiSquareGOF([10,20,30],[20,20,20]);
 approx(gof.statistic,10,1e-12,"chi-square GOF statistic");
