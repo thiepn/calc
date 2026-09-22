@@ -49,6 +49,22 @@ function ensureOnlyVariable(ast,variable){
 }
 function dependsOn(ast,variable){return A.collectVariables(ast).has(variable);}
 
+function derivativeDomainRestrictions(ast,variable,out){
+  out=out||[];
+  if(!ast)return out;
+  if(ast.type==="call"&&ast.args&&ast.args[0]&&dependsOn(ast.args[0],variable)){
+    var z=cloneAst(ast.args[0]);
+    if(ast.name==="abs")out.push(new A.Restriction(new A.SymbolicExpression(z),"!=",rat(0)));
+    else if(ast.name==="sqrt")out.push(new A.Restriction(new A.SymbolicExpression(z),">",rat(0)));
+    else if(ast.name==="tan")out.push(new A.Restriction(new A.SymbolicExpression(call("cos",[z])),"!=",rat(0)));
+    else if(ast.name==="asin"||ast.name==="acos")out.push(new A.Restriction(new A.SymbolicExpression(bin("-",lit(rat(1)),bin("^",z,lit(rat(2))))),">",rat(0)));
+  }
+  if(ast.type==="unary"||ast.type==="postfix")derivativeDomainRestrictions(ast.arg,variable,out);
+  else if(ast.type==="binary"){derivativeDomainRestrictions(ast.left,variable,out);derivativeDomainRestrictions(ast.right,variable,out);}
+  else if(ast.type==="call")ast.args.forEach(function(a){derivativeDomainRestrictions(a,variable,out);});
+  return out;
+}
+
 function derivativeAst(ast,variable){
   if(!ast)throw new UnsupportedDerivativeError("Missing expression");
   if(ast.type==="literal")return lit(rat(0));
@@ -120,6 +136,7 @@ function differentiate(sourceOrExpr,variable,order){
   variable=requireVariable(expr.ast,variable);order=order===undefined?1:Number(order);
   if(!Number.isInteger(order)||order<0||order>20)throw new CalculusError("INVALID_ORDER","Derivative order must be an integer from 0 to 20");
   var ast=cloneAst(expr.ast),restrictions=expr.restrictions.slice();
+  if(order>0)restrictions=restrictions.concat(derivativeDomainRestrictions(expr.ast,variable));
   for(var i=0;i<order;i++){
     ast=derivativeAst(ast,variable);
     try{
