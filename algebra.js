@@ -523,9 +523,21 @@ function solvePolynomial(p,domain){
     var e1=new SymbolicExpression(bin("/",bin("+",lit(b.neg()),imag),lit(den))),e2=new SymbolicExpression(bin("/",bin("-",lit(b.neg()),imag),lit(den)));
     return {type:"finite",solutions:[new SolutionValue(e1,null,true),new SolutionValue(e2,null,true)]};
   }
-  var fact=factorPolynomial(p),values=fact.roots.map(r=>new SolutionValue(new SymbolicExpression(lit(r)),r,true));
-  if(fact.residual.degree<=0)return {type:"finite",solutions:dedupeSolutions(values)};
-  throw new UnsupportedSymbolicError("Polynomial solving is certified for linear, quadratic, and higher-degree polynomials reducible by exact rational roots",{degree:d,knownRoots:values.map(v=>v.toString())});
+  var current=p.clone(),values=[];
+  while(current.degree>2){
+    var candidates=rationalRootCandidates(current),found=null;
+    for(var ri=0;ri<candidates.length;ri++)if(current.evaluate(candidates[ri]).isZero()){found=candidates[ri];break;}
+    if(found===null)break;
+    values.push(new SolutionValue(new SymbolicExpression(lit(found)),found,true));
+    current=syntheticDivide(current,found).quotient;
+  }
+  if(current.degree<=2){
+    var tail=solvePolynomial(current,domain);
+    if(tail.type==="finite")values=values.concat(tail.solutions);
+    else if(tail.type==="all")return {type:"all",solutions:[]};
+    return {type:values.length?"finite":"empty",solutions:dedupeSolutions(values)};
+  }
+  throw new UnsupportedSymbolicError("Polynomial solving is certified for linear, quadratic, and higher-degree polynomials reducible to those forms by exact rational roots",{degree:d,knownRoots:values.map(v=>v.toString())});
 }
 function dedupeSolutions(values){
   var seen=new Set(),out=[];values.forEach(v=>{var k=v.toString();if(!seen.has(k)){seen.add(k);out.push(v);}});return out;
@@ -680,6 +692,11 @@ function solveInequality(source,variable){
 
 function simplify(source,variable){return new SymbolicExpression(source).simplify(variable);}
 function expand(source,variable){return new SymbolicExpression(source).expand(variable);}
+function collect(source,variable){
+  var expr=new SymbolicExpression(source),v=singleVariable(expr.ast,variable);
+  if(!v)return expr.simplify();
+  return new SymbolicExpression(Polynomial.fromAst(expr.ast,v).toAst(),{restrictions:expr.restrictions});
+}
 function factor(source,variable){return new SymbolicExpression(source).factor(variable);}
 function substitute(source,mapping){return new SymbolicExpression(source).substitute(mapping);}
 
@@ -697,12 +714,20 @@ function runCommand(raw,options){
   var cmd=m[1],args=splitArgs(m[2]);
   if(cmd==="simplify"){if(args.length<1||args.length>2)throw new M.ArityError("simplify",1,args.length);var se=simplify(args[0],args[1]),sd=se.toString();if(se.restrictions.length)sd+="   where "+se.restrictions.map(r=>r.toString()).join(", ");return commandResult(sd,"symbolic",{value:se,metadata:{operation:"simplify",restrictions:se.restrictions.map(r=>r.toString())}});}
   if(cmd==="expand"){var ex=expand(args[0],args[1]),ed=ex.toString();if(ex.restrictions.length)ed+="   where "+ex.restrictions.map(r=>r.toString()).join(", ");return commandResult(ed,"symbolic",{value:ex,metadata:{operation:"expand",restrictions:ex.restrictions.map(r=>r.toString())}});}
+  if(cmd==="collect"){var co=collect(args[0],args[1]),cd=co.toString();if(co.restrictions.length)cd+="   where "+co.restrictions.map(r=>r.toString()).join(", ");return commandResult(cd,"symbolic",{value:co,metadata:{operation:"collect",restrictions:co.restrictions.map(r=>r.toString())}});}
   if(cmd==="factor"){var fa=factor(args[0],args[1]),fd=fa.toString();if(fa.restrictions.length)fd+="   where "+fa.restrictions.map(r=>r.toString()).join(", ");return commandResult(fd,"symbolic",{value:fa,metadata:{operation:"factor",restrictions:fa.restrictions.map(r=>r.toString())}});}
   if(cmd==="solve"){
     if(args.length<1||args.length>3)throw new EquationError("solve expects solve(equation, variable?)");
     var ss=solveEquation(args[0],args[1]||undefined,{domain:args[2]||"real"}),display=ss.toString();
     if(ss.restrictions.length)display+="   where "+ss.restrictions.map(r=>r.toString()).join(", ");
     return commandResult(display,"solution-set",{value:ss,metadata:{operation:"solve",variable:ss.variable,restrictions:ss.restrictions.map(r=>r.toString())}});
+  }
+  if(cmd==="system"){
+    var body=m[2],parts=[],depth=0,start=0;
+    for(var si=0;si<body.length;si++){if(body[si]==="(")depth++;else if(body[si]===")")depth--;else if(body[si]===";"&&depth===0){parts.push(body.slice(start,si).trim());start=si+1;}}
+    parts.push(body.slice(start).trim());parts=parts.filter(Boolean);
+    if(parts.length<1)throw new EquationError("system requires one or more equations separated by semicolons");
+    var sys=solveLinearSystem(parts);return commandResult(sys.toString(),"linear-system",{value:sys,metadata:{operation:"system",variables:sys.variables,freeVariables:sys.freeVariables}});
   }
   if(cmd==="inequality"){
     var iu=solveInequality(args[0],args[1]||undefined);return commandResult(iu.variable+" ∈ "+iu.toString(),"interval-union",{value:iu,metadata:{operation:"inequality"}});
@@ -719,7 +744,7 @@ global.CalcAlgebra={
   AlgebraError:AlgebraError,UnsupportedSymbolicError:UnsupportedSymbolicError,EquationError:EquationError,InconsistentSystemError:InconsistentSystemError,
   SymbolicExpression:SymbolicExpression,Restriction:Restriction,Polynomial:Polynomial,RationalFunction:RationalFunction,Equation:Equation,SolutionValue:SolutionValue,SolutionSet:SolutionSet,LinearSystemSolution:LinearSystemSolution,IntervalUnion:IntervalUnion,
   printAst:printAst,simplifyAst:simplifyAst,expandAst:expandAst,collectVariables:collectVariables,collectRestrictions:collectRestrictions,substituteAst:substituteAst,
-  simplify:simplify,expand:expand,factor:factor,substitute:substitute,
+  simplify:simplify,expand:expand,collect:collect,factor:factor,substitute:substitute,
   solveEquation:solveEquation,solveLinearSystem:solveLinearSystem,solveInequality:solveInequality,
   runCommand:runCommand
 };
