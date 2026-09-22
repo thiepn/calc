@@ -22,7 +22,7 @@ let draft=CT.newFormulaDraft();
 eq(draft.schema,CT.SCHEMA,"schema");
 eq(draft.status,"draft","new draft status");
 let report=CT.validationReport(draft);
-assert(report.ok,"default formula draft validates");
+assert(report.ok,"default formula draft validates: "+JSON.stringify(report.stages)+" tests="+JSON.stringify(report.tests));
 assert(report.stages.every(s=>s.pass),"all default validation stages pass");
 
 let result=CT.executeManifest(draft,{x:7},{precision:12});
