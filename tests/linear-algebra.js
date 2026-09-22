@@ -144,7 +144,7 @@ matApprox(new L.Matrix([[2,0],[0,3]]).multiply(diag.P),diag.P.multiply(diag.D),1
 
 // Minimal polynomial.
 eq(L.minimalPolynomial(D).toString(),"lambda ^ 2 - 5 * lambda + 6","minimal polynomial distinct diagonal");
-eq(L.minimalPolynomial(new L.Matrix([[2,0],[0,2]])).toString(),"lambda - 2","minimal polynomial scalar matrix");
+eq(L.minimalPolynomial(new L.Matrix([[new M.Rational(2n),new M.Rational(0n)],[new M.Rational(0n),new M.Rational(2n)]])).toString(),"lambda - 2","minimal polynomial scalar matrix");
 
 // Exact Jordan subset.
 const J2=new L.Matrix([[new M.Rational(2n),new M.Rational(1n)],[new M.Rational(0n),new M.Rational(2n)]]);
