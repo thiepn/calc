@@ -257,10 +257,13 @@ function regularizedBeta(x,a,b){
   const bt=Math.exp(logGamma(a+b)-logGamma(a)-logGamma(b)+a*Math.log(x)+b*Math.log1p(-x));
   return x<(a+1)/(a+b+2)?bt*betaContinuedFraction(a,b,x)/a:1-bt*betaContinuedFraction(b,a,1-x)/b;
 }
-function erf(x){
-  const sign=x<0?-1:1,a=Math.abs(x),t=1/(1+0.3275911*a),y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-a*a);return sign*y;
+function erfc(x){
+  const z=Math.abs(x),t=1/(1+0.5*z);
+  const tau=t*Math.exp(-z*z-1.26551223+t*(1.00002368+t*(0.37409196+t*(0.09678418+t*(-0.18628806+t*(0.27886807+t*(-1.13520398+t*(1.48851587+t*(-0.82215223+t*0.17087277)))))))));
+  return x>=0?tau:2-tau;
 }
-function erfc(x){return x>=0?1-erf(x):1+erf(-x);}
+function erf(x){return x>=0?1-erfc(x):erfc(-x)-1;}
+
 function normalQuantile(p){
   if(!(p>0&&p<1)){if(p===0)return -Infinity;if(p===1)return Infinity;throw new DistributionError("p must be in [0,1]");}
   const a=[-39.69683028665376,220.9460984245205,-275.9285104469687,138.357751867269,-30.66479806614716,2.506628277459239];
@@ -288,7 +291,7 @@ class SeededRNG{
   toJSON(){return {type:"xorshift32",state:this.state};}
 }
 class Distribution{
-  constructor(name,params,discrete){this.name=name;this.params=Object.freeze(Object.assign({},params));this.discrete=!!discrete;Object.freeze(this);}
+  constructor(name,params,discrete){this.name=name;this.params=Object.freeze(Object.assign({},params));this.discrete=!!discrete;}
   sf(x){return clamp01(1-this.cdf(x));}
   sample(rng){throw new DistributionError("Sampling not implemented for "+this.name);}
   sampleN(n,seed){const rng=seed instanceof SeededRNG?seed:new SeededRNG(seed),out=[];for(let i=0;i<n;i++)out.push(this.sample(rng));return out;}
@@ -313,7 +316,7 @@ class NegativeBinomial extends Distribution{
   constructor(r,p){if(!Number.isInteger(r)||r<=0||!(p>0&&p<=1))throw new DistributionError("NegativeBinomial requires positive integer r and p in (0,1]");super("NegativeBinomial",{r:r,p:p,convention:"failures-before-r-successes"},true);this.r=r;this.p=p;}
   pmf(k){return Number.isInteger(k)&&k>=0?Math.exp(logChoose(k+this.r-1,k)+this.r*Math.log(this.p)+k*Math.log1p(-this.p)):0;}
   cdf(x){const k=Math.floor(x);return k<0?0:clamp01(regularizedBeta(this.p,this.r,k+1));}
-  sf(x){return clamp01(1-this.cdf(x));}quantile(q){if(q<=0)return 0;let k=0;while(this.cdf(k)<q&&k<1e6)k++;return k;}mean(){return this.r*(1-this.p)/this.p;}variance(){return this.r*(1-this.p)/(this.p*this.p);}
+  sf(x){const k=Math.floor(x);return k<0?1:clamp01(regularizedBeta(1-this.p,k+1,this.r));}quantile(q){if(q<=0)return 0;let k=0;while(this.cdf(k)<q&&k<1e6)k++;return k;}mean(){return this.r*(1-this.p)/this.p;}variance(){return this.r*(1-this.p)/(this.p*this.p);}
   sample(rng){let f=0,s=0;while(s<this.r){if(rng.next()<this.p)s++;else f++;}return f;}
 }
 class Hypergeometric extends Distribution{
@@ -365,7 +368,7 @@ class StudentT extends Distribution{
   constructor(df){if(!(df>0))throw new DistributionError("Student t df must be > 0");super("StudentT",{df:df},false);this.df=df;}
   pdf(x){const v=this.df;return Math.exp(logGamma((v+1)/2)-logGamma(v/2)-0.5*Math.log(v*Math.PI)-((v+1)/2)*Math.log1p(x*x/v));}
   cdf(x){if(x===0)return 0.5;const v=this.df,z=v/(v+x*x),ib=regularizedBeta(z,v/2,0.5);return x>0?1-0.5*ib:0.5*ib;}
-  sf(x){return 1-this.cdf(x);}quantile(p){return invertCdf(this,p,-10,10);}mean(){return this.df>1?0:NaN;}variance(){return this.df>2?this.df/(this.df-2):this.df>1?Infinity:NaN;}sample(rng){return rng.normal()/Math.sqrt(new ChiSquare(this.df).sample(rng)/this.df);}
+  sf(x){if(x>=0){const v=this.df,z=v/(v+x*x);return 0.5*regularizedBeta(z,v/2,0.5);}return 1-this.cdf(x);}quantile(p){return invertCdf(this,p,-10,10);}mean(){return this.df>1?0:NaN;}variance(){return this.df>2?this.df/(this.df-2):this.df>1?Infinity:NaN;}sample(rng){return rng.normal()/Math.sqrt(new ChiSquare(this.df).sample(rng)/this.df);}
 }
 class FDistribution extends Distribution{
   constructor(d1,d2){if(!(d1>0&&d2>0))throw new DistributionError("F dfs must be > 0");super("F",{d1:d1,d2:d2},false);this.d1=d1;this.d2=d2;}
