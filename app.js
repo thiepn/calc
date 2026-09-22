@@ -8,6 +8,7 @@ const LA=window.CalcLinearAlgebra;
 const S=window.CalcStatistics;
 const G=window.CalcGraph;
 const T=window.CalcTools;
+const CT=window.CalcCustomTools;
 const $=function(s,r){return (r||document).querySelector(s);};
 const $$=function(s,r){return Array.from((r||document).querySelectorAll(s));};
 const uid=function(){return crypto.randomUUID?crypto.randomUUID():"id-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);};
@@ -27,7 +28,7 @@ const state={
   env:{},lastResult:null,theme:localStorage.getItem("calc.theme")||"system",
   installPrompt:null,history:[],worksheets:[],activeWorksheet:null,
   graph:{session:null,drag:null,pinch:null,pointers:new Map(),geometries:[],worker:null},
-  selectedTool:"percentage-of",toolSearch:"",dataset:null,statisticsWorker:null,dataRevision:0
+  selectedTool:"percentage-of",toolSearch:"",customLibrary:new CT.CustomToolLibrary(),customCurrent:null,customValidationTimer:null,dataset:null,statisticsWorker:null,dataRevision:0
 };
 
 function toast(msg){
@@ -60,12 +61,13 @@ function openDb(){
   if(dbPromise)return dbPromise;
   dbPromise=new Promise(function(resolve,reject){
     if(!("indexedDB" in window)){reject(new Error("Local database is unavailable"));return;}
-    var req=indexedDB.open("calc-db",1);
+    var req=indexedDB.open("calc-db",2);
     req.onupgradeneeded=function(){
       var db=req.result;
       if(!db.objectStoreNames.contains("history"))db.createObjectStore("history",{keyPath:"id"});
       if(!db.objectStoreNames.contains("worksheets"))db.createObjectStore("worksheets",{keyPath:"id"});
       if(!db.objectStoreNames.contains("settings"))db.createObjectStore("settings",{keyPath:"key"});
+      if(!db.objectStoreNames.contains("customTools"))db.createObjectStore("customTools",{keyPath:"id"});
     };
     req.onsuccess=function(){resolve(req.result);};
     req.onerror=function(){reject(req.error||new Error("Could not open local database"));};
@@ -744,6 +746,106 @@ async function runSpecializedEngineering(){
   var t=T.REGISTRY.get("engineering-relations"),box=$("#toolResult");try{var relationId=$("#engRelation").value,relation=U.ENGINEERING_RELATIONS[relationId],parts=[];Object.keys(relation.variables).forEach(function(name){var el=$("#engVar-"+name),value=el?el.value.trim():"";if(value)parts.push(name+"="+value);});var er=U.tryEvaluate("eng("+relationId+(parts.length?", "+parts.join(", "):"")+")",{}, {angle:state.angle,precision:state.precision}),out={title:relation.name,display:er.display,warnings:[],details:{relation:relationId}};renderToolResult(out);await recordToolHistory(t,out);}catch(e){box.innerHTML="<strong>Error</strong><span class=\"ws-error\"></span>";$(".ws-error",box).textContent=errorMessage(e);}
 }
 
+function customStatusClass(status){return "custom-status "+(status||"draft");}
+function renderCustomLibrary(){
+  var box=$("#customToolLibrary");if(!box)return;box.innerHTML="";
+  var items=state.customLibrary.list();
+  if(!items.length){var none=document.createElement("div");none.className="hint";none.textContent="No custom tools yet.";box.appendChild(none);return;}
+  items.forEach(function(m){var b=document.createElement("button");b.classList.toggle("active",state.customCurrent&&state.customCurrent.id===m.id);var name=document.createElement("span");name.textContent=m.name;var meta=document.createElement("small");meta.textContent=m.status+" · r"+m.revision+" · "+m.mode;b.append(name,meta);b.onclick=function(){editCustomTool(m.id);};box.appendChild(b);});
+}
+function populateCustomDuplicateSelect(){
+  var el=$("#customDuplicateSelect");if(!el)return;el.innerHTML="";
+  T.REGISTRY.list().filter(function(t){return !t.specialized&&!String(t.id).startsWith("custom.");}).forEach(function(t){var o=document.createElement("option");o.value=t.id;o.textContent=t.name;el.appendChild(o);});
+}
+function miniField(label,input){var wrap=document.createElement("div");wrap.className="mini-field";var l=document.createElement("label");l.textContent=label;wrap.append(l,input);return wrap;}
+function customInput(type,value,cls){var i=document.createElement("input");i.type=type||"text";i.value=value===undefined||value===null?"":value;if(cls)i.className=cls;return i;}
+function customSelect(options,value,cls){var s=document.createElement("select");if(cls)s.className=cls;options.forEach(function(o){var op=document.createElement("option");op.value=o[0];op.textContent=o[1];if(String(o[0])===String(value))op.selected=true;s.appendChild(op);});return s;}
+function addCustomVariableRow(v){
+  v=v||{name:"x",label:"x",type:"number",unit:"",default:1,min:null,max:null,positive:false,nonzero:false};
+  var row=document.createElement("div");row.className="custom-variable-row";
+  var name=customInput("text",v.name,"ct-var-name"),label=customInput("text",v.label,"ct-var-label"),type=customSelect([["number","Number"],["integer","Integer"],["percent","Percent"],["quantity","Quantity"]],v.type,"ct-var-type"),unit=customInput("text",v.unit||"","ct-var-unit"),def=customInput("text",v.default,"ct-var-default"),min=customInput("number",v.min,"ct-var-min"),max=customInput("number",v.max,"ct-var-max");
+  row.append(miniField("Name",name),miniField("Label",label),miniField("Type",type),miniField("Unit",unit),miniField("Default",def),miniField("Min",min),miniField("Max",max));
+  var flags=document.createElement("div");flags.className="custom-variable-flags";var p=document.createElement("label"),pc=document.createElement("input");pc.type="checkbox";pc.className="ct-var-positive";pc.checked=!!v.positive;p.append(pc,document.createTextNode(" >0"));var n=document.createElement("label"),nc=document.createElement("input");nc.type="checkbox";nc.className="ct-var-nonzero";nc.checked=!!v.nonzero;n.append(nc,document.createTextNode(" ≠0"));flags.append(p,n);row.appendChild(flags);
+  var rm=document.createElement("button");rm.type="button";rm.className="custom-row-remove";rm.textContent="Remove";rm.onclick=function(){row.remove();scheduleCustomValidation();};row.appendChild(rm);
+  row.querySelectorAll("input,select").forEach(function(el){el.addEventListener("input",scheduleCustomValidation);el.addEventListener("change",scheduleCustomValidation);});$("#customVariableRows").appendChild(row);
+}
+function addCustomTestRow(t){
+  t=t||{name:"Example",inputs:{x:2},expected:{value:4},tolerance:1e-9};
+  var row=document.createElement("div");row.className="custom-test-row";
+  var name=customInput("text",t.name,"ct-test-name"),inputs=document.createElement("textarea");inputs.className="ct-test-inputs";inputs.rows=2;inputs.value=JSON.stringify(t.inputs||{});
+  var kind=customSelect([["value","Value"],["display","Display"]],t.expected&&t.expected.display!==undefined?"display":"value","ct-test-kind"),expected=customInput("text",t.expected&&t.expected.display!==undefined?t.expected.display:(t.expected&&t.expected.value!==undefined?t.expected.value:""),"ct-test-expected"),tol=customInput("number",t.tolerance===undefined?1e-9:t.tolerance,"ct-test-tolerance");
+  row.append(miniField("Name",name),miniField("Inputs JSON",inputs),miniField("Expected",kind),miniField("Expected value/display",expected),miniField("Tolerance",tol));
+  var rm=document.createElement("button");rm.type="button";rm.className="custom-row-remove";rm.textContent="Remove";rm.onclick=function(){row.remove();scheduleCustomValidation();};row.appendChild(rm);
+  row.querySelectorAll("input,select,textarea").forEach(function(el){el.addEventListener("input",scheduleCustomValidation);el.addEventListener("change",scheduleCustomValidation);});$("#customTestRows").appendChild(row);
+}
+function builderVariableData(){
+  return $("#customVariableRows .custom-variable-row").map(function(row){return {name:$(".ct-var-name",row).value.trim(),label:$(".ct-var-label",row).value.trim(),type:$(".ct-var-type",row).value,unit:$(".ct-var-unit",row).value.trim()||null,default:$(".ct-var-default",row).value,min:$(".ct-var-min",row).value,max:$(".ct-var-max",row).value,positive:$(".ct-var-positive",row).checked,nonzero:$(".ct-var-nonzero",row).checked};});
+}
+function builderTestData(){
+  return $("#customTestRows .custom-test-row").map(function(row,index){var inputs;try{inputs=JSON.parse($(".ct-test-inputs",row).value||"{}");}catch(e){throw new CT.CustomToolSchemaError("Test "+(index+1)+" inputs are invalid JSON");}var kind=$(".ct-test-kind",row).value,raw=$(".ct-test-expected",row).value,expected={};expected[kind]=kind==="value"?Number(raw):raw;return {name:$(".ct-test-name",row).value||("Test "+(index+1)),inputs:inputs,expected:expected,tolerance:Number($(".ct-test-tolerance",row).value||1e-9)};});
+}
+function builderManifest(){
+  var base=state.customCurrent||CT.newFormulaDraft(),mode=$("#customMode").value,raw={id:base.id,name:$("#customName").value,description:$("#customDescription").value,aliases:base.aliases||[],mode:mode,status:base.status||"draft",variables:builderVariableData(),tests:builderTestData(),createdAt:base.createdAt,updatedAt:base.updatedAt,revision:base.revision,history:base.history||[]};
+  if(mode==="formula"){raw.expression=$("#customExpression").value;raw.output={type:$("#customOutputType").value,unit:$("#customOutputUnit").value.trim()||null,label:"Result"};}
+  else if(mode==="relation")raw.relation=$("#customExpression").value;
+  else raw.baseToolId=$("#customBaseTool").value;
+  return raw;
+}
+function updateCustomModeUi(){
+  var mode=$("#customMode").value,proxy=mode==="builtin-proxy",relation=mode==="relation";
+  $("#customProxyField").style.display=proxy?"grid":"none";$("#customExpressionField").style.display=proxy?"none":"grid";$("#customOutputType").closest(".field").style.display=proxy||relation?"none":"grid";$("#customOutputUnit").closest(".field").style.display=proxy||relation?"none":"grid";
+  $("#customExpressionLabel").textContent=relation?"Relation (left = right)":"Formula expression";$("#customMode").disabled=proxy;scheduleCustomValidation();
+}
+function fillCustomBuilder(manifest){
+  state.customCurrent=CT.normalizeManifest(manifest);var m=state.customCurrent;
+  $("#customName").value=m.name;$("#customDescription").value=m.description;$("#customMode").value=m.mode;$("#customMode").disabled=false;$("#customBaseTool").value=m.baseToolId||"";$("#customExpression").value=m.mode==="formula"?m.expression||"":m.mode==="relation"?m.relation||"":"";
+  $("#customOutputType").value=m.output&&m.output.type||"scalar";$("#customOutputUnit").value=m.output&&m.output.unit||"";
+  $("#customVariableRows").innerHTML="";m.variables.forEach(addCustomVariableRow);$("#customTestRows").innerHTML="";m.tests.forEach(addCustomTestRow);
+  $("#customStatusBadge").textContent=m.status+" · r"+m.revision;$("#customStatusBadge").className=customStatusClass(m.status);$("#customBuilderTitle").textContent=m.name;
+  updateCustomModeUi();renderCustomLibrary();renderCustomValidation(CT.validationReport(m,{skipTests:true}));
+}
+function newCustomTool(){fillCustomBuilder(CT.newFormulaDraft());}
+function editCustomTool(id){var m=state.customLibrary.get(id);if(m)fillCustomBuilder(m);}
+function validationText(report){
+  var lines=report.stages.map(function(s){return (s.pass?"✓ ":"✗ ")+s.stage+(s.message?": "+s.message:"");});
+  (report.tests||[]).forEach(function(t){lines.push((t.pass?"✓ test ":"✗ test ")+t.name+(t.message?": "+t.message:""));});return lines.join("\n");
+}
+function renderCustomValidation(report){var box=$("#customValidationReport");box.textContent=validationText(report);box.className="custom-validation-report "+(report.ok?"pass":"fail");}
+function validateCustomBuilder(full){
+  try{var report=CT.validationReport(builderManifest(),{skipTests:!full});renderCustomValidation(report);return report;}catch(e){var report={ok:false,stages:[{stage:"builder",pass:false,message:e.message}],tests:[]};renderCustomValidation(report);return report;}
+}
+function scheduleCustomValidation(){clearTimeout(state.customValidationTimer);state.customValidationTimer=setTimeout(function(){validateCustomBuilder(false);},180);}
+async function persistCustom(manifest){state.customLibrary.put(manifest);await dbPut("customTools",manifest);renderCustomLibrary();renderToolList();return manifest;}
+async function saveCustomDraft(showToast){
+  var raw=builderManifest(),current=state.customLibrary.get(raw.id),draft;
+  if(current){CT.uninstall(current,T.REGISTRY);draft=CT.revise(current,raw);}else{raw.status="draft";draft=CT.normalizeManifest(raw);}
+  await persistCustom(draft);fillCustomBuilder(draft);if(showToast!==false)toast("Custom tool saved as Draft");return draft;
+}
+async function activateCustomTool(){
+  try{var draft=await saveCustomDraft(false),activated=CT.activate(draft),m=activated.manifest;CT.installActive(m,T.REGISTRY);await persistCustom(m);fillCustomBuilder(m);renderCustomValidation(activated.report);toast("Custom tool activated");}
+  catch(e){toast(errorMessage(e));validateCustomBuilder(true);}
+}
+async function archiveCustomTool(){
+  try{var current=state.customCurrent&&state.customLibrary.get(state.customCurrent.id);if(!current)throw new Error("Save the custom tool first");CT.uninstall(current,T.REGISTRY);var m=CT.archive(current);await persistCustom(m);fillCustomBuilder(m);toast("Custom tool archived");}catch(e){toast(errorMessage(e));}
+}
+async function deleteCustomTool(){
+  var current=state.customCurrent&&state.customLibrary.get(state.customCurrent.id);if(!current)return;if(!confirm("Delete custom tool '"+current.name+"'?"))return;CT.uninstall(current,T.REGISTRY);state.customLibrary.remove(current.id);await dbDelete("customTools",current.id);renderCustomLibrary();renderToolList();newCustomTool();toast("Custom tool deleted");
+}
+function exportCustomTool(){
+  try{var m=state.customCurrent&&state.customLibrary.get(state.customCurrent.id)||CT.normalizeManifest(builderManifest()),doc=CT.exportManifest(m),blob=new Blob([JSON.stringify(doc,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=m.name.replace(/[^A-Za-z0-9._-]+/g,"-").replace(/^-+|-+$/g,"")+".calctool.json";a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},1000);}catch(e){toast(errorMessage(e));}
+}
+async function importCustomFile(file){
+  try{var text=await file.text(),m=CT.importManifest(text);await persistCustom(m);fillCustomBuilder(m);toast("Imported as Draft");}catch(e){toast(errorMessage(e));}
+}
+async function duplicateBuiltInCustom(){
+  try{var m=CT.duplicateBuiltIn($("#customDuplicateSelect").value);await persistCustom(m);fillCustomBuilder(m);toast("Built-in duplicated as Draft");}catch(e){toast(errorMessage(e));}
+}
+function openCustomBuilder(){populateCustomDuplicateSelect();renderCustomLibrary();if(!state.customCurrent)newCustomTool();var d=$("#customToolDialog");if(!d.open)d.showModal();}
+async function loadCustomTools(){
+  var items=[];try{items=await dbAll("customTools");}catch(e){}
+  state.customLibrary=new CT.CustomToolLibrary(items);state.customLibrary.installAll(T.REGISTRY);renderToolList();renderCustomLibrary();
+}
+
 let worksheetSaveTimer=null;
 function newWorksheet(){
   var ws={id:uid(),title:"Untitled worksheet",createdAt:Date.now(),updatedAt:Date.now(),revision:1,blocks:[{id:uid(),type:"math",source:""}]};
@@ -953,6 +1055,11 @@ function bindEvents(){
   $("#regressionBtn").onclick=function(){dataRegression();};$("#histogramBtn").onclick=dataHistogram;$("#boxplotBtn").onclick=dataBoxplot;
   $("#meanCiBtn").onclick=function(){renderInference("ci");};$("#oneSampleTBtn").onclick=function(){renderInference("test");};
   $("#distributionType").onchange=renderDistributionParams;$("#distributionEvalBtn").onclick=function(){renderDistribution("eval");};$("#distributionQuantileBtn").onclick=function(){renderDistribution("quantile");};
+  $("#customToolBuilderBtn").onclick=openCustomBuilder;$("#customCloseBtn").onclick=function(){$("#customToolDialog").close();};
+  $("#customNewBtn").onclick=newCustomTool;$("#customAddVariableBtn").onclick=function(){addCustomVariableRow();scheduleCustomValidation();};$("#customAddTestBtn").onclick=function(){addCustomTestRow();scheduleCustomValidation();};
+  $("#customValidateBtn").onclick=function(){validateCustomBuilder(true);};$("#customSaveDraftBtn").onclick=function(){saveCustomDraft(true);};$("#customActivateBtn").onclick=activateCustomTool;$("#customArchiveBtn").onclick=archiveCustomTool;$("#customExportBtn").onclick=exportCustomTool;$("#customDeleteBtn").onclick=deleteCustomTool;
+  $("#customDuplicateBtn").onclick=duplicateBuiltInCustom;$("#customImportBtn").onclick=function(){$("#customImportFile").click();};$("#customImportFile").onchange=function(){if(this.files&&this.files[0])importCustomFile(this.files[0]);this.value="";};
+  $("#customMode").onchange=updateCustomModeUi;$("#customOutputType").onchange=scheduleCustomValidation;$("#customOutputUnit").oninput=scheduleCustomValidation;$("#customName").oninput=scheduleCustomValidation;$("#customDescription").oninput=scheduleCustomValidation;$("#customExpression").oninput=scheduleCustomValidation;
   $("#addMathBlock").onclick=function(){addBlock("math");};$("#addTextBlock").onclick=function(){addBlock("text");};$("#newWorksheetBtn").onclick=newWorksheet;
   $("#worksheetTitle").addEventListener("input",function(){if(state.activeWorksheet){state.activeWorksheet.title=this.value||"Untitled worksheet";scheduleWorksheetSave();renderWorksheetList();}});
   $("#clearHistoryBtn").onclick=async function(){if(!confirm("Clear calculation history?"))return;state.history=[];try{await dbClear("history");}catch(e){}renderHistory();};
@@ -960,7 +1067,8 @@ function bindEvents(){
 }
 
 async function init(){
-  setTheme(state.theme);state.graph.session=new G.GraphSession({viewport:new G.Viewport(-10,10,-10,10),env:state.env});bindEvents();renderMatrixGrid(false);renderToolList();renderTool();renderDistributionParams();populateDataControls();
+  setTheme(state.theme);state.graph.session=new G.GraphSession({viewport:new G.Viewport(-10,10,-10,10),env:state.env});bindEvents();renderMatrixGrid(false);renderDistributionParams();populateDataControls();
+  await loadCustomTools();renderToolList();renderTool();
   $("#graphExpressions").value="sin(x)\nx^2 / 5";plotGraph();
   try{state.history=(await dbAll("history")).sort(function(a,b){return b.time-a.time;});}catch(e){}
   await loadWorksheets();
