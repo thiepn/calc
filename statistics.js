@@ -201,6 +201,11 @@ class Probability{
   toString(){return M.formatNumber(this.value,12);}
   valueOf(){return this.value;}
 }
+class Event{
+  constructor(name,probability){this.name=String(name||"Event");this.probability=probability instanceof Probability?probability:new Probability(probability);Object.freeze(this);}
+  complement(name){return new Event(name||("not "+this.name),this.probability.complement());}
+  toString(){return this.name+" (p="+this.probability.toString()+")";}
+}
 class FrequencyTable{
   constructor(values,frequencies){
     if(values.length!==frequencies.length)throw new StatisticsError("FREQUENCY_MISMATCH","Values and frequencies must have equal length");
@@ -436,6 +441,12 @@ function wilsonInterval(successes,n,confidence){
   confidence=confidence===undefined?0.95:confidence;const ph=successes/n,z=normalQuantile(1-(1-confidence)/2),den=1+z*z/n,center=(ph+z*z/(2*n))/den,half=z*Math.sqrt(ph*(1-ph)/n+z*z/(4*n*n))/den;
   return new ConfidenceInterval({estimate:ph,lower:Math.max(0,center-half),upper:Math.min(1,center+half),confidence:confidence,method:"Wilson score",n:n,successes:successes});
 }
+function oneProportionZ(successes,n,p0,alternative){
+  if(!Number.isInteger(successes)||!Number.isInteger(n)||n<=0||successes<0||successes>n||!(p0>0&&p0<1))throw new InferenceError("Invalid one-proportion test parameters");
+  const ph=successes/n,se=Math.sqrt(p0*(1-p0)/n),z=(ph-p0)/se,dist=new Normal(0,1);
+  const p=alternative==="greater"?dist.sf(z):alternative==="less"?dist.cdf(z):Math.min(1,2*dist.sf(Math.abs(z)));
+  return new HypothesisTest({null:"p = "+p0,alternative:alternative||"two-sided",statistic:z,distribution:"normal",pValue:p,estimate:ph,se:se,n:n,successes:successes,method:"one-proportion z"});
+}
 function chiSquareGOF(observed,expected){
   if(observed.length!==expected.length||observed.length<2)throw new InferenceError("Chi-square GOF requires matching category counts");
   let stat=0,total=0;for(let i=0;i<observed.length;i++){if(!(expected[i]>0)||observed[i]<0)throw new InferenceError("Expected counts must be positive and observations non-negative");stat+=(observed[i]-expected[i])**2/expected[i];total+=observed[i];}
@@ -512,13 +523,13 @@ class StatisticsWorkerClient{
 
 global.CalcStatistics={
   VERSION:"1.0.0-statistics",
-  Missing:Missing,isMissing:isMissing,DataColumn:DataColumn,Dataset:Dataset,Probability:Probability,FrequencyTable:FrequencyTable,RandomVariable:RandomVariable,ConfidenceInterval:ConfidenceInterval,HypothesisTest:HypothesisTest,parseDelimitedDataset:parseDelimitedDataset,
+  Missing:Missing,isMissing:isMissing,DataColumn:DataColumn,Dataset:Dataset,Probability:Probability,Event:Event,FrequencyTable:FrequencyTable,RandomVariable:RandomVariable,ConfidenceInterval:ConfidenceInterval,HypothesisTest:HypothesisTest,parseDelimitedDataset:parseDelimitedDataset,
   StatisticsError:StatisticsError,DatasetError:DatasetError,DistributionError:DistributionError,InferenceError:InferenceError,RegressionError:RegressionError,
   describe:describe,quantile:quantile,median:median,weightedMean:weightedMean,frequencyExpanded:frequencyExpanded,
   covariance:covariance,pearson:pearson,spearman:spearman,covarianceMatrix:covarianceMatrix,correlationMatrix:correlationMatrix,
   logGamma:logGamma,gamma:gamma,regularizedGammaP:regularizedGammaP,regularizedGammaQ:regularizedGammaQ,betaFn:betaFn,regularizedBeta:regularizedBeta,erf:erf,erfc:erfc,normalQuantile:normalQuantile,
   SeededRNG:SeededRNG,Distribution:Distribution,Bernoulli:Bernoulli,Binomial:Binomial,Geometric:Geometric,NegativeBinomial:NegativeBinomial,Hypergeometric:Hypergeometric,Poisson:Poisson,Uniform:Uniform,Normal:Normal,Exponential:Exponential,GammaDistribution:GammaDistribution,BetaDistribution:BetaDistribution,ChiSquare:ChiSquare,StudentT:StudentT,FDistribution:FDistribution,
-  meanCI:meanCI,oneSampleT:oneSampleT,welchT:welchT,pairedT:pairedT,wilsonInterval:wilsonInterval,chiSquareGOF:chiSquareGOF,chiSquareIndependence:chiSquareIndependence,
+  meanCI:meanCI,oneSampleT:oneSampleT,welchT:welchT,pairedT:pairedT,wilsonInterval:wilsonInterval,oneProportionZ:oneProportionZ,chiSquareGOF:chiSquareGOF,chiSquareIndependence:chiSquareIndependence,
   RegressionModel:RegressionModel,fitRegression:fitRegression,fitPolynomial:fitPolynomial,
   histogramModel:histogramModel,boxPlotModel:boxPlotModel,scatterModel:scatterModel,distributionPlotModel:distributionPlotModel,
   StatisticsWorkerClient:StatisticsWorkerClient
