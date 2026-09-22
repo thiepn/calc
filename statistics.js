@@ -289,11 +289,12 @@ function regularizedBeta(x,a,b){
   return x<(a+1)/(a+b+2)?bt*betaContinuedFraction(a,b,x)/a:1-bt*betaContinuedFraction(b,a,1-x)/b;
 }
 function erfc(x){
+  if(x===0)return 1;
   const z=Math.abs(x),t=1/(1+0.5*z);
   const tau=t*Math.exp(-z*z-1.26551223+t*(1.00002368+t*(0.37409196+t*(0.09678418+t*(-0.18628806+t*(0.27886807+t*(-1.13520398+t*(1.48851587+t*(-0.82215223+t*0.17087277)))))))));
   return x>=0?tau:2-tau;
 }
-function erf(x){return x>=0?1-erfc(x):erfc(-x)-1;}
+function erf(x){if(x===0)return 0;return x>0?1-erfc(x):erfc(-x)-1;}
 
 function normalQuantile(p){
   if(!(p>0&&p<1)){if(p===0)return -Infinity;if(p===1)return Infinity;throw new DistributionError("p must be in [0,1]");}
