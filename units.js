@@ -440,6 +440,22 @@ class QuantityEvaluator{
       return M.evaluateAst(ast,this.env,Object.assign({},this.options,{complex:false}),0);
     }
     if(ast.type==="binary"){
+      if(ast.op==="*"&&ast.implicit){
+        if(ast.right.type==="identifier"){
+          var rightEnv=lookupEnv(this.env,ast.right.name),rightUnit=rightEnv.found?null:UNIT_REGISTRY.get(ast.right.name);
+          if(rightUnit){
+            var leftValue=this.eval(ast.left);
+            if(!(leftValue instanceof Quantity))return quantityFromUnit(leftValue,rightUnit);
+          }
+        }
+        if(ast.left.type==="identifier"){
+          var leftEnv=lookupEnv(this.env,ast.left.name),leftUnit=leftEnv.found?null:UNIT_REGISTRY.get(ast.left.name);
+          if(leftUnit){
+            var rightValue=this.eval(ast.right);
+            if(!(rightValue instanceof Quantity))return quantityFromUnit(rightValue,leftUnit);
+          }
+        }
+      }
       var l=this.eval(ast.left),r=this.eval(ast.right);
       if(ast.op==="+")return qAdd(l,r);if(ast.op==="-")return qSub(l,r);if(ast.op==="*")return qMul(l,r);if(ast.op==="/")return qDiv(l,r);if(ast.op==="^")return qPow(l,r);
       throw new UnitError("UNSUPPORTED_QUANTITY_OPERATOR","Unsupported quantity operator '"+ast.op+"'");
