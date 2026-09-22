@@ -236,7 +236,11 @@ class ToolDefinition{
 }
 class ToolRegistry{
   constructor(){this.map=new Map();this.aliasMap=new Map();}
-  register(spec){const d=spec instanceof ToolDefinition?spec:new ToolDefinition(spec);if(this.map.has(d.id))throw new ToolError("DUPLICATE_TOOL","Duplicate tool '"+d.id+"'");this.map.set(d.id,d);[d.id,d.name].concat(d.aliases).forEach(a=>this.aliasMap.set(String(a).toLowerCase(),d.id));return d;}
+  indexAliases(d){[d.id,d.name].concat(d.aliases).forEach(a=>this.aliasMap.set(String(a).toLowerCase(),d.id));}
+  unindexAliases(d){for(const [alias,id] of Array.from(this.aliasMap.entries()))if(id===d.id)this.aliasMap.delete(alias);}
+  register(spec){const d=spec instanceof ToolDefinition?spec:new ToolDefinition(spec);if(this.map.has(d.id))throw new ToolError("DUPLICATE_TOOL","Duplicate tool '"+d.id+"'");this.map.set(d.id,d);this.indexAliases(d);return d;}
+  unregister(id,options){options=options||{};const d=this.map.get(id);if(!d)return false;if(!options.allowBuiltIn&&!String(id).startsWith("custom."))throw new ToolError("PROTECTED_TOOL","Only custom.* tools may be removed dynamically");this.unindexAliases(d);this.map.delete(id);return true;}
+  replaceCustom(spec){const d=spec instanceof ToolDefinition?spec:new ToolDefinition(spec);if(!String(d.id).startsWith("custom."))throw new ToolError("CUSTOM_TOOL_ID","Dynamic custom tools require a custom.* ID");if(this.map.has(d.id))this.unregister(d.id);return this.register(d);}
   get(id){return this.map.get(id)||this.map.get(this.aliasMap.get(String(id).toLowerCase()))||null;}
   list(category){return Array.from(this.map.values()).filter(t=>t.enabled&&(!category||t.category===category));}
   search(query){query=String(query||"").trim().toLowerCase();if(!query)return this.list();return this.list().map(t=>({tool:t,score:(t.name.toLowerCase().startsWith(query)?100:0)+(t.id.includes(query)?40:0)+(t.aliases.some(a=>a.toLowerCase().includes(query))?25:0)+(t.description.toLowerCase().includes(query)?10:0)})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||a.tool.name.localeCompare(b.tool.name)).map(x=>x.tool);}
@@ -256,7 +260,7 @@ function result(display,value,details,warnings){return {display:display,value:va
 
 const REGISTRY=new ToolRegistry();
 function reg(spec){return REGISTRY.register(spec);}
-const categories=["Everyday","Finance","Geometry","Dates & Time","Programmer","Number Theory","Units & Measurement","Engineering"];
+const categories=["Everyday","Finance","Geometry","Dates & Time","Programmer","Number Theory","Units & Measurement","Engineering","Custom"];
 
 reg({id:"percentage-of",name:"Percentage of value",category:"Everyday",aliases:["percent","percentage"],description:"Find p% of a value.",inputs:[{id:"value",label:"Value",type:"number",default:200},{id:"percent",label:"Percentage",type:"number",default:15}],run:i=>{const v=i.value*i.percent/100;return result(fmt(v),v,{formula:"value × percent / 100"});},examples:[{value:200,percent:15}]});
 reg({id:"percent-change",name:"Percentage change",category:"Everyday",description:"Relative change from old to new value.",inputs:[{id:"old",label:"Old value",type:"number",default:100},{id:"new",label:"New value",type:"number",default:120}],run:i=>{if(i.old===0)throw new ToolDomainError("Percentage change is undefined when old value is zero");const v=(i.new-i.old)/i.old*100;return result(fmt(v)+"%",v,{absoluteChange:i.new-i.old});}});
