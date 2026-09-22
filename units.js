@@ -344,7 +344,7 @@ function qDiv(a,b){
   if(a instanceof Quantity)ensureNotAbsoluteForProduct(a);if(b instanceof Quantity)ensureNotAbsoluteForProduct(b);
   if(a instanceof Quantity&&b instanceof Quantity){
     var d=a.dimension.sub(b.dimension);
-    if(d.isDimensionless()&&a.kind!=="information"&&b.kind!=="information")return scalarDiv(a.baseValue,b.baseValue);
+    if(d.isDimensionless())return scalarDiv(a.baseValue,b.baseValue);
     return new Quantity(scalarDiv(a.baseValue,b.baseValue),d,{kind:inferKindDiv(a,b,d),exact:a.exact&&b.exact});
   }
   if(a instanceof Quantity)return new Quantity(scalarDiv(a.baseValue,b),a.dimension,{kind:a.kind,displayUnit:a.displayUnit,exact:a.exact&&isExactScalar(b)});
@@ -599,10 +599,10 @@ regRelation({id:"ohm",name:"Ohm's law",formula:"I*R",output:"V",variables:{V:vs(
 regRelation({id:"power",name:"Electrical power",formula:"V*I",output:"P",variables:{P:vs("W","power"),V:vs("V","voltage"),I:vs("A","current")},solvers:{
   P:g=>qMul(g.V,g.I),V:g=>qDiv(g.P,g.I),I:g=>qDiv(g.P,g.V)
 }});
-regRelation({id:"force",name:"Newton's second law",formula:"m*a",output:"F",variables:{F:vs("N","force"),m:vs("g","mass"),a:{dimension:DIMS.acceleration,kind:"acceleration"}},solvers:{
+regRelation({id:"force",name:"Newton's second law",formula:"m*a",output:"F",variables:{F:vs("N","force"),m:vs("kg","mass"),a:{dimension:DIMS.acceleration,kind:"acceleration"}},solvers:{
   F:g=>qMul(g.m,g.a),m:g=>qDiv(g.F,g.a),a:g=>qDiv(g.F,g.m)
 }});
-regRelation({id:"kinetic",name:"Kinetic energy",formula:"0.5*m*v^2",output:"E",variables:{E:vs("J","energy"),m:vs("g","mass"),v:{dimension:DIMS.speed,kind:"speed"}},solvers:{
+regRelation({id:"kinetic",name:"Kinetic energy",formula:"0.5*m*v^2",output:"E",variables:{E:vs("J","energy"),m:vs("kg","mass"),v:{dimension:DIMS.speed,kind:"speed"}},solvers:{
   E:g=>qMul(rat(1,2),qMul(g.m,qPow(g.v,rat(2)))),
   m:g=>qDiv(qMul(rat(2),g.E),qPow(g.v,rat(2))),
   v:g=>{var inner=qDiv(qMul(rat(2),g.E),g.m);return qCall("sqrt",[inner],{});}
@@ -665,11 +665,11 @@ function convert(value,from,to){
 }
 function serializeQuantity(q){
   if(!(q instanceof Quantity))throw new UnitError("SERIALIZATION_ERROR","Expected Quantity");
-  return {type:"quantity",baseValue:M.serializeValue(q.baseValue),dimension:q.dimension.toArray(),kind:q.kind,displayUnit:q.displayUnit?q.displayUnit.id:null,expressionUnits:q.expressionUnits||null,exact:q.exact};
+  return {type:"quantity",baseValue:M.serializeValue(q.baseValue),dimension:q.dimension.toArray(),kind:q.kind,displayUnit:q.displayUnit?q.displayUnit.id:null,expressionUnits:q.expressionUnits||null,customDisplayScale:q.customDisplayScale?M.serializeValue(q.customDisplayScale):null,exact:q.exact};
 }
 function deserializeQuantity(data){
   if(!data||data.type!=="quantity")throw new UnitError("SERIALIZATION_ERROR","Invalid quantity payload");
-  return new Quantity(M.deserializeValue(data.baseValue),new DimensionVector(data.dimension),{kind:data.kind,displayUnit:data.displayUnit?UNIT_REGISTRY.require(data.displayUnit):null,expressionUnits:data.expressionUnits,exact:data.exact});
+  return new Quantity(M.deserializeValue(data.baseValue),new DimensionVector(data.dimension),{kind:data.kind,displayUnit:data.displayUnit?UNIT_REGISTRY.require(data.displayUnit):null,expressionUnits:data.expressionUnits,customDisplayScale:data.customDisplayScale?M.deserializeValue(data.customDisplayScale):null,exact:data.exact});
 }
 
 const CONVERTER_CATEGORIES=Object.freeze({
