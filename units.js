@@ -244,7 +244,22 @@ class Quantity{
   }
 }
 
+function exactifyInputScalar(value){
+  if(value instanceof M.Rational||value instanceof M.Complex)return value;
+  if(typeof value==="bigint")return new M.Rational(value);
+  if(typeof value==="number"){
+    if(!Number.isFinite(value))throw new UnitError("INVALID_QUANTITY","Quantity magnitude must be finite");
+    return M.Rational.fromDecimal(String(value));
+  }
+  if(typeof value==="string"){
+    var s=value.trim();if(!s)throw new UnitError("INVALID_QUANTITY","Quantity magnitude is empty");
+    return M.Rational.fromDecimal(s);
+  }
+  return value;
+}
+
 function quantityFromUnit(value,unit){
+  value=exactifyInputScalar(value);
   unit=typeof unit==="string"?UNIT_REGISTRY.require(unit):unit;
   if(unit.mode==="affine"){
     var base=scalarAdd(scalarMul(value,unit.scale),unit.offset);
