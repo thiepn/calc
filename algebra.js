@@ -234,7 +234,7 @@ class Polynomial{
     });
     var out=terms[0].negative?unary("-",terms[0].ast):terms[0].ast;
     for(var i=1;i<terms.length;i++)out=bin(terms[i].negative?"-":"+",out,terms[i].ast);
-    return simplifyAst(out);
+    return out;
   }
   toString(){return printAst(this.toAst());}
   static constant(variable,c){return new Polynomial(variable,[asRational(c)]);}
