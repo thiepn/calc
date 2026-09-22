@@ -174,8 +174,8 @@ async function evaluateCurrent(){
     $("#calcStatus").textContent="Error";$("#exactResult").textContent=errorMessage(e);$("#approxResult").textContent="";
   }
 }
-async function addHistory(expression,res,source){
-  var item={id:uid(),time:Date.now(),expression:expression,result:res.display,approx:res.approx||"",source:source||"calculate"};
+async function addHistory(expression,res,source,extra){
+  var item=Object.assign({id:uid(),time:Date.now(),expression:expression,result:res.display,approx:res.approx||"",source:source||"calculate"},extra||{});
   state.history.unshift(item);if(state.history.length>500)state.history.length=500;
   try{await dbPut("history",item);}catch(e){}
 }
@@ -679,7 +679,7 @@ function renderToolList(){
   var currentCategory=null;
   tools.forEach(function(t){
     if(t.category!==currentCategory){currentCategory=t.category;var h=document.createElement("div");h.className="tool-category";h.textContent=currentCategory;list.appendChild(h);}
-    var b=document.createElement("button");b.textContent=t.name;b.title=t.description;b.classList.toggle("active",t.id===state.selectedTool);b.onclick=function(){state.selectedTool=t.id;renderToolList();renderTool();};list.appendChild(b);
+    var b=document.createElement("button");b.textContent=t.name;b.title=t.description;b.classList.toggle("active",t.id===state.selectedTool);b.onclick=function(){state.selectedTool=t.id;history.replaceState(null,"","#tools/"+encodeURIComponent(t.id));renderToolList();renderTool();};list.appendChild(b);
   });
   if(!tools.length){var none=document.createElement("div");none.className="hint";none.textContent="No matching tools.";list.appendChild(none);}
 }
@@ -730,7 +730,10 @@ function renderToolResult(out){
   if(out.warnings&&out.warnings.length){var warnings=document.createElement("div");warnings.className="tool-warnings";warnings.textContent=out.warnings.join(" ");box.appendChild(warnings);}
   if(out.details&&Object.keys(out.details).length){var meta=document.createElement("div");meta.className="tool-result-meta";meta.textContent=Object.keys(out.details).filter(function(k){return typeof out.details[k]!=="object";}).map(function(k){return k+": "+out.details[k];}).join(" · ");if(meta.textContent)box.appendChild(meta);}
 }
-async function recordToolHistory(t,out){await addHistory(t.name,{display:out.display,approx:""},"tool:"+t.id);}
+async function recordToolHistory(t,out){
+  var payload;try{payload=T.serializeToolResult(out);}catch(e){payload=null;}
+  await addHistory(t.name,{display:out.display,approx:""},"tool:"+t.id,{toolId:t.id,toolVersion:t.version,toolPayload:payload});
+}
 async function runRegistryTool(){
   var t=T.REGISTRY.get(state.selectedTool),box=$("#toolResult");try{var out=T.REGISTRY.execute(t.id,collectToolInputs(t),{precision:state.precision,angle:state.angle});renderToolResult(out);await recordToolHistory(t,out);}catch(e){box.innerHTML="<strong>Error</strong><span class=\"ws-error\"></span>";$(".ws-error",box).textContent=errorMessage(e);}
 }
@@ -874,7 +877,7 @@ function openCommands(){
 }
 function closeCommands(){var d=$("#commandDialog");if(d.open)d.close();}
 function toolCommands(q){
-  return T.REGISTRY.search(q).slice(0,12).map(function(t){return {id:"tool."+t.id,title:t.name,keywords:t.category+" "+t.aliases.join(" ")+" "+t.description,run:function(){state.selectedTool=t.id;state.toolSearch="";renderToolList();renderTool();switchView("tools");}};});
+  return T.REGISTRY.search(q).slice(0,12).map(function(t){return {id:"tool."+t.id,title:t.name,keywords:t.category+" "+t.aliases.join(" ")+" "+t.description,run:function(){state.selectedTool=t.id;state.toolSearch="";renderToolList();renderTool();switchView("tools");history.replaceState(null,"","#tools/"+encodeURIComponent(t.id));}};});
 }
 function renderCommands(q){
   q=String(q||"").trim().toLowerCase();
@@ -906,7 +909,7 @@ function bindEvents(){
   $$("#keypad [data-insert]").forEach(function(b){b.onclick=function(){insertExpression(b.dataset.insert);};});
   $$("[data-key-action]").forEach(function(b){b.onclick=function(){if(b.dataset.keyAction==="clear")clearExpression();else if(b.dataset.keyAction==="backspace")backspaceExpression();else evaluateCurrent();};});
   $$("[data-result-action]").forEach(function(b){b.onclick=function(){if(b.dataset.resultAction==="copy")copyText($("#exactResult").textContent+($("#approxResult").textContent?" "+$("#approxResult").textContent:""));else if(b.dataset.resultAction==="graph")graphCurrent();else if(state.lastResult){state.env.ans=state.lastResult.value;toast("Saved as ans");}};});
-  $$("[data-quick]").forEach(function(b){b.onclick=function(){state.selectedTool=b.dataset.quick;renderToolList();renderTool();switchView("tools");};});
+  $("[data-quick]").forEach(function(b){b.onclick=function(){state.selectedTool=b.dataset.quick;renderToolList();renderTool();switchView("tools");history.replaceState(null,"","#tools/"+encodeURIComponent(state.selectedTool));};});
 
   $("#graphPlotBtn").onclick=plotGraph;$("#graphReset").onclick=resetGraph;$("#graphExport").onclick=exportGraphPng;$("#graphPiTicks").onchange=drawGraph;
   $("#graphRoots").onclick=analyzeGraphRoots;$("#graphIntersections").onclick=analyzeGraphIntersections;$("#graphExtrema").onclick=analyzeGraphExtrema;$("#graphTangent").onclick=analyzeGraphTangent;$("#graphIntegral").onclick=analyzeGraphIntegral;
@@ -961,9 +964,10 @@ async function init(){
   $("#graphExpressions").value="sin(x)\nx^2 / 5";plotGraph();
   try{state.history=(await dbAll("history")).sort(function(a,b){return b.time-a.time;});}catch(e){}
   await loadWorksheets();
-  var initial=(location.hash||"").replace(/^#/,"");
-  switchView(VIEW_META[initial]?initial:"calculate");
-  window.addEventListener("hashchange",function(){var v=(location.hash||"").replace(/^#/,"");if(VIEW_META[v]&&v!==state.view)switchView(v);});
+  var initial=(location.hash||"").replace(/^#/,""),toolRoute=initial.match(/^tools\/(.+)$/);
+  if(toolRoute){var decoded=decodeURIComponent(toolRoute[1]);if(T.REGISTRY.get(decoded))state.selectedTool=decoded;initial="tools";}
+  switchView(VIEW_META[initial]?initial:"calculate");if(initial==="tools"){renderToolList();renderTool();history.replaceState(null,"","#tools/"+encodeURIComponent(state.selectedTool));}
+  window.addEventListener("hashchange",function(){var raw=(location.hash||"").replace(/^#/,""),m=raw.match(/^tools\/(.+)$/),v=raw;if(m){var id=decodeURIComponent(m[1]);if(T.REGISTRY.get(id)){state.selectedTool=id;renderToolList();renderTool();}v="tools";}if(VIEW_META[v]&&v!==state.view)switchView(v);});
   if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(function(){});
 }
 window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();state.installPrompt=e;$("#installBtn").classList.remove("hidden");});
