@@ -89,7 +89,7 @@ function normalizeVariable(v,index){
   if(!v||typeof v!=="object")throw new CustomToolSchemaError("Variable "+(index+1)+" must be an object");
   const name=String(v.name||"").trim();if(!SAFE_NAME.test(name)||FORBIDDEN_NAMES.has(name))throw new CustomToolSchemaError("Invalid variable name '"+name+"'");
   const type=String(v.type||"number");if(!VARIABLE_TYPES.has(type))throw new CustomToolSchemaError("Unsupported variable type '"+type+"'");
-  const out={name:name,label:String(v.label||name),type:type,required:v.required!==false,default:v.default===undefined?"":v.default,unit:v.unit?String(v.unit).trim():null,min:v.min===undefined||v.min===""?null:Number(v.min),max:v.max===undefined||v.max===""?null:Number(v.max),nonzero:!!v.nonzero,positive:!!v.positive,description:String(v.description||"")};
+  const out={name:name,label:String(v.label||name),type:type,required:v.required!==false,default:v.default===undefined?"":v.default,unit:v.unit?String(v.unit).trim():null,min:v.min===undefined||v.min===null||v.min===""?null:Number(v.min),max:v.max===undefined||v.max===null||v.max===""?null:Number(v.max),nonzero:!!v.nonzero,positive:!!v.positive,description:String(v.description||"")};
   if(out.min!==null&&!Number.isFinite(out.min))throw new CustomToolSchemaError(name+" min must be finite");
   if(out.max!==null&&!Number.isFinite(out.max))throw new CustomToolSchemaError(name+" max must be finite");
   if(out.min!==null&&out.max!==null&&out.max<out.min)throw new CustomToolSchemaError(name+" max must be >= min");
