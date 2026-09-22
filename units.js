@@ -451,17 +451,12 @@ function shouldTryQuantity(raw,env){
   if(/^\s*(convert|constant|eng)\s*\(/.test(raw))return true;
   var normalized=normalizeUnitInput(raw),toks=unitTokensIn(raw);
   for(var t of toks){
-    var found=lookupEnv(env,t);if(found.found&&found.value instanceof Quantity)return true;
-    var callPattern=new RegExp("\\b"+t.replace(/[.*+?^$()|[\\]\\\\]/g,"\\\\function shouldTryQuantity(raw,env){
-  if(/^\s*(convert|constant|eng)\s*\(/.test(raw))return true;
-  var toks=unitTokensIn(raw);
-  for(var t of toks){
-    var found=lookupEnv(env,t);if(found.found&&found.value instanceof Quantity)return true;
-    if(UNIT_REGISTRY.get(t)||CONSTANT_REGISTRY[t])return true;
-  }
-  return /\s+to\s+/.test(raw);
-}")+"\\s*\\(");
-    if(M.FUNCTION_REGISTRY&&Object.prototype.hasOwnProperty.call(M.FUNCTION_REGISTRY,t)&&callPattern.test(normalized))continue;
+    var found=lookupEnv(env,t);
+    if(found.found&&found.value instanceof Quantity)return true;
+    if(M.FUNCTION_REGISTRY&&Object.prototype.hasOwnProperty.call(M.FUNCTION_REGISTRY,t)){
+      var callPattern=new RegExp("\\b"+t+"\\s*\\(");
+      if(callPattern.test(normalized))continue;
+    }
     if(UNIT_REGISTRY.get(t)||CONSTANT_REGISTRY[t])return true;
   }
   return /\s+to\s+/.test(raw);
