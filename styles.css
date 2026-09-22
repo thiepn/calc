@@ -331,3 +331,7 @@ kbd{border:1px solid var(--line-strong);background:var(--surface-2);border-radiu
   .custom-variable-row,.custom-test-row{grid-template-columns:repeat(2,minmax(0,1fr))}
   .custom-row-remove{grid-column:1/-1}
 }
+
+.custom-version-list{display:grid;gap:6px}
+.custom-version-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-size:10px;color:var(--muted)}
+.custom-version-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
