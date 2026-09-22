@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#111317">
+  <meta name="description" content="Calc — a local-first universal calculator and mathematical workstation.">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icon.svg">
+  <link rel="stylesheet" href="./styles.css">
+  <title>Calc</title>
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Primary">
+      <button class="brand" data-view="calculate" aria-label="Calc home">
+        <span class="brand-mark">=</span><span class="brand-name">Calc</span>
+      </button>
+      <nav class="nav-list">
+        <button class="nav-item active" data-view="calculate"><span>⌗</span><b>Calculate</b></button>
+        <button class="nav-item" data-view="graph"><span>⌁</span><b>Graph</b></button>
+        <button class="nav-item" data-view="matrix"><span>▦</span><b>Matrix</b></button>
+        <button class="nav-item" data-view="data"><span>▤</span><b>Data</b></button>
+        <button class="nav-item" data-view="tools"><span>◇</span><b>Tools</b></button>
+        <button class="nav-item" data-view="worksheet"><span>▧</span><b>Worksheet</b></button>
+        <button class="nav-item" data-view="history"><span>↺</span><b>History</b></button>
+      </nav>
+      <div class="sidebar-bottom">
+        <button id="installBtn" class="sidebar-action hidden">Install</button>
+        <button id="themeBtn" class="sidebar-action" title="Change theme">Theme</button>
+      </div>
+    </aside>
+
+    <main class="main-shell">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button id="mobileNavBtn" class="icon-btn mobile-only" aria-label="Open navigation">☰</button>
+          <div>
+            <h1 id="viewTitle">Calculate</h1>
+            <div id="viewSubtitle" class="subtitle">Exact when possible. Approximate when necessary.</div>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <button id="angleBtn" class="pill-btn" title="Angle mode">RAD</button>
+          <button id="commandBtn" class="search-button"><span>Search or command</span><kbd>Ctrl K</kbd></button>
+        </div>
+      </header>
+
+      <div class="workspace-wrap">
+        <section class="workspace active" id="view-calculate" data-view-panel="calculate">
+          <div class="calculate-layout">
+            <section class="calc-display panel">
+              <div class="expression-meta">
+                <span id="calcModeLabel">Exact arithmetic</span>
+                <span id="calcStatus"></span>
+              </div>
+              <textarea id="expressionInput" rows="2" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Expression" placeholder="Enter an expression"></textarea>
+              <div class="result-block" aria-live="polite">
+                <div id="exactResult" class="exact-result">0</div>
+                <div id="approxResult" class="approx-result"></div>
+              </div>
+              <div id="resultActions" class="result-actions">
+                <button data-result-action="copy">Copy</button>
+                <button data-result-action="graph">Graph</button>
+                <button data-result-action="save">Save as ans</button>
+              </div>
+            </section>
+
+            <section class="quick-strip panel" aria-label="Quick tools">
+              <button data-quick="percent">Percentage</button>
+              <button data-quick="unit">Convert</button>
+              <button data-view="matrix">Matrix</button>
+              <button data-quick="loan">Loan</button>
+            </section>
+
+            <section class="keypad panel" id="keypad" aria-label="Calculator keypad">
+              <div class="keypad-scientific">
+                <button data-insert="sin(">sin</button><button data-insert="cos(">cos</button><button data-insert="tan(">tan</button><button data-insert="ln(">ln</button>
+                <button data-insert="sqrt(">√</button><button data-insert="^">xʸ</button><button data-insert="pi">π</button><button data-insert="e">e</button>
+                <button data-insert="(">(</button><button data-insert=")">)</button><button data-insert="%">%</button><button data-insert="!">!</button>
+              </div>
+              <div class="keypad-main">
+                <button class="key utility" data-key-action="clear">AC</button>
+                <button class="key utility" data-key-action="backspace">⌫</button>
+                <button class="key operator" data-insert="/">÷</button>
+                <button class="key operator" data-insert="*">×</button>
+                <button class="key" data-insert="7">7</button><button class="key" data-insert="8">8</button><button class="key" data-insert="9">9</button><button class="key operator" data-insert="-">−</button>
+                <button class="key" data-insert="4">4</button><button class="key" data-insert="5">5</button><button class="key" data-insert="6">6</button><button class="key operator" data-insert="+">+</button>
+                <button class="key" data-insert="1">1</button><button class="key" data-insert="2">2</button><button class="key" data-insert="3">3</button><button class="key equals tall" data-key-action="evaluate">=</button>
+                <button class="key wide" data-insert="0">0</button><button class="key" data-insert=".">.</button>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="workspace" id="view-graph" data-view-panel="graph">
+          <div class="graph-layout">
+            <aside class="graph-controls panel">
+              <div class="section-heading">
+                <div><h2>Expressions</h2><p>One function per line.</p></div>
+                <button id="graphReset" class="small-btn">Reset</button>
+              </div>
+              <textarea id="graphExpressions" rows="7" spellcheck="false" placeholder="sin(x)&#10;x^2 / 5"></textarea>
+              <button id="graphPlotBtn" class="primary-btn">Plot</button>
+              <div id="graphLegend" class="graph-legend"></div>
+              <div class="hint">Drag to pan. Wheel or pinch to zoom.</div>
+            </aside>
+            <div class="graph-stage panel">
+              <canvas id="graphCanvas" aria-label="Interactive graph"></canvas>
+              <div id="graphReadout" class="graph-readout">x: 0 · y: 0</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="workspace" id="view-matrix" data-view-panel="matrix">
+          <div class="matrix-layout">
+            <section class="panel">
+              <div class="section-heading">
+                <div><h2>Matrix A</h2><p>Exact fractions are preserved.</p></div>
+                <div class="inline-controls">
+                  <label>Rows <input id="matrixRows" type="number" min="1" max="10" value="3"></label>
+                  <label>Cols <input id="matrixCols" type="number" min="1" max="10" value="3"></label>
+                </div>
+              </div>
+              <div id="matrixGrid" class="matrix-grid"></div>
+              <div class="action-row">
+                <button data-matrix-op="det">det(A)</button>
+                <button data-matrix-op="rref">RREF</button>
+                <button data-matrix-op="inverse">A⁻¹</button>
+                <button data-matrix-op="transpose">Aᵀ</button>
+                <button data-matrix-op="rank">Rank</button>
+              </div>
+            </section>
+            <section class="panel result-panel">
+              <h2>Result</h2>
+              <div id="matrixResult" class="math-output muted">Choose an operation.</div>
+            </section>
+          </div>
+        </section>
+
+        <section class="workspace" id="view-data" data-view-panel="data">
+          <div class="data-layout">
+            <section class="panel">
+              <div class="section-heading"><div><h2>Dataset</h2><p>Paste CSV, TSV, or whitespace-separated values.</p></div></div>
+              <textarea id="dataInput" rows="12" spellcheck="false" placeholder="x,y&#10;1,3&#10;2,5&#10;3,7"></textarea>
+              <div class="action-row">
+                <button id="analyzeDataBtn" class="primary-btn">Analyze</button>
+                <button id="sampleDataBtn">Sample</button>
+              </div>
+            </section>
+            <section class="panel">
+              <h2>Summary</h2>
+              <div id="dataSummary" class="data-summary muted">Paste data and choose Analyze.</div>
+            </section>
+          </div>
+        </section>
+
+        <section class="workspace" id="view-tools" data-view-panel="tools">
+          <div class="tools-layout">
+            <section class="panel tool-list-panel">
+              <div class="section-heading"><div><h2>Tools</h2><p>Focused calculators using the same math core.</p></div></div>
+              <div id="toolList" class="tool-list"></div>
+            </section>
+            <section class="panel tool-runner">
+              <div id="toolRunner"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="workspace" id="view-worksheet" data-view-panel="worksheet">
+          <div class="worksheet-layout">
+            <section class="panel worksheet-main">
+              <div class="worksheet-toolbar">
+                <input id="worksheetTitle" value="Untitled worksheet" aria-label="Worksheet title">
+                <div class="action-row compact">
+                  <button id="addMathBlock">+ Math</button>
+                  <button id="addTextBlock">+ Text</button>
+                  <button id="newWorksheetBtn">New</button>
+                </div>
+              </div>
+              <div id="worksheetBlocks" class="worksheet-blocks"></div>
+            </section>
+            <aside class="panel worksheet-side">
+              <h2>Worksheets</h2>
+              <div id="worksheetList" class="worksheet-list"></div>
+              <div class="hint">Math blocks evaluate top-to-bottom. Assign variables with <code>a = 5</code>.</div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="workspace" id="view-history" data-view-panel="history">
+          <section class="panel history-panel">
+            <div class="section-heading">
+              <div><h2>History</h2><p>Stored locally on this device.</p></div>
+              <button id="clearHistoryBtn" class="danger-ghost">Clear</button>
+            </div>
+            <div id="historyList" class="history-list"></div>
+          </section>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div id="mobileNavBackdrop" class="backdrop hidden"></div>
+
+  <dialog id="commandDialog" class="command-dialog">
+    <div class="command-box">
+      <input id="commandInput" autocomplete="off" placeholder="Search commands, tools, and workspaces…" aria-label="Command search">
+      <div id="commandResults" class="command-results"></div>
+      <footer><span>↑↓ navigate</span><span>Enter run</span><span>Esc close</span></footer>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="./math.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
