@@ -269,7 +269,7 @@
         <section class="workspace" id="view-tools" data-view-panel="tools">
           <div class="tools-layout">
             <section class="panel tool-list-panel">
-              <div class="section-heading"><div><h2>Tools</h2><p>Registered calculators with shared validation, history, and semantics.</p></div></div>
+              <div class="section-heading"><div><h2>Tools</h2><p>Registered calculators with shared validation, history, and semantics.</p></div><button id="customToolBuilderBtn" class="small-btn">Custom Builder</button></div>
               <div id="toolList" class="tool-list"></div>
             </section>
             <section class="panel tool-runner">
@@ -314,6 +314,59 @@
 
   <div id="mobileNavBackdrop" class="backdrop hidden"></div>
 
+  <dialog id="customToolDialog" class="custom-tool-dialog">
+    <div class="custom-builder-shell">
+      <aside class="custom-builder-library">
+        <div class="section-heading"><div><h2>Custom tools</h2><p>Draft, test, activate, archive.</p></div><button id="customNewBtn" class="small-btn">New</button></div>
+        <div class="custom-builder-actions">
+          <select id="customDuplicateSelect" aria-label="Built-in tool to duplicate"></select>
+          <button id="customDuplicateBtn">Duplicate built-in</button>
+          <button id="customImportBtn">Import .calctool.json</button>
+          <input id="customImportFile" type="file" accept=".json,.calctool.json,application/json" hidden>
+        </div>
+        <div id="customToolLibrary" class="custom-tool-library"></div>
+      </aside>
+      <section class="custom-builder-editor">
+        <div class="section-heading">
+          <div><h2 id="customBuilderTitle">Custom Formula Builder</h2><p>No JavaScript, eval, or network execution.</p></div>
+          <div class="inline-controls"><span id="customStatusBadge" class="custom-status">Draft</span><button id="customCloseBtn" class="small-btn">Close</button></div>
+        </div>
+        <div class="custom-builder-grid">
+          <div class="field"><label for="customName">Name</label><input id="customName" maxlength="120"></div>
+          <div class="field"><label for="customMode">Mode</label><select id="customMode"><option value="formula">Formula</option><option value="relation">Relation</option><option value="builtin-proxy">Built-in proxy</option></select></div>
+          <div class="field full"><label for="customDescription">Description</label><input id="customDescription" maxlength="1000"></div>
+          <div class="field full" id="customExpressionField"><label for="customExpression" id="customExpressionLabel">Formula expression</label><textarea id="customExpression" rows="3" spellcheck="false"></textarea></div>
+          <div class="field"><label for="customOutputType">Output type</label><select id="customOutputType"><option value="scalar">Scalar</option><option value="quantity">Quantity</option></select></div>
+          <div class="field"><label for="customOutputUnit">Output unit</label><input id="customOutputUnit" placeholder="e.g. km/hr"></div>
+          <div class="field full custom-proxy-field" id="customProxyField"><label for="customBaseTool">Base built-in tool</label><input id="customBaseTool" readonly></div>
+        </div>
+
+        <div class="custom-builder-section">
+          <div class="section-heading"><div><h3>Variables</h3><p>Typed inputs and structured constraints.</p></div><button id="customAddVariableBtn" class="small-btn">+ Variable</button></div>
+          <div id="customVariableRows" class="custom-variable-rows"></div>
+        </div>
+
+        <div class="custom-builder-section">
+          <div class="section-heading"><div><h3>Tests</h3><p>At least one passing test is required to activate.</p></div><button id="customAddTestBtn" class="small-btn">+ Test</button></div>
+          <div id="customTestRows" class="custom-test-rows"></div>
+        </div>
+
+        <div class="custom-builder-section">
+          <div class="section-heading"><div><h3>Validation</h3><p>Schema → semantic/dimensional → tests.</p></div><button id="customValidateBtn" class="small-btn">Validate</button></div>
+          <div id="customValidationReport" class="custom-validation-report muted">Edit the tool and validate it.</div>
+        </div>
+
+        <div class="action-row custom-builder-footer">
+          <button id="customSaveDraftBtn">Save draft</button>
+          <button id="customActivateBtn" class="primary-btn">Activate</button>
+          <button id="customArchiveBtn">Archive</button>
+          <button id="customExportBtn">Export</button>
+          <button id="customDeleteBtn" class="danger-ghost">Delete</button>
+        </div>
+      </section>
+    </div>
+  </dialog>
+
   <dialog id="commandDialog" class="command-dialog">
     <div class="command-box">
       <input id="commandInput" autocomplete="off" placeholder="Search commands, tools, and workspaces…" aria-label="Command search">
@@ -332,6 +385,7 @@
   <script src="./statistics.js"></script>
   <script src="./graph.js"></script>
   <script src="./tools.js"></script>
+  <script src="./custom-tools.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
