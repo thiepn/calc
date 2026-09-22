@@ -187,7 +187,7 @@ throwsCode(()=>CT.importManifest("{nope"),"CUSTOM_TOOL_IMPORT_ERROR","invalid JS
 throwsCode(()=>CT.importManifest(JSON.stringify({schema:CT.SCHEMA,tool:{name:"x",mode:"formula",variables:[],expression:"fetch(1)",output:{type:"scalar"}}})),"CUSTOM_TOOL_IMPORT_ERROR","semantic-invalid import rejected");
 
 // Library behavior.
-const library=new CT.CustomToolLibrary([activated.manifest,archived]);
+const library=new CT.CustomToolLibrary([activated.manifest,imported]);
 eq(library.list().length,2,"library count");
 eq(library.list("active").length,1,"library status filter");
 library.installAll(T.REGISTRY);
