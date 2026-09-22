@@ -144,7 +144,7 @@ let bits=T.BitInteger.parse("FF",16,8,true);
 eq(bits.raw,255n,"raw 8-bit FF");
 eq(bits.value(),-1n,"signed two's complement interpretation");
 eq(bits.not().format(16),"0","masked NOT");
-eq(T.BitInteger.parse("80",16,8,true).shrArithmetic(1).format(16),"c0","arithmetic right shift");
+eq(T.BitInteger.parse("80",16,8,true).shrArithmetic(1).format(16),"C0","arithmetic right shift");
 eq(T.BitInteger.parse("80",16,8,true).shrLogical(1).format(16),"40","logical right shift");
 eq(T.BitInteger.parse("81",16,8,true).rol(1).format(16),"3","rotate left wraps");
 eq(T.BitInteger.parse("1",16,8,true).ror(1).format(16),"80","rotate right wraps");
