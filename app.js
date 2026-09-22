@@ -1,6 +1,7 @@
 (function(){
 "use strict";
 const M=window.CalcMath;
+const A=window.CalcAlgebra;
 const $=function(s,r){return (r||document).querySelector(s);};
 const $$=function(s,r){return Array.from((r||document).querySelectorAll(s));};
 const uid=function(){return crypto.randomUUID?crypto.randomUUID():"id-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);};
@@ -117,10 +118,14 @@ function backspaceExpression(){
   input.focus();previewExpression();
 }
 function calcOptions(commit){return {angle:state.angle,precision:state.precision,complex:true,commit:commit};}
+function evaluateInput(raw,env,commit){
+  var symbolic=A&&A.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
+  return symbolic||M.evaluate(raw,env,calcOptions(commit));
+}
 function setCalcResult(res,preview){
   $("#exactResult").textContent=res.display;
   $("#approxResult").textContent=res.approx||"";
-  $("#calcStatus").textContent=preview?"Preview":(res.exact?"Exact":"Approximate");
+  $("#calcStatus").textContent=preview?"Preview":(res.symbolic?"Symbolic":(res.exact?"Exact":"Approximate"));
 }
 let previewTimer=null;
 function previewExpression(){
@@ -128,15 +133,16 @@ function previewExpression(){
   previewTimer=setTimeout(function(){
     var raw=$("#expressionInput").value.trim();
     if(!raw){$("#calcStatus").textContent="";return;}
-    try{var res=M.evaluate(raw,Object.create(state.env),calcOptions(false));setCalcResult(res,true);}
+    try{var res=evaluateInput(raw,Object.create(state.env),false);setCalcResult(res,true);}
     catch(e){$("#calcStatus").textContent="";$("#approxResult").textContent="";}
   },90);
 }
 async function evaluateCurrent(){
   var input=$("#expressionInput"),raw=input.value.trim();if(!raw)return;
   try{
-    var res=M.evaluate(raw,state.env,calcOptions(true));
-    if(!res.functionDefinition){state.env.ans=res.value;state.lastResult=res;}
+    var res=evaluateInput(raw,state.env,true);
+    if(!res.functionDefinition&&!res.symbolic){state.env.ans=res.value;state.lastResult=res;}
+    else if(res.symbolic)state.lastResult=null;
     setCalcResult(res,false);
     if(!res.functionDefinition)await addHistory(raw,res);
   }catch(e){
@@ -420,7 +426,7 @@ function recalcWorksheet(resultsOnly){
     block.result="";block.error="";
     if(!String(block.source||"").trim()){updateBlockResult(block);return;}
     try{
-      var res=M.evaluate(block.source,env,calcOptions(true));block.result=res.display+(res.approx?" "+res.approx:"");
+      var res=evaluateInput(block.source,env,true);block.result=res.display+(res.approx?" "+res.approx:"");
     }catch(e){block.error=errorMessage(e);}
     updateBlockResult(block);
   });
@@ -464,6 +470,11 @@ const commands=[
   {id:"view.worksheet",title:"Open Worksheet",keywords:"notebook document",run:function(){switchView("worksheet");}},
   {id:"view.history",title:"Open History",keywords:"recent calculations",run:function(){switchView("history");}},
   {id:"action.newWorksheet",title:"New Worksheet",keywords:"create notebook",run:function(){newWorksheet();switchView("worksheet");}},
+  {id:"algebra.solve",title:"Solve equation",keywords:"algebra equation roots quadratic",run:function(){switchView("calculate");$("#expressionInput").value="solve(x^2 - 5*x + 6 = 0, x)";previewExpression();$("#expressionInput").focus();}},
+  {id:"algebra.simplify",title:"Simplify expression",keywords:"algebra simplify rational expression",run:function(){switchView("calculate");$("#expressionInput").value="simplify((x^2 - 1)/(x - 1))";previewExpression();$("#expressionInput").focus();}},
+  {id:"algebra.expand",title:"Expand expression",keywords:"algebra polynomial expand",run:function(){switchView("calculate");$("#expressionInput").value="expand((x + 1)^3)";previewExpression();$("#expressionInput").focus();}},
+  {id:"algebra.factor",title:"Factor polynomial",keywords:"algebra polynomial factor",run:function(){switchView("calculate");$("#expressionInput").value="factor(x^2 - 5*x + 6)";previewExpression();$("#expressionInput").focus();}},
+  {id:"algebra.inequality",title:"Solve inequality",keywords:"algebra inequality interval",run:function(){switchView("calculate");$("#expressionInput").value="inequality(x^2 - 1 <= 0, x)";previewExpression();$("#expressionInput").focus();}},
   {id:"action.theme",title:"Change Theme",keywords:"light dark oled graphite",run:cycleTheme}
 ];
 tools.forEach(function(t){commands.push({id:"tool."+t.id,title:t.name,keywords:t.desc,run:function(){state.selectedTool=t.id;renderToolList();renderTool();switchView("tools");}});});
