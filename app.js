@@ -873,9 +873,13 @@ function openCommands(){
   var d=$("#commandDialog");if(!d.open)d.showModal();$("#commandInput").value="";commandIndex=0;renderCommands("");setTimeout(function(){$("#commandInput").focus();},0);
 }
 function closeCommands(){var d=$("#commandDialog");if(d.open)d.close();}
+function toolCommands(q){
+  return T.REGISTRY.search(q).slice(0,12).map(function(t){return {id:"tool."+t.id,title:t.name,keywords:t.category+" "+t.aliases.join(" ")+" "+t.description,run:function(){state.selectedTool=t.id;state.toolSearch="";renderToolList();renderTool();switchView("tools");}};});
+}
 function renderCommands(q){
   q=String(q||"").trim().toLowerCase();
-  commandMatches=commands.filter(function(c){return !q||(c.title+" "+(c.keywords||"")).toLowerCase().indexOf(q)>=0;}).slice(0,12);
+  var base=commands.filter(function(c){return !q||(c.title+" "+(c.keywords||"")).toLowerCase().indexOf(q)>=0;}),dynamic=toolCommands(q);
+  var seen=new Set();commandMatches=base.concat(dynamic).filter(function(c){if(seen.has(c.id))return false;seen.add(c.id);return true;}).slice(0,12);
   commandIndex=Math.min(commandIndex,Math.max(0,commandMatches.length-1));
   var box=$("#commandResults");box.innerHTML="";
   commandMatches.forEach(function(c,i){var b=document.createElement("button");b.className="command-item"+(i===commandIndex?" selected":"");b.innerHTML="<span></span><small>Run</small>";$("span",b).textContent=c.title;b.onclick=function(){c.run();closeCommands();};box.appendChild(b);});
