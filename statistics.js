@@ -193,6 +193,35 @@ function frequencyExpanded(values,frequencies){
   return out;
 }
 
+class Probability{
+  constructor(value){value=Number(value);if(!(value>=0&&value<=1))throw new StatisticsError("INVALID_PROBABILITY","Probability must lie in [0,1]");this.value=value;Object.freeze(this);}
+  complement(){return new Probability(1-this.value);}
+  toString(){return M.formatNumber(this.value,12);}
+  valueOf(){return this.value;}
+}
+class FrequencyTable{
+  constructor(values,frequencies){
+    if(values.length!==frequencies.length)throw new StatisticsError("FREQUENCY_MISMATCH","Values and frequencies must have equal length");
+    this.values=values.slice();this.frequencies=frequencies.map(f=>{const n=Number(f);if(!Number.isInteger(n)||n<0)throw new StatisticsError("INVALID_FREQUENCY","Frequencies must be non-negative integers");return n;});
+    this.total=this.frequencies.reduce((a,b)=>a+b,0);Object.freeze(this.values);Object.freeze(this.frequencies);Object.freeze(this);
+  }
+  expanded(){return frequencyExpanded(this.values,this.frequencies);}
+  describe(options){return describe(this.expanded(),options);}
+}
+class RandomVariable{
+  constructor(name,distribution){if(!(distribution instanceof Distribution))throw new DistributionError("RandomVariable requires a Distribution");this.name=name||"X";this.distribution=distribution;Object.freeze(this);}
+  mean(){return this.distribution.mean();}variance(){return this.distribution.variance();}cdf(x){return new Probability(this.distribution.cdf(x));}sf(x){return new Probability(this.distribution.sf(x));}quantile(p){return this.distribution.quantile(p instanceof Probability?p.value:p);}
+}
+class ConfidenceInterval{
+  constructor(spec){Object.assign(this,spec);Object.freeze(this);}
+  contains(x){return x>=this.lower&&x<=this.upper;}
+  toString(){return "["+M.formatNumber(this.lower,12)+", "+M.formatNumber(this.upper,12)+"]";}
+}
+class HypothesisTest{
+  constructor(spec){Object.assign(this,spec);this.pValue=this.pValue instanceof Probability?this.pValue:new Probability(this.pValue);Object.freeze(this);}
+  toString(){return this.method+": statistic="+M.formatNumber(this.statistic,12)+", p="+this.pValue.toString();}
+}
+
 function pairedNumeric(dataset,aName,bName){
   const rows=dataset.completeCases([aName,bName]),pairs=[];
   for(const row of rows){const a=numericValue(row.values[0]),b=numericValue(row.values[1]);if(a!==null&&b!==null)pairs.push({rowId:row.rowId,a:a,b:b});}
@@ -380,20 +409,20 @@ function twoSidedPFromT(t,df){const d=new StudentT(df);return clamp01(2*d.sf(Mat
 function meanCI(values,confidence){
   confidence=confidence===undefined?0.95:confidence;const x=values.map(numericValue).filter(v=>v!==null),s=describe(x);if(x.length<2)throw new InferenceError("Mean CI needs at least two observations");
   const alpha=1-confidence,tcrit=new StudentT(x.length-1).quantile(1-alpha/2),se=s.sdSample/Math.sqrt(x.length);
-  return {estimate:s.mean,lower:s.mean-tcrit*se,upper:s.mean+tcrit*se,confidence:confidence,method:"one-sample t",df:x.length-1,se:se,n:x.length};
+  return new ConfidenceInterval({estimate:s.mean,lower:s.mean-tcrit*se,upper:s.mean+tcrit*se,confidence:confidence,method:"one-sample t",df:x.length-1,se:se,n:x.length});
 }
 function oneSampleT(values,mu0,alternative){
   const x=values.map(numericValue).filter(v=>v!==null),s=describe(x);if(x.length<2)throw new InferenceError("One-sample t-test needs at least two observations");
   const se=s.sdSample/Math.sqrt(x.length);if(se===0)throw new InferenceError("Test is undefined for zero sample variance");
   const t=(s.mean-mu0)/se,dist=new StudentT(x.length-1);let p=alternative==="greater"?dist.sf(t):alternative==="less"?dist.cdf(t):twoSidedPFromT(t,x.length-1);
-  return {null:"mu = "+mu0,alternative:alternative||"two-sided",statistic:t,distribution:"t",df:x.length-1,pValue:p,estimate:s.mean,se:se,n:x.length,method:"one-sample t"};
+  return new HypothesisTest({null:"mu = "+mu0,alternative:alternative||"two-sided",statistic:t,distribution:"t",df:x.length-1,pValue:p,estimate:s.mean,se:se,n:x.length,method:"one-sample t"});
 }
 function welchT(a,b,alternative){
   const x=a.map(numericValue).filter(v=>v!==null),y=b.map(numericValue).filter(v=>v!==null),sx=describe(x),sy=describe(y);if(x.length<2||y.length<2)throw new InferenceError("Welch t-test needs at least two observations per group");
   const vx=sx.varianceSample/x.length,vy=sy.varianceSample/y.length,se=Math.sqrt(vx+vy);if(se===0)throw new InferenceError("Welch test undefined for zero variance");
   const t=(sx.mean-sy.mean)/se,df=(vx+vy)**2/(vx*vx/(x.length-1)+vy*vy/(y.length-1)),dist=new StudentT(df);
   const p=alternative==="greater"?dist.sf(t):alternative==="less"?dist.cdf(t):twoSidedPFromT(t,df);
-  return {null:"mu1 - mu2 = 0",alternative:alternative||"two-sided",statistic:t,distribution:"t",df:df,pValue:p,estimate:sx.mean-sy.mean,se:se,n1:x.length,n2:y.length,method:"Welch two-sample t"};
+  return new HypothesisTest({null:"mu1 - mu2 = 0",alternative:alternative||"two-sided",statistic:t,distribution:"t",df:df,pValue:p,estimate:sx.mean-sy.mean,se:se,n1:x.length,n2:y.length,method:"Welch two-sample t"});
 }
 function pairedT(dataset,a,b,alternative){
   const p=pairedNumeric(dataset,a,b),diff=p.map(x=>x.a-x.b),res=oneSampleT(diff,0,alternative);res.method="paired t";res.pairs=p.length;res.excluded=dataset.rowCount-p.length;return res;
@@ -401,18 +430,18 @@ function pairedT(dataset,a,b,alternative){
 function wilsonInterval(successes,n,confidence){
   if(!Number.isInteger(successes)||!Number.isInteger(n)||n<=0||successes<0||successes>n)throw new InferenceError("Invalid proportion counts");
   confidence=confidence===undefined?0.95:confidence;const ph=successes/n,z=normalQuantile(1-(1-confidence)/2),den=1+z*z/n,center=(ph+z*z/(2*n))/den,half=z*Math.sqrt(ph*(1-ph)/n+z*z/(4*n*n))/den;
-  return {estimate:ph,lower:Math.max(0,center-half),upper:Math.min(1,center+half),confidence:confidence,method:"Wilson score",n:n,successes:successes};
+  return new ConfidenceInterval({estimate:ph,lower:Math.max(0,center-half),upper:Math.min(1,center+half),confidence:confidence,method:"Wilson score",n:n,successes:successes});
 }
 function chiSquareGOF(observed,expected){
   if(observed.length!==expected.length||observed.length<2)throw new InferenceError("Chi-square GOF requires matching category counts");
   let stat=0,total=0;for(let i=0;i<observed.length;i++){if(!(expected[i]>0)||observed[i]<0)throw new InferenceError("Expected counts must be positive and observations non-negative");stat+=(observed[i]-expected[i])**2/expected[i];total+=observed[i];}
-  const df=observed.length-1,p=new ChiSquare(df).sf(stat);return {statistic:stat,df:df,pValue:p,distribution:"chi-square",method:"chi-square goodness-of-fit",n:total,warning:expected.some(x=>x<5)?"Some expected counts are below 5":null};
+  const df=observed.length-1,p=new ChiSquare(df).sf(stat);return new HypothesisTest({statistic:stat,df:df,pValue:p,distribution:"chi-square",method:"chi-square goodness-of-fit",n:total,warning:expected.some(x=>x<5)?"Some expected counts are below 5":null});
 }
 function chiSquareIndependence(table){
   const r=table.length,c=r?table[0].length:0;if(r<2||c<2||table.some(row=>row.length!==c))throw new InferenceError("Chi-square independence requires at least a 2x2 table");
   const rs=table.map(row=>kahanSum(row)),cs=Array.from({length:c},(_,j)=>kahanSum(table.map(row=>row[j]))),n=kahanSum(rs);let stat=0,minExp=Infinity;
   for(let i=0;i<r;i++)for(let j=0;j<c;j++){const e=rs[i]*cs[j]/n;if(e<=0)throw new InferenceError("Expected count is zero");minExp=Math.min(minExp,e);stat+=(table[i][j]-e)**2/e;}
-  const df=(r-1)*(c-1);return {statistic:stat,df:df,pValue:new ChiSquare(df).sf(stat),distribution:"chi-square",method:"chi-square independence",n:n,warning:minExp<5?"Some expected counts are below 5":null};
+  const df=(r-1)*(c-1);return new HypothesisTest({statistic:stat,df:df,pValue:new ChiSquare(df).sf(stat),distribution:"chi-square",method:"chi-square independence",n:n,warning:minExp<5?"Some expected counts are below 5":null});
 }
 
 class RegressionModel{
@@ -479,7 +508,7 @@ class StatisticsWorkerClient{
 
 global.CalcStatistics={
   VERSION:"1.0.0-statistics",
-  Missing:Missing,isMissing:isMissing,DataColumn:DataColumn,Dataset:Dataset,parseDelimitedDataset:parseDelimitedDataset,
+  Missing:Missing,isMissing:isMissing,DataColumn:DataColumn,Dataset:Dataset,Probability:Probability,FrequencyTable:FrequencyTable,RandomVariable:RandomVariable,ConfidenceInterval:ConfidenceInterval,HypothesisTest:HypothesisTest,parseDelimitedDataset:parseDelimitedDataset,
   StatisticsError:StatisticsError,DatasetError:DatasetError,DistributionError:DistributionError,InferenceError:InferenceError,RegressionError:RegressionError,
   describe:describe,quantile:quantile,median:median,weightedMean:weightedMean,frequencyExpanded:frequencyExpanded,
   covariance:covariance,pearson:pearson,spearman:spearman,covarianceMatrix:covarianceMatrix,correlationMatrix:correlationMatrix,
