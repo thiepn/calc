@@ -16,116 +16,114 @@ Calc currently includes:
 - exact subspace workflows and certified numerical decompositions;
 - typed Dataset/DataColumn objects with row identity and explicit missingness;
 - stable descriptive statistics with R7 quantiles;
-- probability objects, distributions and seeded sampling;
-- confidence intervals and hypothesis tests;
-- SVD-backed multiple/polynomial regression;
-- histogram, boxplot, scatter and distribution visualization models;
-- interactive Data, Matrix, Graph, Tools and Worksheet workspaces;
+- probability objects, distributions, seeded sampling and inference;
+- SVD-backed regression;
+- canonical Graph V2 plot/session objects with certified analysis;
+- explicit, piecewise, parametric, polar, implicit and inequality graphing;
+- statistical graph overlays that reuse Phase 6 models;
 - persistent local history/worksheets;
 - offline/installable PWA support.
 
-Calc deliberately distinguishes:
+Calc deliberately distinguishes exact from approximate, unsupported from impossible, statistical missingness from zero, and rendered geometry from mathematical conclusions.
 
-- exact from approximate;
-- unsupported from impossible;
-- missing data from zero;
-- pairwise from complete-case operations;
-- numerical failure from a statistical conclusion;
-- physical dimensions from semantic quantity kinds.
+## Graph V2
 
-It does not claim to be a complete CAS or general statistical package.
+The Graph workspace supports ordinary explicit functions:
+
+```text
+sin(x)
+f(x)=x^2/5
+```
+
+parameter sliders:
+
+```text
+slider(a;1;-3;3;0.1)
+a*x^2
+```
+
+piecewise plots:
+
+```text
+piecewise(-x;-inf;0;() | x;0;inf;[))
+```
+
+parametric plots:
+
+```text
+parametric(cos(t);sin(t);t;0;2*pi)
+```
+
+polar plots:
+
+```text
+polar(1+cos(theta);theta;0;2*pi)
+```
+
+implicit curves:
+
+```text
+implicit(x^2+y^2-1)
+```
+
+and inequalities:
+
+```text
+ineq(y<=x^2)
+```
+
+Graph analysis includes:
+
+```text
+roots
+intersections
+extrema
+tangent lines
+definite integrals
+```
+
+These values route through the certified calculus/algebra engines. Canvas samples are used only for visualization.
+
+Other Graph features include:
+
+- adaptive function sampling;
+- discontinuity splitting;
+- removable-hole markers;
+- open/closed piecewise endpoints;
+- π-aware x-axis ticks;
+- drag pan;
+- wheel zoom;
+- pinch zoom;
+- canonical pointer trace;
+- series visibility toggles;
+- scatter overlays;
+- SVD regression overlays;
+- histogram overlays;
+- box-plot overlays;
+- probability-distribution overlays;
+- 2D vector arrows;
+- PNG export;
+- textual accessibility summary.
 
 ## Data workspace
 
 Paste CSV, TSV, semicolon CSV or whitespace-separated data.
 
-The Data workspace currently provides:
+Data provides:
 
 ```text
 descriptive summaries
 missing counts
 R7 quartiles / IQR
-Pearson correlation
-Spearman correlation
-
-SVD linear regression
-rank / condition diagnostics
-coefficient inference
-
-histogram
-box plot
-
+Pearson / Spearman
+SVD regression
+histogram / box plot
 mean confidence interval
-one-sample t test
-
-Normal
-Binomial
-Poisson
-Student t
-Chi-square
-Gamma
-Beta
-CDF / SF / quantiles
+one-sample t
+probability-distribution CDF / SF / quantiles
 ```
 
-Large summaries and regression can run through the statistics worker.
-
-## Probability & statistics engine
-
-Typed statistical objects include:
-
-```text
-Dataset
-DataColumn
-Probability
-Event
-FrequencyTable
-RandomVariable
-Distribution
-ConfidenceInterval
-HypothesisTest
-RegressionModel
-```
-
-Certified distribution families:
-
-```text
-Bernoulli
-Binomial
-Geometric
-Negative Binomial
-Hypergeometric
-Poisson
-
-Uniform
-Normal
-Exponential
-Gamma
-Beta
-Chi-square
-Student t
-F
-```
-
-Tail-sensitive distributions use direct survival-function paths where appropriate instead of always computing `1 - CDF`.
-
-## Regression
-
-Regression routes through the Phase 5 linear-algebra backend:
-
-```text
-Dataset
-↓
-complete-case design matrix
-↓
-SVD pseudoinverse
-↓
-RegressionModel
-```
-
-The primary solver does not use the normal-equation inverse.
-
-Rank-deficient models remain solvable through the pseudoinverse and emit an explicit warning.
+Large summaries/regression can run in the statistics worker.
 
 ## Matrix workspace
 
@@ -202,17 +200,19 @@ root(cos(x)-x, x, 0, 1)
 - `linear-algebra.js` — Phase 5 Matrix/Vector/subspace/decomposition engine.
 - `statistics.js` — Phase 6 Dataset/probability/inference/regression engine.
 - `statistics-worker.js` — Phase 6 large-data worker.
+- `graph.js` — Phase 7 canonical plot/session/analysis engine.
+- `graph-worker.js` — Phase 7 graph geometry/analysis worker.
 - `app.js` — application state, persistence, workspaces and UI routing.
 - `styles.css` — responsive design system.
 - `sw.js` + `manifest.webmanifest` — offline/installable PWA runtime.
 - `tests/` — cumulative deterministic certification suites.
-- `docs/math/` — normative mathematical/statistical semantics.
+- `docs/math/` — normative mathematical/statistical/graph semantics.
 
 No external runtime libraries are required.
 
 ## Verification
 
-GitHub Actions checks syntax and runs cumulative certification for:
+GitHub Actions checks syntax and cumulative certification for:
 
 - core numeric/parser behavior;
 - deterministic expression fuzzing;
@@ -220,7 +220,8 @@ GitHub Actions checks syntax and runs cumulative certification for:
 - calculus/numerical methods;
 - units/quantities/constants/engineering;
 - Linear Algebra V2;
-- Probability, Statistics & Data V2.
+- Probability, Statistics & Data V2;
+- Graphing V2.
 
 See:
 
@@ -230,5 +231,6 @@ See:
 - `docs/math/UNITS_SEMANTICS.md`
 - `docs/math/LINEAR_ALGEBRA_SEMANTICS.md`
 - `docs/math/STATISTICS_PROBABILITY_SEMANTICS.md`
+- `docs/math/GRAPHING_SEMANTICS.md`
 
-for the exact supported semantics and deliberate limitations.
+for exact supported semantics and deliberate limitations.
