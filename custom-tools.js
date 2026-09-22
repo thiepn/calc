@@ -260,7 +260,7 @@ function validationReport(raw,options){
 }
 function compile(raw,options){
   options=options||{};const report=validationReport(raw,{skipTests:!!options.skipTests});if(!report.ok&&!options.allowInvalid)throw report.error||new CustomToolValidationError("Custom tool validation failed",{report:report});
-  const manifest=report.manifest||normalizeManifest(raw),relationMode=manifest.mode==="relation",inputs;
+  const manifest=report.manifest||normalizeManifest(raw),relationMode=manifest.mode==="relation";let inputs;
   if(manifest.mode==="builtin-proxy"){
     const base=T.REGISTRY.get(manifest.baseToolId);inputs=base.inputs.map(input=>{const override=manifest.variables.find(v=>v.name===input.id);return Object.assign({},input,override&&override.default!==""?{default:override.default}:{});});
   }else inputs=manifest.variables.map(v=>variableInputSchema(v,relationMode));
