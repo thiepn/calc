@@ -405,7 +405,13 @@ function limit(source,variable,targetSource,direction,options){
   if(target.kind==="finite"){
     try{var direct=evalAstAt(expr.ast,variable,target.value);if(Number.isFinite(M.toNumber(direct)))return new LimitResult("finite",direct,{exact:M.isExactValue(direct),method:"direct",direction:dir});}catch(e){}
   }
-  try{var rf=A.RationalFunction.fromAst(expr.ast,variable),pr=polynomialLimit(rf,target,dir);if(pr)return new LimitResult(pr.type,pr.value,{sign:pr.sign,exact:pr.exact,method:pr.method,direction:dir});}catch(e){}
+  try{
+    var rf=A.RationalFunction.fromAst(expr.ast,variable),pr=polynomialLimit(rf,target,dir);
+    if(pr)return new LimitResult(pr.type,pr.value,{sign:pr.sign,exact:pr.exact,method:pr.method,direction:dir});
+  }catch(e){
+    if(e instanceof LimitDoesNotExistError)throw e;
+    if(!(e instanceof A.UnsupportedSymbolicError))throw e;
+  }
   var standard=standardLimit(expr.ast,variable,target);if(standard)return new LimitResult(standard.type,standard.value,{exact:standard.exact,method:standard.method,direction:dir});
   var sampled=sampleLimit(expr,variable,target,dir,options);return new LimitResult(sampled.type,sampled.value,{exact:false,method:sampled.method,direction:dir,errorEstimate:sampled.errorEstimate});
 }
