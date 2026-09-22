@@ -313,14 +313,14 @@ class SymbolicExpression{
     this.restrictions=uniqueRestrictions((options.restrictions||[]).concat(collectRestrictions(this.ast,{realDomain:options.realDomain!==false})));
   }
   simplify(variable){
-    var ast=simplifyAst(this.ast),v=singleVariable(ast,variable);
+    var ast=simplifyAst(this.ast),vars=Array.from(collectVariables(ast)),v=variable||((vars.length===1)?vars[0]:null);
     if(v){
       try{ast=RationalFunction.fromAst(ast,v).toAst();}catch(e){if(!(e instanceof UnsupportedSymbolicError))throw e;}
     }
     return new SymbolicExpression(ast,{restrictions:this.restrictions,realDomain:true});
   }
   expand(variable){
-    var v=singleVariable(this.ast,variable);
+    var vars=Array.from(collectVariables(this.ast)),v=variable||((vars.length===1)?vars[0]:null);
     if(v){
       try{return new SymbolicExpression(Polynomial.fromAst(this.ast,v).toAst(),{restrictions:this.restrictions});}catch(e){if(!(e instanceof UnsupportedSymbolicError))throw e;}
     }
