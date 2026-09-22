@@ -53,6 +53,8 @@ eq(nb.blocks[0].status,"clean","assignment block clean");
 eq(nb.blocks[1].result.display,"10","downstream symbol result");
 eq(nb.blocks[2].result.display,"11","typed block reference result");
 eq(N.deserializeValue(nb.blocks[1].result.serialized).toString(),"10","exact result serialization");
+run=N.evaluateNotebook(nb,{precision:12,angle:"RAD"});
+assert(run.evaluations.every(function(e){return e.cached===true||e.blockId==="b1"&&e.cached===true;}),"second evaluation reuses clean cached blocks");
 
 // Quantity assignment + typed reference preserves units.
 nb=doc([
@@ -89,6 +91,16 @@ eq(nb.blocks[0].status,"dirty","edited source dirty");
 eq(nb.blocks[1].status,"stale","symbol dependent stale");
 eq(nb.blocks[2].status,"stale","transitive dependent stale");
 eq(nb.blocks[3].status,"clean","independent block remains clean");
+
+// Removing an old symbol definition still invalidates its former dependents.
+nb=doc([
+  block("s1","math","a=5"),
+  block("s2","math","a+1")
+]);
+run=N.evaluateNotebook(nb,{});nb=run.document;
+nb.blocks[0].source="z=5";
+nb=N.markDirty(nb,"s1");
+eq(nb.blocks[1].status,"stale","old dependency edge preserved during invalidation");
 
 // Error blocks block explicit dependents but independent later blocks continue.
 nb=doc([
@@ -175,6 +187,7 @@ assert(restored.blocks.every(b=>b.status==="dirty"),"restored computational bloc
 nb=doc([block("a","math","1"),block("b","text","note")]);
 nb=N.addBlock(nb,"matrix",1,{rows:[["1"]],operation:"det"});
 eq(nb.blocks[1].type,"matrix","add block at index");
+eq(nb.blocks[2].status,"stale","insertion invalidates downstream computation");
 const matrixId=nb.blocks[1].id;
 nb=N.duplicateBlock(nb,matrixId);
 eq(nb.blocks[2].type,"matrix","duplicate block");
@@ -183,6 +196,7 @@ nb=N.moveBlock(nb,nb.blocks[2].id,0);
 eq(nb.blocks[0].type,"matrix","move block");
 nb=N.removeBlock(nb,matrixId);
 assert(!nb.blocks.some(b=>b.id===matrixId),"remove block");
+assert(nb.blocks.filter(function(b){return b.type!=="text";}).every(function(b){return b.status==="stale"||b.status==="dirty";}),"removal invalidates remaining computational blocks");
 
 // Structured export/import.
 nb=doc([block("a","math","1/3"),block("t","text","hello")]);
