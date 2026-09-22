@@ -68,6 +68,20 @@ const cob=L.changeOfBasis(std,alt);
 matApprox(cob,new L.Matrix([[0.5,0.5],[0.5,-0.5]]),1e-12,"change-of-basis matrix");
 const proj=L.projectionOntoBasis(new L.Vector([3,4]),new L.Basis([new L.Vector([1,0])],2));
 approx(proj.values[0],3,1e-12,"projection x");approx(proj.values[1],0,1e-12,"projection y");
+const Pproj=L.projectionMatrix(new L.Basis([new L.Vector([1,1])],2));
+matApprox(Pproj.multiply(Pproj),Pproj,1e-12,"projection idempotence");
+matApprox(Pproj.conjugateTranspose(),Pproj,1e-12,"projection self-adjoint");
+eq(M.formatValue(L.scalarTriple(new L.Vector([1,0,0]),new L.Vector([0,1,0]),new L.Vector([0,0,1]))),"1","scalar triple product");
+
+// Linear-system classification.
+const sysUnique=L.solveLinearSystem(new L.Matrix([[new M.Rational(1n),new M.Rational(1n)],[new M.Rational(1n),new M.Rational(-1n)]]),new L.Vector([new M.Rational(3n),new M.Rational(1n)]));
+eq(sysUnique.type,"unique","unique system classification");
+eq(sysUnique.particular.toString(),"[2, 1]","unique system solution");
+const sysInfinite=L.solveLinearSystem(new L.Matrix([[new M.Rational(1n),new M.Rational(1n)],[new M.Rational(2n),new M.Rational(2n)]]),new L.Vector([new M.Rational(2n),new M.Rational(4n)]));
+eq(sysInfinite.type,"infinite","infinite system classification");
+eq(sysInfinite.nullSpace.dimension(),1,"infinite system null direction");
+const sysBad=L.solveLinearSystem(new L.Matrix([[new M.Rational(1n),new M.Rational(1n)],[new M.Rational(1n),new M.Rational(1n)]]),new L.Vector([new M.Rational(1n),new M.Rational(2n)]));
+eq(sysBad.type,"inconsistent","inconsistent system classification");
 
 // Modified Gram-Schmidt.
 const mgs=L.modifiedGramSchmidt([new L.Vector([1,1,0]),new L.Vector([1,0,1])]);
