@@ -868,7 +868,7 @@ function createNotebook(){
 }
 function checkpointWorksheet(reason){
   if(!state.activeWorksheet)return;var t=Date.now();
-  if(t-worksheetCheckpointAt>900){state.activeWorksheet=NB.commitRevision(state.activeWorksheet,reason||"edit");worksheetCheckpointAt=t;}
+  if(t-worksheetCheckpointAt>900){replaceActiveWorksheet(NB.commitRevision(state.activeWorksheet,reason||"edit"));worksheetCheckpointAt=t;}
 }
 function newWorksheet(){
   var ws=createNotebook();state.worksheets.unshift(ws);state.activeWorksheet=ws;renderWorksheetArea();saveWorksheet(ws,true);
