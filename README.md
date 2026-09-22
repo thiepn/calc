@@ -13,7 +13,7 @@ Calc currently includes:
 - canonical Matrix/Vector/subspace objects and certified numerical decompositions;
 - typed Dataset/probability/inference/regression systems;
 - Graph V2 with explicit, piecewise, parametric, polar, implicit and inequality plots;
-- a registry-driven specialized calculator system with finance, geometry, date, programmer and number-theory tools;\n- a safe declarative Custom Formula Builder with Draft/Active/Archived lifecycle, tests, quantities, relations, revision history, and strict `.calctool.json` import/export;
+- a registry-driven specialized calculator system with finance, geometry, date, programmer and number-theory tools;\n- a safe declarative Custom Formula Builder with Draft/Active/Archived lifecycle, tests, quantities, relations, revision history, and strict `.calctool.json` import/export;\n- typed Worksheets & Notebooks V2 with Math/Text/Tool/Matrix/Data/Graph blocks, dependencies, stale tracking, version restore, import/export, and recovery mode;
 - persistent history/worksheets;
 - offline/installable PWA support.
 
@@ -187,6 +187,71 @@ Other builder features include:
 - forced-Draft imports with new local IDs;
 - startup isolation for invalid old/corrupt Active manifests.
 
+## Worksheets & Notebooks V2
+
+The former Math/Text worksheet prototype has been replaced by a typed notebook engine.
+
+Block types:
+
+```text
+Math
+Text
+Tool
+Matrix
+Data
+Graph
+```
+
+Top-down symbols remain supported:
+
+```text
+Block A
+a = 5
+
+Block B
+a * 2
+→ 10
+```
+
+Stable typed block references use:
+
+```text
+{{block:<block-id>}}
+```
+
+A referenced Rational, real scalar, or Quantity is passed as a typed value rather than reconstructed from display text.
+
+Notebook execution tracks:
+
+```text
+dirty
+stale
+clean
+error
+blocked
+```
+
+If an upstream block fails, dependent blocks become blocked while independent later branches continue to run.
+
+Other notebook capabilities include:
+
+- automatic migration of older worksheets;
+- Active custom-tool blocks through stable Tool Registry IDs;
+- Matrix operations through Phase 5;
+- Data summaries/correlation/regression through Phase 6;
+- Graph V2 source blocks;
+- exact typed result serialization;
+- clean-block result reuse;
+- stale propagation across old and new dependency edges;
+- manual or debounced Auto run;
+- block duplicate/reorder/delete;
+- up to 30 local revision snapshots;
+- restore-as-new-revision;
+- `.calcnb.json` import/export;
+- Markdown export;
+- recovery mode for malformed legacy records;
+- 500-block notebook complexity budget.
+
 ## Graph V2
 
 Graph supports:
@@ -236,7 +301,7 @@ eng(ohm, V=12 V, R=6 ohm)
 - `linear-algebra.js` — Phase 5 linear algebra.
 - `statistics.js` / `statistics-worker.js` — Phase 6 probability/statistics/data.
 - `graph.js` / `graph-worker.js` — Phase 7 graph models, geometry and analysis.
-- `tools.js` — Phase 8 Tool Registry, finance, dates, geometry, programmer and number theory.\n- `custom-tools.js` — Phase 9 safe custom formulas, relations, validation, lifecycle and import/export.
+- `tools.js` — Phase 8 Tool Registry, finance, dates, geometry, programmer and number theory.\n- `custom-tools.js` — Phase 9 safe custom formulas, relations, validation, lifecycle and import/export.\n- `notebook.js` — Phase 10 typed notebook blocks, dependencies, versioning, execution, import/export and recovery.
 - `app.js` — application state, persistence, workspaces and UI routing.
 - `styles.css` — responsive design system.
 - `sw.js` + `manifest.webmanifest` — offline/installable PWA runtime.
@@ -257,8 +322,8 @@ GitHub Actions runs cumulative certification for:
 - Linear Algebra V2;
 - Probability/Statistics/Data V2;
 - Graphing V2;
-- Specialized Calculators V2;\n- Custom Formula Builder.
+- Specialized Calculators V2;\n- Custom Formula Builder;\n- Worksheets & Notebooks V2.
 
 The Phase 8 registry-wide test executes every enabled generic tool with its declared defaults in addition to deterministic boundary/reference cases.
 
-See the files under `docs/math/` and `docs/release/` for the exact supported semantics, verification scope and deliberate limitations. Custom Tools are specified in `docs/math/CUSTOM_TOOLS_SEMANTICS.md`.
+See the files under `docs/math/` and `docs/release/` for the exact supported semantics, verification scope and deliberate limitations. Custom Tools are specified in `docs/math/CUSTOM_TOOLS_SEMANTICS.md`; notebook semantics are specified in `docs/math/NOTEBOOK_SEMANTICS.md`.
