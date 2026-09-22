@@ -312,7 +312,10 @@ function adaptiveSimpson(sourceOrFn,variable,a,b,options){
   var m=(a+b)/2,fa=safe(a),fm=safe(m),fb=safe(b),whole=simp(a,b,fa,fm,fb),errTotal=0;
   function recurse(x0,x1,f0,fmid,f1,S,depth){
     checkToken(o);var mid=(x0+x1)/2,lm=(x0+mid)/2,rm=(mid+x1)/2,fl=safe(lm),fr=safe(rm),L=simp(x0,mid,f0,fl,fmid),R=simp(mid,x1,fmid,fr,f1),delta=L+R-S,tol=o.absTol+o.relTol*Math.abs(L+R);
-    if(depth<=0){errTotal+=Math.abs(delta)/15;return L+R+delta/15;}
+    if(depth<=0){
+      if(Math.abs(delta)>15*tol)throw new ConvergenceError("Adaptive integration exhausted its recursion depth before meeting tolerance",{interval:[x0,x1],estimatedError:Math.abs(delta)/15});
+      errTotal+=Math.abs(delta)/15;return L+R+delta/15;
+    }
     if(Math.abs(delta)<=15*tol){errTotal+=Math.abs(delta)/15;return L+R+delta/15;}
     return recurse(x0,mid,f0,fl,fmid,L,depth-1)+recurse(mid,x1,fmid,fr,f1,R,depth-1);
   }
@@ -342,18 +345,32 @@ function definiteIntegral(source,variable,aSource,bSource,options){
   return new DefiniteIntegralResult(num.value,false,num.method,num.errorEstimate,{evaluations:num.evaluations});
 }
 
-function polynomialLimit(rf,target){
+function polynomialLimit(rf,target,direction){
   var p=rf.numerator,q=rf.denominator;
   if(target.kind==="infinity"){
-    var dp=p.degree,dq=q.degree;if(dp<dq)return {type:"finite",value:rat(0),exact:true,method:"rational-degree"};
+    var dp=p.degree,dq=q.degree;
+    if(dp<dq)return {type:"finite",value:rat(0),exact:true,method:"rational-degree"};
     if(dp===dq)return {type:"finite",value:p.leading().div(q.leading()),exact:true,method:"rational-degree"};
     var diff=dp-dq,lead=p.leading().div(q.leading()),sgn=lead.n<0n?-1:1;if(target.sign<0&&diff%2===1)sgn*=-1;
     return {type:"infinite",sign:sgn,exact:true,method:"rational-degree"};
   }
   var x=target.value,pv=p.evaluate(x),qv=q.evaluate(x),steps=0;
   if(!qv.isZero())return {type:"finite",value:pv.div(qv),exact:true,method:"direct-rational"};
-  while(qv.isZero()&&pv.isZero()&&steps<32&&p.degree>0&&q.degree>0){p=p.derivative();q=q.derivative();pv=p.evaluate(x);qv=q.evaluate(x);steps++;}
+  while(qv.isZero()&&pv.isZero()&&steps<32&&p.degree>0&&q.degree>0){
+    p=p.derivative();q=q.derivative();pv=p.evaluate(x);qv=q.evaluate(x);steps++;
+  }
   if(!qv.isZero())return {type:"finite",value:pv.div(qv),exact:true,method:"polynomial-lhopital",steps:steps};
+  if(!pv.isZero()){
+    var multiplicity=0,qd=q;
+    while(multiplicity<32&&qd.evaluate(x).isZero()&&qd.degree>0){qd=qd.derivative();multiplicity++;}
+    var qlead=qd.evaluate(x);
+    if(qlead.isZero())return null;
+    var baseSign=pv.div(qlead).n<0n?-1:1;
+    if(direction==="both"&&multiplicity%2===1)throw new LimitDoesNotExistError("Left- and right-hand limits approach opposite infinities",{poleOrder:multiplicity});
+    var sideSign=baseSign;
+    if(direction==="left"&&multiplicity%2===1)sideSign*=-1;
+    return {type:"infinite",sign:sideSign,exact:true,method:"rational-pole",poleOrder:multiplicity};
+  }
   return null;
 }
 function standardLimit(ast,variable,target){
@@ -371,7 +388,9 @@ function sampleLimit(expr,variable,target,direction){
   dirs.forEach(function(dir){
     var vals=[];for(var k=2;k<=9;k++){var h=Math.pow(10,-k)*Math.max(1,Math.abs(x0));try{vals.push(fn.evaluate(x0+dir*h));}catch(e){}}
     if(vals.length<4)throw new UnsupportedLimitError("Not enough finite samples to estimate the limit");
-    var tail=vals.slice(-3),avg=tail.reduce(function(a,b){return a+b;},0)/tail.length,spread=Math.max.apply(null,tail)-Math.min.apply(null,tail);results.push({value:avg,spread:spread});
+    var tail=vals.slice(-3),avg=tail.reduce(function(a,b){return a+b;},0)/tail.length,spread=Math.max.apply(null,tail)-Math.min.apply(null,tail);
+    if(spread>1e-5*Math.max(1,Math.abs(avg)))throw new UnsupportedLimitError("Numerical samples do not stabilize sufficiently to certify a limit",{direction:dir,spread:spread});
+    results.push({value:avg,spread:spread});
   });
   if(results.length===2&&!numericalClose(results[0].value,results[1].value,1e-6,1e-6))throw new LimitDoesNotExistError("Left- and right-hand limits disagree",{left:results[0].value,right:results[1].value});
   var val=results.reduce(function(a,b){return a+b.value;},0)/results.length,err=Math.max.apply(null,results.map(function(r){return r.spread;}));if(!Number.isFinite(val))throw new UnsupportedLimitError("Numerical limit estimate was not finite");
@@ -386,7 +405,7 @@ function limit(source,variable,targetSource,direction,options){
   if(target.kind==="finite"){
     try{var direct=evalAstAt(expr.ast,variable,target.value);if(Number.isFinite(M.toNumber(direct)))return new LimitResult("finite",direct,{exact:M.isExactValue(direct),method:"direct",direction:dir});}catch(e){}
   }
-  try{var rf=A.RationalFunction.fromAst(expr.ast,variable),pr=polynomialLimit(rf,target);if(pr)return new LimitResult(pr.type,pr.value,{sign:pr.sign,exact:pr.exact,method:pr.method,direction:dir});}catch(e){}
+  try{var rf=A.RationalFunction.fromAst(expr.ast,variable),pr=polynomialLimit(rf,target,dir);if(pr)return new LimitResult(pr.type,pr.value,{sign:pr.sign,exact:pr.exact,method:pr.method,direction:dir});}catch(e){}
   var standard=standardLimit(expr.ast,variable,target);if(standard)return new LimitResult(standard.type,standard.value,{exact:standard.exact,method:standard.method,direction:dir});
   var sampled=sampleLimit(expr,variable,target,dir,options);return new LimitResult(sampled.type,sampled.value,{exact:false,method:sampled.method,direction:dir,errorEstimate:sampled.errorEstimate});
 }
