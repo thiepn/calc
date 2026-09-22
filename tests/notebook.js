@@ -184,7 +184,9 @@ assert(restored.revision>nb.revision,"restore creates newer revision");
 assert(restored.blocks.every(b=>b.status==="dirty"),"restored computational blocks dirty");
 
 // Add/remove/move/duplicate.
-nb=doc([block("a","math","1"),block("b","text","note")]);
+nb=doc([block("a","math","1"),block("b","math","2"),block("t","text","note")]);
+run=N.evaluateNotebook(nb,{});nb=run.document;
+eq(nb.blocks[1].status,"clean","structural fixture starts clean");
 nb=N.addBlock(nb,"matrix",1,{rows:[["1"]],operation:"det"});
 eq(nb.blocks[1].type,"matrix","add block at index");
 eq(nb.blocks[2].status,"stale","insertion invalidates downstream computation");
