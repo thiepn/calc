@@ -14,7 +14,7 @@ const VIEW_META={
   calculate:["Calculate","Exact when possible. Approximate when necessary."],
   graph:["Graph","Interactive 2D plotting and analysis."],
   matrix:["Matrix","Exact matrix arithmetic and row reduction."],
-  data:["Data","Descriptive statistics and linear regression."],
+  data:["Data","Datasets, distributions, inference, regression and statistical models."],
   tools:["Tools","Focused calculators built on the shared math core."],
   worksheet:["Worksheet","Persistent multi-step mathematical work."],
   history:["History","Your local calculation history."]
@@ -781,6 +781,9 @@ const commands=[
   {id:"view.tools",title:"Open Tools",keywords:"finance geometry units",run:function(){switchView("tools");}},
   {id:"view.worksheet",title:"Open Worksheet",keywords:"notebook document",run:function(){switchView("worksheet");}},
   {id:"view.history",title:"Open History",keywords:"recent calculations",run:function(){switchView("history");}},
+  {id:"data.regression",title:"Regression analysis",keywords:"statistics regression data least squares",run:function(){switchView("data");setTimeout(function(){var el=$("#regressionBtn");if(el)el.focus();},0);}},
+  {id:"data.inference",title:"Statistical inference",keywords:"statistics t test confidence interval hypothesis",run:function(){switchView("data");setTimeout(function(){var el=$("#testColumnSelect");if(el)el.focus();},0);}},
+  {id:"data.distribution",title:"Probability distribution",keywords:"probability normal binomial poisson distribution cdf quantile",run:function(){switchView("data");setTimeout(function(){var el=$("#distributionType");if(el)el.focus();},0);}},
   {id:"action.newWorksheet",title:"New Worksheet",keywords:"create notebook",run:function(){newWorksheet();switchView("worksheet");}},
   {id:"algebra.solve",title:"Solve equation",keywords:"algebra equation roots quadratic",run:function(){switchView("calculate");$("#expressionInput").value="solve(x^2 - 5*x + 6 = 0, x)";previewExpression();$("#expressionInput").focus();}},
   {id:"algebra.simplify",title:"Simplify expression",keywords:"algebra simplify rational expression",run:function(){switchView("calculate");$("#expressionInput").value="simplify((x^2 - 1)/(x - 1))";previewExpression();$("#expressionInput").focus();}},
