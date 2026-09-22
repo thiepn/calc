@@ -84,6 +84,8 @@ const reversed=C.definiteIntegral("x","x","2","0");
 eq(M.formatValue(reversed.value),"-2","reversed exact bounds");
 
 throwsCode(()=>C.adaptiveSimpson("1/x","x",-1,1),"SINGULARITY_DETECTED","singular ordinary integral");
+throwsCode(()=>C.adaptiveSimpson("sin(1000*x)","x",0,1,{maxDepth:0,absTol:1e-16,relTol:1e-16}),"CONVERGENCE_FAILURE","integration depth exhaustion reports failure");
+
 throwsCode(()=>C.definiteIntegral("exp(-x^2)","x","0","inf"),"UNSUPPORTED_INTEGRAL","improper integrals explicit unsupported");
 
 // Compiled numerical function parity.
@@ -110,6 +112,12 @@ const infLim=C.limit("(2*x^2+1)/(x^2-3)","x","inf");
 eq(infLim.toString(),"2","rational infinity limit");
 
 throwsCode(()=>C.limit("1/x","x","0"),"LIMIT_DOES_NOT_EXIST","two-sided pole limit DNE");
+const leftPole=C.limit("1/x","x","0","left");
+eq(leftPole.toString(),"−∞","left pole limit");
+const rightPole=C.limit("1/x","x","0","right");
+eq(rightPole.toString(),"∞","right pole limit");
+throwsCode(()=>C.limit("sin(1/x)","x","0"),"UNSUPPORTED_LIMIT","unstable numerical sampling is not certified");
+
 
 // Taylor series.
 const tay=C.taylor("exp(x)","x","0",4);
@@ -145,6 +153,10 @@ throwsCode(()=>C.bisection("x^2-2","x",0,2,{token}),"CANCELLED","numerical cance
 
 // Command surface.
 eq(C.runCommand("diff(x^3, x)").display,"3 * x ^ 2","diff command");
+eq(C.runCommand("gradient(x^2+y^2, x, y)").display,"[2 * x, 2 * y]","gradient command");
+eq(C.runCommand("jacobian(x^2+y; x*y, x, y)").display,"[[2 * x, 1], [y, x]]","jacobian command");
+eq(C.runCommand("hessian(x^2+3*x*y+y^2, x, y)").display,"[[2, 3], [3, 2]]","hessian command");
+
 assert(C.runCommand("integrate(1/x, x)").display.includes("ln(abs(x))"),"integrate command");
 eq(C.runCommand("integral(x^2, x, 0, 3)").display,"9","definite integral command");
 eq(C.runCommand("limit(sin(x)/x, x, 0)").display,"1","limit command");
