@@ -282,19 +282,38 @@
           <div class="worksheet-layout">
             <section class="panel worksheet-main">
               <div class="worksheet-toolbar">
-                <input id="worksheetTitle" value="Untitled worksheet" aria-label="Worksheet title">
-                <div class="action-row compact">
-                  <button id="addMathBlock">+ Math</button>
-                  <button id="addTextBlock">+ Text</button>
+                <input id="worksheetTitle" value="Untitled notebook" aria-label="Notebook title">
+                <div class="action-row compact worksheet-actions">
+                  <button id="runWorksheetBtn" class="primary-btn">Run</button>
+                  <label class="worksheet-auto"><input id="worksheetAutoRun" type="checkbox" checked> Auto</label>
                   <button id="newWorksheetBtn">New</button>
                 </div>
               </div>
+              <div class="action-row compact worksheet-block-add">
+                <button data-add-ws-block="math">+ Math</button>
+                <button data-add-ws-block="text">+ Text</button>
+                <button data-add-ws-block="tool">+ Tool</button>
+                <button data-add-ws-block="matrix">+ Matrix</button>
+                <button data-add-ws-block="data">+ Data</button>
+                <button data-add-ws-block="graph">+ Graph</button>
+              </div>
+              <div id="worksheetRecoveryBanner" class="worksheet-recovery hidden"></div>
               <div id="worksheetBlocks" class="worksheet-blocks"></div>
             </section>
             <aside class="panel worksheet-side">
-              <h2>Worksheets</h2>
+              <div class="section-heading"><div><h2>Notebooks</h2><p>Typed, versioned, local-first.</p></div></div>
+              <div class="worksheet-side-actions">
+                <button id="worksheetImportBtn">Import</button>
+                <input id="worksheetImportFile" type="file" accept=".json,.calcnb.json,application/json" hidden>
+                <button id="worksheetExportBtn">Export JSON</button>
+                <button id="worksheetMarkdownBtn">Export Markdown</button>
+              </div>
               <div id="worksheetList" class="worksheet-list"></div>
-              <div class="hint">Math blocks evaluate top-to-bottom. Assign variables with <code>a = 5</code>.</div>
+              <div class="worksheet-side-section">
+                <h3>Versions</h3>
+                <div id="worksheetVersionList" class="worksheet-version-list muted">No previous revisions.</div>
+              </div>
+              <div class="hint">Blocks evaluate top-to-bottom. Reference an earlier block with <code>{{block:block-id}}</code>. Failed dependencies block only their downstream dependents.</div>
             </aside>
           </div>
         </section>
@@ -391,6 +410,7 @@
   <script src="./graph.js"></script>
   <script src="./tools.js"></script>
   <script src="./custom-tools.js"></script>
+  <script src="./notebook.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
