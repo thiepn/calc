@@ -6,28 +6,67 @@ A local-first universal calculator PWA and mathematical workstation.
 
 Calc currently includes:
 
-- exact arbitrary-size integer and Rational arithmetic;
+- exact arbitrary-size Integer/Rational arithmetic;
 - finite Real and exact-capable Complex scalars;
-- scientific calculation, variables, multi-argument user functions and angle modes;
+- scientific calculation, variables, user functions and angle modes;
 - symbolic simplification, expansion, collection, factoring and substitution;
-- linear/quadratic/rational/radical/absolute equation solving for certified subsets;
-- factorable higher polynomial solving;
-- exact linear systems and linear/quadratic inequalities;
-- symbolic derivatives, higher/partial derivatives, gradients, Jacobians and Hessians;
-- controlled verified antiderivatives;
-- exact and adaptive numerical definite integration;
-- exact/controlled limits and Taylor polynomials;
-- numerical derivatives and bisection/Newton/secant/hybrid root solving;
-- cancellable numerical worker architecture;
-- unit conversion;
+- equation, system and inequality solving for certified algebraic subsets;
+- symbolic derivatives, multivariable calculus, verified antiderivatives, limits and Taylor polynomials;
+- numerical differentiation, adaptive integration and safeguarded root solving;
+- first-class physical quantities with SI dimensions;
+- exact unit conversion factors where definitions are exact;
+- SI and IEC prefix engines;
+- affine absolute-temperature and temperature-difference semantics;
+- explicit angle quantities;
+- typed physical constants with provenance;
+- dimension-checked engineering relations;
 - exact Matrix determinant/RREF/inverse/transpose/rank;
 - descriptive statistics and linear regression;
 - interactive 2D graphing;
-- specialized percentage, loan, geometry, date, programmer and number-theory tools;
+- specialized everyday/finance/geometry/date/programmer/number-theory tools;
 - persistent worksheets and local history;
 - offline/installable PWA support.
 
-The project intentionally distinguishes **unsupported mathematics** from **no solution** and **numerical non-convergence**. It does not claim to be a complete CAS.
+Calc deliberately distinguishes:
+
+- exact from approximate;
+- unsupported mathematics from no solution;
+- numerical non-convergence from a mathematical result;
+- physical dimension from semantic quantity kind.
+
+It does not claim to be a complete CAS.
+
+## Quantity examples
+
+```text
+5 km + 300 m
+
+80 km / 1.25 hr to km/hr
+
+5 kg * 9.81 m/s^2
+
+1 cm^2 to m^2
+
+20 degC to degF
+
+30 degC - 20 degC
+
+sin(90 deg)
+
+1 KiB to B
+
+constant(g0)
+
+eng(ohm, V=12 V, R=6 ohm)
+```
+
+Quantity variables can also be assigned:
+
+```text
+d = 5 km
+t = 20 min
+d / t to km/hr
+```
 
 ## Algebra commands
 
@@ -63,20 +102,35 @@ nderivative(sin(x), x, 0)
 root(cos(x)-x, x, 0, 1)
 ```
 
+## Engineering commands
+
+```text
+eng(ohm, V=12 V, R=6 ohm)
+
+eng(power, V=12 V, I=2 A)
+
+eng(force, F=10 N, m=2 kg)
+
+eng(wave, f=2 Hz, lambda=3 m)
+```
+
+The Tools workspace also exposes these relations through a normal form UI. Leave one variable blank to solve it, or fill every variable to verify consistency.
+
 ## Run
 
-Open `index.html` through a static HTTP server, or use the GitHub Pages deployment workflow.
+Open `index.html` through a static HTTP server, or use the GitHub Pages deployment.
 
 ## Architecture
 
 - `math.js` — Phase 1 deterministic numeric/parser kernel.
 - `algebra.js` — Phase 2 symbolic expressions, polynomials, equations and solving.
 - `calculus.js` — Phase 3 symbolic calculus and numerical methods.
-- `calculus-worker.js` — Phase 3 numerical worker task backend.
-- `app.js` — application state, IndexedDB persistence, workspaces, command palette and Graph interaction.
-- `styles.css` — responsive app UI and Light/Graphite/OLED themes.
+- `calculus-worker.js` — Phase 3 numerical worker backend.
+- `units.js` — Phase 4 dimensions, quantities, units, constants and engineering.
+- `app.js` — application state, persistence, workspaces, command palette and UI routing.
+- `styles.css` — responsive application design system.
 - `sw.js` + `manifest.webmanifest` — offline/installable PWA runtime.
-- `tests/` — deterministic core, fuzz, algebra and calculus certification suites.
+- `tests/` — cumulative deterministic certification suites.
 - `docs/math/` — normative mathematical semantics.
 
 No external runtime libraries are required.
@@ -87,14 +141,16 @@ GitHub Actions checks JavaScript syntax and runs:
 
 - application/core smoke tests;
 - hardened core-kernel certification;
-- deterministic core fuzzing;
+- deterministic expression fuzzing;
 - symbolic algebra certification;
-- calculus and numerical-method certification.
+- calculus and numerical-method certification;
+- units/quantities/constants/engineering certification.
 
 See:
 
 - `docs/math/CORE_SEMANTICS.md`
 - `docs/math/ALGEBRA_SEMANTICS.md`
 - `docs/math/CALCULUS_NUMERICAL_SEMANTICS.md`
+- `docs/math/UNITS_SEMANTICS.md`
 
 for the exact supported semantics and deliberate limitations.
