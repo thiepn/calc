@@ -127,6 +127,30 @@ function collectRestrictions(ast,options,out){
   return uniqueRestrictions(out);
 }
 
+function extractSquareParts(n){
+  n=BigInt(n);if(n<0n)throw new M.DomainError("Square-factor extraction requires a non-negative integer");
+  if(n===0n)return {outside:0n,inside:1n};
+  if(n>1000000000000n)return null;
+  var outside=1n,inside=1n,remaining=n,p=2n;
+  while(p*p<=remaining){
+    var count=0;while(remaining%p===0n){remaining/=p;count++;}
+    if(count){for(var k=0;k<Math.floor(count/2);k++)outside*=p;if(count%2)inside*=p;}
+    p=p===2n?3n:p+2n;
+  }
+  if(remaining>1n)inside*=remaining;
+  return {outside:outside,inside:inside};
+}
+function simplifySqrtRationalAst(value){
+  if(value.n<0n)return call("sqrt",[lit(value)]);
+  var exact=M.sqrtValue(value,false);if(exact instanceof M.Rational)return lit(exact);
+  var combined=value.n*value.d,parts=extractSquareParts(combined);
+  if(!parts)return call("sqrt",[lit(value)]);
+  var coeff=new M.Rational(parts.outside,value.d);
+  if(parts.inside===1n)return lit(coeff);
+  var radical=call("sqrt",[lit(new M.Rational(parts.inside))]);
+  return coeff.equals(rat(1))?radical:bin("*",lit(coeff),radical);
+}
+
 function simplifyAst(ast){
   if(!ast)return ast;
   if(ast.type==="literal"||ast.type==="identifier")return cloneAst(ast);
@@ -145,7 +169,7 @@ function simplifyAst(ast){
   if(ast.type==="call"){
     var args=ast.args.map(simplifyAst);
     if(ast.name==="sqrt"&&args.length===1&&isLit(args[0])&&isRat(args[0].value)){
-      try{var sq=M.sqrtValue(args[0].value,true);if(M.isExactValue(sq))return lit(sq);}catch(e){}
+      try{return simplifySqrtRationalAst(args[0].value);}catch(e){if(e instanceof M.CalcError)throw e;}
     }
     if(ast.name==="abs"&&args.length===1&&isLit(args[0])&&isRat(args[0].value))return lit(args[0].value.abs());
     return call(ast.name,args);
