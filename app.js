@@ -5,6 +5,7 @@ const A=window.CalcAlgebra;
 const C=window.CalcCalculus;
 const U=window.CalcUnits;
 const LA=window.CalcLinearAlgebra;
+const S=window.CalcStatistics;
 const $=function(s,r){return (r||document).querySelector(s);};
 const $$=function(s,r){return Array.from((r||document).querySelectorAll(s));};
 const uid=function(){return crypto.randomUUID?crypto.randomUUID():"id-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);};
@@ -24,7 +25,7 @@ const state={
   env:{},lastResult:null,theme:localStorage.getItem("calc.theme")||"system",
   installPrompt:null,history:[],worksheets:[],activeWorksheet:null,
   graph:{xMin:-10,xMax:10,yMin:-10,yMax:10,asts:[],lines:[],drag:null,pointers:new Map()},
-  selectedTool:"percent"
+  selectedTool:"percent",dataset:null,statisticsWorker:null,dataRevision:0
 };
 
 function toast(msg){
@@ -360,26 +361,203 @@ function runMatrix(op){
   }
 }
 
-function parseNumericColumn(rows,index){
-  var arr=[];rows.forEach(function(row){if(index>=row.length)return;var raw=String(row[index]).trim();if(!raw)return;var n=Number(raw.replace(",","."));if(Number.isFinite(n))arr.push(n);});return arr;
+function dataNumber(x){
+  return Number.isFinite(Number(x))?M.formatNumber(Number(x),state.precision):"—";
 }
-function analyzeData(){
-  var box=$("#dataSummary");
-  try{
-    var d=M.parseDelimited($("#dataInput").value);if(!d.rows.length)throw new Error("No data rows found");
-    var cols=d.headers.map(function(h,i){return {name:h,values:parseNumericColumn(d.rows,i)};}).filter(function(c){return c.values.length>0;});
-    if(!cols.length)throw new Error("No numeric columns found");
+function formatProbabilityValue(p){
+  p=p instanceof S.Probability?p.value:Number(p);
+  if(!Number.isFinite(p))return "—";
+  if(p!==0&&p<1e-4)return p.toExponential(4);
+  return M.formatNumber(p,8);
+}
+function statisticsWorker(){
+  if(!state.statisticsWorker&&S&&typeof Worker!=="undefined")state.statisticsWorker=new S.StatisticsWorkerClient("./statistics-worker.js");
+  return state.statisticsWorker;
+}
+function currentNumericColumns(){
+  return state.dataset?state.dataset.columns.filter(function(c){return c.type==="numeric";}):[];
+}
+function fillDataSelect(select,names,preferred){
+  if(!select)return;var old=preferred||select.value;select.innerHTML="";
+  names.forEach(function(name){var o=document.createElement("option");o.value=name;o.textContent=name;if(name===old)o.selected=true;select.appendChild(o);});
+}
+function populateDataControls(){
+  var names=currentNumericColumns().map(function(c){return c.name;});
+  fillDataSelect($("#dataXSelect"),names,names[0]);
+  fillDataSelect($("#dataYSelect"),names,names[Math.min(1,names.length-1)]);
+  fillDataSelect($("#testColumnSelect"),names,names[0]);
+  ["#pearsonBtn","#spearmanBtn","#regressionBtn","#histogramBtn","#boxplotBtn","#meanCiBtn","#oneSampleTBtn"].forEach(function(sel){var b=$(sel);if(b)b.disabled=!names.length;});
+}
+function renderDataSummary(dataset,summaries){
+  var box=$("#dataSummary");box.innerHTML="";box.classList.remove("muted","ws-error");
+  var numeric=dataset.columns.filter(function(c){return c.type==="numeric";});
+  if(numeric.length){
     var table=document.createElement("table");table.className="summary-table";
-    table.innerHTML="<thead><tr><th>Column</th><th>n</th><th>Mean</th><th>Median</th><th>SD</th><th>Min</th><th>Max</th></tr></thead>";
+    table.innerHTML="<thead><tr><th>Column</th><th>n</th><th>Missing</th><th>Mean</th><th>Median</th><th>SD</th><th>Q1</th><th>Q3</th><th>Min</th><th>Max</th></tr></thead>";
     var tb=document.createElement("tbody");
-    cols.forEach(function(c){var st=M.stats(c.values),tr=document.createElement("tr");[c.name,st.count,M.formatNumber(st.mean),M.formatNumber(st.median),Number.isFinite(st.sdSample)?M.formatNumber(st.sdSample):"—",M.formatNumber(st.min),M.formatNumber(st.max)].forEach(function(v){var td=document.createElement("td");td.textContent=v;tr.appendChild(td);});tb.appendChild(tr);});
-    table.appendChild(tb);box.innerHTML="";box.appendChild(table);
-    if(cols.length>=2){
-      var n=Math.min(cols[0].values.length,cols[1].values.length),x=cols[0].values.slice(0,n),y=cols[1].values.slice(0,n),reg=M.linearRegression(x,y);
-      var call=document.createElement("div");call.className="stat-callout";call.textContent="Linear regression: "+cols[1].name+" = "+M.formatNumber(reg.intercept)+" + "+M.formatNumber(reg.slope)+"·"+cols[0].name+" · R² = "+M.formatNumber(reg.r2)+" · r = "+M.formatNumber(reg.correlation);box.appendChild(call);
-    }
-    box.classList.remove("muted");
+    numeric.forEach(function(col){
+      var st=summaries[col.name],tr=document.createElement("tr");
+      [col.name,st.count,st.missing,dataNumber(st.mean),dataNumber(st.median),dataNumber(st.sdSample),dataNumber(st.q1),dataNumber(st.q3),dataNumber(st.min),dataNumber(st.max)].forEach(function(v){var td=document.createElement("td");td.textContent=v;tr.appendChild(td);});
+      tb.appendChild(tr);
+    });
+    table.appendChild(tb);box.appendChild(table);
+  }else{
+    var none=document.createElement("div");none.className="muted";none.textContent="No numeric columns detected.";box.appendChild(none);
+  }
+  var badges=document.createElement("div");badges.className="data-badge-row";
+  [
+    dataset.rowCount+" rows",
+    dataset.columnCount+" columns",
+    numeric.length+" numeric",
+    dataset.columns.reduce(function(n,c){return n+c.missingCount();},0)+" missing",
+    "quantiles: R7"
+  ].forEach(function(t){var b=document.createElement("span");b.className="data-badge";b.textContent=t;badges.appendChild(b);});
+  box.appendChild(badges);
+}
+async function analyzeData(){
+  var box=$("#dataSummary"),revision=++state.dataRevision;
+  try{
+    var dataset=S.Dataset.fromDelimited($("#dataInput").value);
+    if(!dataset.rowCount)throw new S.DatasetError("No data rows found");
+    state.dataset=dataset;populateDataControls();
+    box.classList.remove("ws-error");box.classList.add("muted");box.textContent=dataset.rowCount>5000?"Analyzing large dataset…":"Analyzing…";
+    var summaries={};
+    if(dataset.rowCount>5000&&typeof Worker!=="undefined"){
+      try{summaries=await statisticsWorker().run("describeDataset",{dataset:dataset.toJSON()});}
+      catch(e){dataset.columns.forEach(function(col){if(col.type==="numeric")summaries[col.name]=S.describe(col);});}
+    }else dataset.columns.forEach(function(col){if(col.type==="numeric")summaries[col.name]=S.describe(col);});
+    if(revision!==state.dataRevision)return;
+    renderDataSummary(dataset,summaries);
+    $("#dataAnalysisResult").textContent="Choose columns and an analysis.";
+    $("#dataAnalysisResult").className="data-analysis-result muted";
+    $("#inferenceResult").textContent="Choose a numeric column.";
+    $("#inferenceResult").className="data-analysis-result muted";
+  }catch(e){
+    state.dataset=null;populateDataControls();box.textContent=errorMessage(e);box.classList.add("ws-error");box.classList.remove("muted");
+  }
+}
+function requireDataset(){if(!state.dataset)throw new S.DatasetError("Analyze a dataset first");return state.dataset;}
+function selectedDataColumns(){
+  var x=$("#dataXSelect").value,y=$("#dataYSelect").value;if(!x||!y)throw new S.DatasetError("Choose numeric columns");return {x:x,y:y};
+}
+function setAnalysisText(lines){
+  var box=$("#dataAnalysisResult");box.innerHTML="";box.classList.remove("muted","ws-error");
+  var pre=document.createElement("pre");pre.textContent=Array.isArray(lines)?lines.join("\n"):String(lines);box.appendChild(pre);
+}
+function dataCorrelation(method){
+  try{
+    var ds=requireDataset(),cols=selectedDataColumns(),r=method==="spearman"?S.spearman(ds,cols.x,cols.y):S.pearson(ds,cols.x,cols.y);
+    setAnalysisText([(method==="spearman"?"Spearman ρ":"Pearson r")+" = "+dataNumber(r.value),"paired n = "+r.n,"excluded rows = "+r.excluded]);
+  }catch(e){var box=$("#dataAnalysisResult");box.textContent=errorMessage(e);box.classList.add("ws-error");}
+}
+async function dataRegression(){
+  var box=$("#dataAnalysisResult");
+  try{
+    var ds=requireDataset(),cols=selectedDataColumns();if(cols.x===cols.y)throw new S.RegressionError("X and response must be different columns");
+    box.classList.remove("ws-error");box.classList.add("muted");box.textContent=ds.rowCount>5000?"Fitting regression in worker…":"Fitting regression…";
+    var model;
+    if(ds.rowCount>5000&&typeof Worker!=="undefined"){
+      try{model=await statisticsWorker().run("regression",{dataset:ds.toJSON(),response:cols.y,predictors:[cols.x],options:{}});}
+      catch(e){model=S.fitRegression(ds,cols.y,[cols.x]);}
+    }else model=S.fitRegression(ds,cols.y,[cols.x]);
+    var intercept=model.coefficients[0],slope=model.coefficients[1],lines=[
+      cols.y+" = "+dataNumber(intercept)+" + "+dataNumber(slope)+" · "+cols.x,
+      "R² = "+dataNumber(model.r2)+"   adjusted R² = "+dataNumber(model.adjustedR2),
+      "n = "+model.n+"   excluded = "+model.excluded+"   rank = "+model.rank,
+      "residual SE = "+dataNumber(model.residualStandardError),
+      "condition number = "+(model.conditionNumber===Infinity?"∞":dataNumber(model.conditionNumber)),
+      "method = "+model.method
+    ];
+    if(model.standardErrors&&model.standardErrors.length>1)lines.push("slope SE = "+dataNumber(model.standardErrors[1])+"   p = "+formatProbabilityValue(model.pValues[1]));
+    if(model.warnings&&model.warnings.length)lines.push("warning: "+model.warnings.join(" "));
+    setAnalysisText(lines);
+  }catch(e){box.textContent=errorMessage(e);box.classList.add("ws-error");box.classList.remove("muted");}
+}
+function dataHistogram(){
+  var box=$("#dataAnalysisResult");
+  try{
+    var ds=requireDataset(),name=$("#dataXSelect").value,col=ds.column(name),model=S.histogramModel(col.values),max=Math.max.apply(null,model.bins.map(function(b){return b.count;}));
+    box.innerHTML="";box.classList.remove("muted","ws-error");
+    var title=document.createElement("div");title.innerHTML="<strong>Histogram · "+name+"</strong> · n="+model.n+" · "+model.bins.length+" bins";box.appendChild(title);
+    var list=document.createElement("div");list.className="histogram-list";
+    model.bins.forEach(function(bin){
+      var row=document.createElement("div");row.className="histogram-row";
+      var label=document.createElement("span");label.className="histogram-label";label.textContent=dataNumber(bin.lo)+"–"+dataNumber(bin.hi);
+      var track=document.createElement("div");track.className="histogram-track";var bar=document.createElement("div");bar.className="histogram-bar";bar.style.width=(max?bin.count/max*100:0)+"%";track.appendChild(bar);
+      var count=document.createElement("span");count.className="histogram-count";count.textContent=bin.count;row.append(label,track,count);list.appendChild(row);
+    });box.appendChild(list);
   }catch(e){box.textContent=errorMessage(e);box.classList.add("ws-error");}
+}
+function dataBoxplot(){
+  try{
+    var ds=requireDataset(),name=$("#dataXSelect").value,m=S.boxPlotModel(ds.column(name).values);
+    setAnalysisText(["Box plot · "+name,"min = "+dataNumber(m.min),"Q1 = "+dataNumber(m.q1),"median = "+dataNumber(m.median),"Q3 = "+dataNumber(m.q3),"max = "+dataNumber(m.max),"IQR = "+dataNumber(m.q3-m.q1),"outliers = "+(m.outliers.length?m.outliers.map(dataNumber).join(", "):"none"),"quantiles = "+m.quantileMethod]);
+  }catch(e){var box=$("#dataAnalysisResult");box.textContent=errorMessage(e);box.classList.add("ws-error");}
+}
+function inferenceValues(){
+  var ds=requireDataset(),name=$("#testColumnSelect").value,col=ds.column(name);if(!col)throw new S.DatasetError("Choose a numeric column");return {name:name,values:col.values};
+}
+function renderInference(kind){
+  var box=$("#inferenceResult");
+  try{
+    var d=inferenceValues();
+    if(kind==="ci"){
+      var confidence=Number($("#testConfidence").value),ci=S.meanCI(d.values,confidence);
+      box.innerHTML="";box.classList.remove("muted","ws-error");
+      var pre=document.createElement("pre");pre.textContent=d.name+" mean = "+dataNumber(ci.estimate)+"\n"+M.formatNumber(ci.confidence*100,6)+"% CI = "+ci.toString()+"\ndf = "+ci.df+"   SE = "+dataNumber(ci.se)+"\nmethod = "+ci.method;box.appendChild(pre);
+    }else{
+      var mu0=Number($("#testMu0").value),test=S.oneSampleT(d.values,mu0);
+      box.innerHTML="";box.classList.remove("muted","ws-error");
+      var pre2=document.createElement("pre");pre2.textContent="H₀: "+test.null+"\nt = "+dataNumber(test.statistic)+"   df = "+dataNumber(test.df)+"\np = "+formatProbabilityValue(test.pValue)+"\nestimate = "+dataNumber(test.estimate)+"   n = "+test.n+"\nmethod = "+test.method;box.appendChild(pre2);
+    }
+  }catch(e){box.textContent=errorMessage(e);box.classList.add("ws-error");box.classList.remove("muted");}
+}
+const DISTRIBUTION_FIELDS={
+  normal:[["μ","distA",0],["σ","distB",1]],
+  binomial:[["n","distA",10],["p","distB",0.5]],
+  poisson:[["λ","distA",3]],
+  t:[["df","distA",10]],
+  chisq:[["df","distA",5]],
+  gamma:[["shape","distA",2],["scale","distB",1]],
+  beta:[["α","distA",2],["β","distB",3]]
+};
+function renderDistributionParams(){
+  var type=$("#distributionType").value,holder=$("#distributionParams");holder.innerHTML="";
+  (DISTRIBUTION_FIELDS[type]||[]).forEach(function(spec){
+    var wrap=document.createElement("div");wrap.className="field";
+    var label=document.createElement("label");label.setAttribute("for",spec[1]);label.textContent=spec[0];
+    var input=document.createElement("input");input.id=spec[1];input.type="number";input.step="any";input.value=spec[2];wrap.append(label,input);holder.appendChild(wrap);
+  });
+}
+function selectedDistribution(){
+  var type=$("#distributionType").value,a=Number($("#distA")&&$("#distA").value),b=Number($("#distB")&&$("#distB").value);
+  if(type==="normal")return new S.Normal(a,b);
+  if(type==="binomial")return new S.Binomial(a,b);
+  if(type==="poisson")return new S.Poisson(a);
+  if(type==="t")return new S.StudentT(a);
+  if(type==="chisq")return new S.ChiSquare(a);
+  if(type==="gamma")return new S.GammaDistribution(a,b);
+  if(type==="beta")return new S.BetaDistribution(a,b);
+  throw new S.DistributionError("Unknown distribution");
+}
+function renderDistribution(mode){
+  var box=$("#distributionResult");
+  try{
+    var dist=selectedDistribution();
+    if(mode==="quantile"){
+      var p=Number($("#distributionP").value),q=dist.quantile(p);setDistributionText(["Quantile("+M.formatNumber(p,8)+") = "+dataNumber(q),"distribution = "+dist.name]);return;
+    }
+    var x=Number($("#distributionX").value),density=dist.discrete?dist.pmf(x):dist.pdf(x),lines=[
+      (dist.discrete?"PMF":"PDF")+"("+dataNumber(x)+") = "+formatProbabilityValue(density),
+      "CDF = "+formatProbabilityValue(dist.cdf(x)),
+      "SF = "+formatProbabilityValue(dist.sf(x)),
+      "mean = "+dataNumber(dist.mean()),
+      "variance = "+dataNumber(dist.variance())
+    ];setDistributionText(lines);
+  }catch(e){box.textContent=errorMessage(e);box.classList.add("ws-error");box.classList.remove("muted");}
+}
+function setDistributionText(lines){
+  var box=$("#distributionResult");box.innerHTML="";box.classList.remove("muted","ws-error");var pre=document.createElement("pre");pre.textContent=lines.join("\n");box.appendChild(pre);
 }
 
 const tools=[
@@ -684,7 +862,12 @@ function bindEvents(){
 
   $("#matrixRows").onchange=function(){renderMatrixGrid(true);};$("#matrixCols").onchange=function(){renderMatrixGrid(true);};
   $$("[data-matrix-op]").forEach(function(b){b.onclick=function(){runMatrix(b.dataset.matrixOp);};});
-  $("#analyzeDataBtn").onclick=analyzeData;$("#sampleDataBtn").onclick=function(){$("#dataInput").value="x,y\n1,3\n2,5\n3,7\n4,9\n5,11";analyzeData();};
+  $("#analyzeDataBtn").onclick=function(){analyzeData();};
+  $("#sampleDataBtn").onclick=function(){$("#dataInput").value="x,y,group\n1,3,A\n2,5,A\n3,7,B\n4,9,B\n5,11,B";analyzeData();};
+  $("#pearsonBtn").onclick=function(){dataCorrelation("pearson");};$("#spearmanBtn").onclick=function(){dataCorrelation("spearman");};
+  $("#regressionBtn").onclick=function(){dataRegression();};$("#histogramBtn").onclick=dataHistogram;$("#boxplotBtn").onclick=dataBoxplot;
+  $("#meanCiBtn").onclick=function(){renderInference("ci");};$("#oneSampleTBtn").onclick=function(){renderInference("test");};
+  $("#distributionType").onchange=renderDistributionParams;$("#distributionEvalBtn").onclick=function(){renderDistribution("eval");};$("#distributionQuantileBtn").onclick=function(){renderDistribution("quantile");};
   $("#addMathBlock").onclick=function(){addBlock("math");};$("#addTextBlock").onclick=function(){addBlock("text");};$("#newWorksheetBtn").onclick=newWorksheet;
   $("#worksheetTitle").addEventListener("input",function(){if(state.activeWorksheet){state.activeWorksheet.title=this.value||"Untitled worksheet";scheduleWorksheetSave();renderWorksheetList();}});
   $("#clearHistoryBtn").onclick=async function(){if(!confirm("Clear calculation history?"))return;state.history=[];try{await dbClear("history");}catch(e){}renderHistory();};
@@ -692,7 +875,7 @@ function bindEvents(){
 }
 
 async function init(){
-  setTheme(state.theme);bindEvents();renderMatrixGrid(false);renderToolList();renderTool();
+  setTheme(state.theme);bindEvents();renderMatrixGrid(false);renderToolList();renderTool();renderDistributionParams();populateDataControls();
   $("#graphExpressions").value="sin(x)\nx^2 / 5";plotGraph();
   try{state.history=(await dbAll("history")).sort(function(a,b){return b.time-a.time;});}catch(e){}
   await loadWorksheets();
