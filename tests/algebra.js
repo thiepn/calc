@@ -15,7 +15,7 @@ eq(A.simplify("x + 0").toString(),"x","additive identity");
 eq(A.simplify("x - x").toString(),"0","self subtraction");
 eq(A.simplish ? "unused" : "ok","ok","API sanity");
 eq(A.simplify("x*x").toString(),"x ^ 2","repeated factor");
-eq(A.simplify("2 + 3/2").toString(),"7/2","exact constant folding");
+eq(A.simplify("2 + 3/2").toString(),"7/2","exact constant folding");\neq(A.simplify("sqrt(8)").toString(),"2 * sqrt(2)","radical square-factor simplification");\neq(A.simplify("sqrt(1/8)").toString(),"1/4 * sqrt(2)","rational radical simplification");
 
 // Rational cancellation must retain original domain restrictions.
 const cancelled=A.simplify("(x^2 - 1)/(x - 1)","x");
@@ -97,7 +97,7 @@ eq(restored.toString(),original.toString(),"symbolic serialization expression");
 eq(restored.restrictions.map(r=>r.toString()).join("|"),original.restrictions.map(r=>r.toString()).join("|"),"symbolic serialization restrictions");
 
 // Calculate command surface.
-eq(A.runCommand("simplify((x^2-1)/(x-1))").display,"x + 1","simplify command");
+const simplifyCommand=A.runCommand("simplify((x^2-1)/(x-1))");\nassert(simplifyCommand.display.startsWith("x + 1")&&simplifyCommand.display.includes("≠ 0"),"simplify command surfaces domain restriction");
 const solveCommand=A.runCommand("solve(x^2 - 5*x + 6 = 0, x)");
 assert(solveCommand.display.includes("x ∈"),"solve command");
 eq(A.runCommand("substitute(x^2 + 1, x, 3)").display,"10","substitute command");
