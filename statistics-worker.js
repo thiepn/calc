@@ -22,7 +22,7 @@ self.onmessage=function(event){
     }else{
       throw new S.StatisticsError("UNKNOWN_WORKER_TASK","Unknown statistics worker task '"+task+"'");
     }
-    self.postMessage({id:id,ok:true,result:JSON.parse(JSON.stringify(result))});
+    self.postMessage({id:id,ok:true,result:result});
   }catch(e){
     self.postMessage({id:id,ok:false,error:err(e)});
   }
