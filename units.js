@@ -294,6 +294,7 @@ function inferKindDiv(a,b,resultDim){
   if(ak==="energy"&&bk==="time")return "power";
   if(ak==="voltage"&&bk==="current")return "resistance";
   if(resultDim.equals(DIMS.frequency))return "frequency";
+  if(resultDim.equals(DIMS.force))return "force";
   return null;
 }
 
