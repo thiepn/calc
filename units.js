@@ -11,6 +11,7 @@ class DimensionError extends UnitError{constructor(message,details){super("DIMEN
 class AffineUnitError extends UnitError{constructor(message,details){super("AFFINE_UNIT_ERROR",message,details);}}
 class UnknownUnitError extends UnitError{constructor(name){super("UNKNOWN_UNIT","Unknown unit '"+name+"'",{unit:name});}}
 class EngineeringError extends UnitError{constructor(message,details){super("ENGINEERING_RELATION_ERROR",message,details);}}
+class PhysicalQuantityError extends UnitError{constructor(message,details){super("PHYSICAL_DOMAIN_ERROR",message,details);}}
 
 function ratDecimal(s){return M.Rational.fromDecimal(String(s));}
 function rat(n,d){return new M.Rational(BigInt(n),d===undefined?1n:BigInt(d));}
@@ -217,6 +218,11 @@ class Quantity{
     this.expressionUnits=options.expressionUnits||null;
     this.customDisplayScale=options.customDisplayScale||null;
     this.exact=options.exact!==false&&isExactScalar(baseValue);
+    if(this.kind==="absolute-temperature"){
+      var absoluteValue=scalarNumber(baseValue);
+      if(!Number.isFinite(absoluteValue))throw new PhysicalQuantityError("Absolute temperature must be a finite real quantity");
+      if(absoluteValue<0)throw new PhysicalQuantityError("Absolute temperature cannot be below 0 K",{kelvin:absoluteValue});
+    }
     Object.freeze(this);
   }
   isDimensionless(){return this.dimension.isDimensionless()&&this.kind!=="angle"&&this.kind!=="information";}
@@ -738,7 +744,7 @@ validateRegistry();
 
 global.CalcUnits={
   VERSION:"1.0.0-quantities",
-  UnitError:UnitError,DimensionError:DimensionError,AffineUnitError:AffineUnitError,UnknownUnitError:UnknownUnitError,EngineeringError:EngineeringError,
+  UnitError:UnitError,DimensionError:DimensionError,AffineUnitError:AffineUnitError,UnknownUnitError:UnknownUnitError,EngineeringError:EngineeringError,PhysicalQuantityError:PhysicalQuantityError,
   DimensionVector:DimensionVector,DIMS:DIMS,UnitDefinition:UnitDefinition,UnitRegistry:UnitRegistry,UNIT_REGISTRY:UNIT_REGISTRY,SI_PREFIXES:SI_PREFIXES,IEC_PREFIXES:IEC_PREFIXES,
   Quantity:Quantity,quantityFromUnit:quantityFromUnit,formatQuantity:formatQuantity,approxQuantity:approxQuantity,
   qAdd:qAdd,qSub:qSub,qMul:qMul,qDiv:qDiv,qPow:qPow,qNeg:qNeg,qCall:qCall,
