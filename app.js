@@ -7,6 +7,7 @@ const U=window.CalcUnits;
 const LA=window.CalcLinearAlgebra;
 const S=window.CalcStatistics;
 const G=window.CalcGraph;
+const T=window.CalcTools;
 const $=function(s,r){return (r||document).querySelector(s);};
 const $$=function(s,r){return Array.from((r||document).querySelectorAll(s));};
 const uid=function(){return crypto.randomUUID?crypto.randomUUID():"id-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);};
@@ -16,7 +17,7 @@ const VIEW_META={
   graph:["Graph","Interactive 2D plotting and analysis."],
   matrix:["Matrix","Exact matrix arithmetic and row reduction."],
   data:["Data","Datasets, distributions, inference, regression and statistical models."],
-  tools:["Tools","Focused calculators built on the shared math core."],
+  tools:["Tools","Registered everyday, finance, geometry, date, programmer and engineering calculators."],
   worksheet:["Worksheet","Persistent multi-step mathematical work."],
   history:["History","Your local calculation history."]
 };
@@ -26,7 +27,7 @@ const state={
   env:{},lastResult:null,theme:localStorage.getItem("calc.theme")||"system",
   installPrompt:null,history:[],worksheets:[],activeWorksheet:null,
   graph:{session:null,drag:null,pinch:null,pointers:new Map(),geometries:[],worker:null},
-  selectedTool:"percent",dataset:null,statisticsWorker:null,dataRevision:0
+  selectedTool:"percentage-of",toolSearch:"",dataset:null,statisticsWorker:null,dataRevision:0
 };
 
 function toast(msg){
@@ -670,126 +671,74 @@ function setDistributionText(lines){
   var box=$("#distributionResult");box.innerHTML="";box.classList.remove("muted","ws-error");var pre=document.createElement("pre");pre.textContent=lines.join("\n");box.appendChild(pre);
 }
 
-const tools=[
-  {id:"percent",name:"Percentage",desc:"Percentage, percentage change, and reverse percentage."},
-  {id:"unit",name:"Unit converter",desc:"Convert typed physical, temperature, angle, and information quantities."},
-  {id:"engineering",name:"Engineering relations",desc:"Solve dimensional engineering relations from any sufficient set of known values."},
-  {id:"loan",name:"Loan & amortization",desc:"Payment, total interest, and amortization."},
-  {id:"triangle",name:"Triangle (SSS)",desc:"Solve a triangle from three sides."},
-  {id:"circle",name:"Circle",desc:"Radius, diameter, circumference, and area."},
-  {id:"date",name:"Date difference",desc:"Exact elapsed calendar days."},
-  {id:"programmer",name:"Programmer",desc:"Base conversion and fixed-width signed interpretation."},
-  {id:"number",name:"Number theory",desc:"GCD, LCM, and Bézout coefficients."}
-];
+function toolDefinitions(){return T.REGISTRY.list();}
 function renderToolList(){
-  var list=$("#toolList");list.innerHTML="";
-  tools.forEach(function(t){var b=document.createElement("button");b.textContent=t.name;b.classList.toggle("active",t.id===state.selectedTool);b.onclick=function(){state.selectedTool=t.id;renderToolList();renderTool();};list.appendChild(b);});
+  var list=$("#toolList"),query=state.toolSearch||"",tools=query?T.REGISTRY.search(query):toolDefinitions();list.innerHTML="";
+  var search=document.createElement("input");search.type="search";search.className="tool-search";search.placeholder="Search tools";search.value=query;search.setAttribute("aria-label","Search tools");
+  search.oninput=function(){state.toolSearch=this.value;renderToolList();};list.appendChild(search);
+  var currentCategory=null;
+  tools.forEach(function(t){
+    if(t.category!==currentCategory){currentCategory=t.category;var h=document.createElement("div");h.className="tool-category";h.textContent=currentCategory;list.appendChild(h);}
+    var b=document.createElement("button");b.textContent=t.name;b.title=t.description;b.classList.toggle("active",t.id===state.selectedTool);b.onclick=function(){state.selectedTool=t.id;renderToolList();renderTool();};list.appendChild(b);
+  });
+  if(!tools.length){var none=document.createElement("div");none.className="hint";none.textContent="No matching tools.";list.appendChild(none);}
 }
-function field(label,id,type,value,extra){
-  return '<div class="field"><label for="'+id+'">'+label+'</label><input id="'+id+'" type="'+(type||"text")+'" value="'+(value===undefined?"":value)+'" '+(extra||"")+'></div>';
+function fieldHtml(spec){
+  var id="toolInput-"+spec.id,value=spec.default===undefined?"":spec.default,label=spec.label||spec.id;
+  if(spec.type==="select"){
+    return '<div class="field"><label for="'+id+'">'+label+'</label><select id="'+id+'" data-tool-input="'+spec.id+'">'+(spec.options||[]).map(function(o){var v=Array.isArray(o)?o[0]:o,l=Array.isArray(o)?o[1]:o;return '<option value="'+String(v).replace(/"/g,"&quot;")+'" '+(String(v)===String(value)?"selected":"")+'>'+l+'</option>';}).join("")+'</select></div>';
+  }
+  if(spec.type==="boolean")return '<label class="field tool-checkbox"><span>'+label+'</span><input id="'+id+'" data-tool-input="'+spec.id+'" type="checkbox" '+(value?"checked":"")+'></label>';
+  var type=spec.type==="date"?"date":spec.type==="number"||spec.type==="integer"||spec.type==="percent"?"number":"text",attrs="";
+  if(spec.min!==undefined)attrs+=' min="'+spec.min+'"';if(spec.max!==undefined)attrs+=' max="'+spec.max+'"';if(type==="number")attrs+=' step="any"';
+  return '<div class="field"><label for="'+id+'">'+label+'</label><input id="'+id+'" data-tool-input="'+spec.id+'" type="'+type+'" value="'+String(value).replace(/"/g,"&quot;")+'"'+attrs+'></div>';
 }
-function selectField(label,id,options){
-  return '<div class="field"><label for="'+id+'">'+label+'</label><select id="'+id+'">'+options.map(function(o){return '<option value="'+o[0]+'">'+o[1]+'</option>';}).join("")+'</select></div>';
-}
-function toolFrame(t,body){
-  return '<div class="tool-title">'+t.name+'</div><div class="tool-desc">'+t.desc+'</div><div class="tool-form">'+body+'</div><div class="action-row"><button id="toolRun" class="primary-btn">Calculate</button></div><div id="toolResult" class="tool-result"><strong>Result</strong><span class="muted">Enter values and calculate.</span></div>';
+function toolFrame(t,body,buttonLabel){
+  return '<div class="tool-title">'+t.name+'</div><div class="tool-desc">'+t.description+'</div><div class="tool-meta">'+t.category+' · v'+t.version+'</div><div class="tool-form">'+body+'</div><div class="action-row"><button id="toolRun" class="primary-btn">'+(buttonLabel||"Calculate")+'</button></div><div id="toolResult" class="tool-result"><strong>Result</strong><span class="muted">Enter values and calculate.</span></div>';
 }
 function renderTool(){
-  var t=tools.find(function(x){return x.id===state.selectedTool;})||tools[0],body="";
-  if(t.id==="percent")body=field("Value","pValue","number",200)+field("Percentage","pPct","number",15)+field("Old value","pOld","number",100)+field("New value","pNew","number",120);
-  else if(t.id==="unit"){
-    var unitCats=Object.keys(U.CONVERTER_CATEGORIES);
-    body=field("Value","uValue","text","1")+selectField("Category","uGroup",unitCats.map(function(x){var label=x.replace(/([A-Z])/g," $1").replace(/^./,function(c){return c.toUpperCase();});return [x,label];}))+'<div class="field"><label>From</label><select id="uFrom"></select></div><div class="field"><label>To</label><select id="uTo"></select></div>';
-  }else if(t.id==="engineering"){
-    var relationOptions=Object.keys(U.ENGINEERING_RELATIONS).map(function(id){return [id,U.ENGINEERING_RELATIONS[id].name];});
-    body=selectField("Relation","engRelation",relationOptions)+'<div id="engFields" class="field full"></div>';
-  }else if(t.id==="loan")body=field("Principal","lPrincipal","number",250000)+field("Annual rate (%)","lRate","number",4.5)+field("Years","lYears","number",30)+field("Payments / year","lFreq","number",12);
-  else if(t.id==="triangle")body=field("Side a","triA","number",3)+field("Side b","triB","number",4)+field("Side c","triC","number",5);
-  else if(t.id==="circle")body=field("Radius","circleR","number",3);
-  else if(t.id==="date")body=field("Start date","dateA","date","2026-01-01")+field("End date","dateB","date","2026-12-31");
-  else if(t.id==="programmer")body=field("Value","progValue","text","FF")+selectField("Input base","progBase",[[2,"Binary"],[8,"Octal"],[10,"Decimal"],[16,"Hexadecimal"]])+selectField("Width","progWidth",[[8,"8-bit"],[16,"16-bit"],[32,"32-bit"],[64,"64-bit"]]);
-  else if(t.id==="number")body=field("a","numA","text","240")+field("b","numB","text","46");
-  $("#toolRunner").innerHTML=toolFrame(t,body);
-  $("#toolRun").onclick=runSelectedTool;
-  if(t.id==="unit"){updateUnitSelects();$("#uGroup").onchange=updateUnitSelects;}
-  if(t.id==="engineering"){renderEngineeringFields();$("#engRelation").onchange=renderEngineeringFields;}
+  var t=T.REGISTRY.get(state.selectedTool)||T.REGISTRY.list()[0];if(!t)return;state.selectedTool=t.id;
+  if(t.id==="unit-converter"){
+    var unitCats=Object.keys(U.CONVERTER_CATEGORIES),body='<div class="field"><label for="uValue">Value</label><input id="uValue" type="text" value="1"></div>'+
+      '<div class="field"><label for="uGroup">Category</label><select id="uGroup">'+unitCats.map(function(x){var label=x.replace(/([A-Z])/g," $1").replace(/^./,function(ch){return ch.toUpperCase();});return '<option value="'+x+'">'+label+'</option>';}).join("")+'</select></div>'+
+      '<div class="field"><label>From</label><select id="uFrom"></select></div><div class="field"><label>To</label><select id="uTo"></select></div>';
+    $("#toolRunner").innerHTML=toolFrame(t,body,"Convert");$("#toolRun").onclick=runSpecializedUnit;updateUnitSelects();$("#uGroup").onchange=updateUnitSelects;return;
+  }
+  if(t.id==="engineering-relations"){
+    var relationOptions=Object.keys(U.ENGINEERING_RELATIONS).map(function(id){return '<option value="'+id+'">'+U.ENGINEERING_RELATIONS[id].name+'</option>';}).join("");
+    $("#toolRunner").innerHTML=toolFrame(t,'<div class="field"><label for="engRelation">Relation</label><select id="engRelation">'+relationOptions+'</select></div><div id="engFields" class="field full"></div>',"Solve");
+    $("#toolRun").onclick=runSpecializedEngineering;renderEngineeringFields();$("#engRelation").onchange=renderEngineeringFields;return;
+  }
+  $("#toolRunner").innerHTML=toolFrame(t,t.inputs.map(fieldHtml).join(""));$("#toolRun").onclick=runRegistryTool;
 }
 const ENGINEERING_DEFAULTS={
-  ohm:{V:"12 V",I:"",R:"6 ohm"},
-  power:{P:"",V:"12 V",I:"2 A"},
-  force:{F:"10 N",m:"2 kg",a:""},
-  kinetic:{E:"",m:"2 kg",v:"3 m/s"},
-  wave:{v:"",f:"2 Hz",lambda:"3 m"},
-  density:{rho:"",m:"1 kg",V:"1 L"}
+  ohm:{V:"12 V",I:"",R:"6 ohm"},power:{P:"",V:"12 V",I:"2 A"},force:{F:"10 N",m:"2 kg",a:""},kinetic:{E:"",m:"2 kg",v:"3 m/s"},wave:{v:"",f:"2 Hz",lambda:"3 m"},density:{rho:"",m:"1 kg",V:"1 L"}
 };
 function renderEngineeringFields(){
-  var holder=$("#engFields"),select=$("#engRelation");if(!holder||!select)return;
-  var relation=U.ENGINEERING_RELATIONS[select.value];if(!relation)return;
-  holder.innerHTML="";
+  var holder=$("#engFields"),select=$("#engRelation");if(!holder||!select)return;var relation=U.ENGINEERING_RELATIONS[select.value];if(!relation)return;holder.innerHTML="";
   var grid=document.createElement("div");grid.className="tool-form";grid.style.gridColumn="1 / -1";
-  Object.keys(relation.variables).forEach(function(name){
-    var spec=relation.variables[name],wrap=document.createElement("div");wrap.className="field";
-    var label=document.createElement("label");label.setAttribute("for","engVar-"+name);
-    label.textContent=name+(spec.kind?" · "+spec.kind:"");
-    var input=document.createElement("input");input.id="engVar-"+name;input.type="text";
-    input.placeholder=spec.unit?("e.g. 1 "+prettyUnitLabel(spec.unit)):"quantity with compatible units";
-    input.value=(ENGINEERING_DEFAULTS[relation.id]&&ENGINEERING_DEFAULTS[relation.id][name])||"";
-    wrap.append(label,input);grid.appendChild(wrap);
-  });
-  var hint=document.createElement("div");hint.className="hint";hint.style.gridColumn="1 / -1";
-  hint.textContent="Leave exactly one variable blank to solve it, or fill every variable to check consistency.";
-  grid.appendChild(hint);holder.appendChild(grid);
+  Object.keys(relation.variables).forEach(function(name){var spec=relation.variables[name],wrap=document.createElement("div");wrap.className="field";var label=document.createElement("label");label.setAttribute("for","engVar-"+name);label.textContent=name+(spec.kind?" · "+spec.kind:"");var input=document.createElement("input");input.id="engVar-"+name;input.type="text";input.placeholder=spec.unit?("e.g. 1 "+prettyUnitLabel(spec.unit)):"quantity with compatible units";input.value=(ENGINEERING_DEFAULTS[relation.id]&&ENGINEERING_DEFAULTS[relation.id][name])||"";wrap.append(label,input);grid.appendChild(wrap);});
+  var hint=document.createElement("div");hint.className="hint";hint.style.gridColumn="1 / -1";hint.textContent="Leave exactly one variable blank to solve it, or fill every variable to check consistency.";grid.appendChild(hint);holder.appendChild(grid);
 }
-function prettyUnitLabel(u){
-  var simple=U.UNIT_REGISTRY.get(u);
-  if(simple&&u.indexOf("/")<0&&u.indexOf("*")<0&&u.indexOf("^")<0)return simple.symbol;
-  return String(u).replace(/\^2/g,"²").replace(/\^3/g,"³").replace(/\/hr/g,"/h").replace(/USgal/g,"gal (US)").replace(/USfloz/g,"fl oz (US)");
+function prettyUnitLabel(u){var simple=U.UNIT_REGISTRY.get(u);if(simple&&u.indexOf("/")<0&&u.indexOf("*")<0&&u.indexOf("^")<0)return simple.symbol;return String(u).replace(/\^2/g,"²").replace(/\^3/g,"³").replace(/\/hr/g,"/h").replace(/USgal/g,"gal (US)").replace(/USfloz/g,"fl oz (US)");}
+function updateUnitSelects(){var group=$("#uGroup").value,units=(U.CONVERTER_CATEGORIES[group]||[]).slice();["#uFrom","#uTo"].forEach(function(sel,idx){var el=$(sel);el.innerHTML="";units.forEach(function(u,i){var o=document.createElement("option");o.value=u;o.textContent=prettyUnitLabel(u);if((idx===0&&i===0)||(idx===1&&i===Math.min(1,units.length-1)))o.selected=true;el.appendChild(o);});});}
+function collectToolInputs(t){
+  var raw={};t.inputs.forEach(function(spec){var el=$('[data-tool-input="'+spec.id+'"]');if(!el)return;raw[spec.id]=spec.type==="boolean"?el.checked:el.value;});return raw;
 }
-function updateUnitSelects(){
-  var group=$("#uGroup").value,units=(U.CONVERTER_CATEGORIES[group]||[]).slice();
-  ["#uFrom","#uTo"].forEach(function(sel,idx){var el=$(sel);el.innerHTML="";units.forEach(function(u,i){var o=document.createElement("option");o.value=u;o.textContent=prettyUnitLabel(u);if((idx===0&&i===0)||(idx===1&&i===Math.min(1,units.length-1)))o.selected=true;el.appendChild(o);});});
+function renderToolResult(out){
+  var box=$("#toolResult");box.innerHTML="<strong>"+(out.title||"Result")+"</strong><pre></pre>";$("pre",box).textContent=out.display;
+  if(out.warnings&&out.warnings.length){var warnings=document.createElement("div");warnings.className="tool-warnings";warnings.textContent=out.warnings.join(" ");box.appendChild(warnings);}
+  if(out.details&&Object.keys(out.details).length){var meta=document.createElement("div");meta.className="tool-result-meta";meta.textContent=Object.keys(out.details).filter(function(k){return typeof out.details[k]!=="object";}).map(function(k){return k+": "+out.details[k];}).join(" · ");if(meta.textContent)box.appendChild(meta);}
 }
-function extGcd(a,b){
-  var oldR=a,r=b,oldS=1n,s=0n,oldT=0n,t=1n;
-  while(r!==0n){var q=oldR/r,tmp=oldR-q*r;oldR=r;r=tmp;tmp=oldS-q*s;oldS=s;s=tmp;tmp=oldT-q*t;oldT=t;t=tmp;}
-  if(oldR<0n){oldR=-oldR;oldS=-oldS;oldT=-oldT;}return [oldR,oldS,oldT];
+async function recordToolHistory(t,out){await addHistory(t.name,{display:out.display,approx:""},"tool:"+t.id);}
+async function runRegistryTool(){
+  var t=T.REGISTRY.get(state.selectedTool),box=$("#toolResult");try{var out=T.REGISTRY.execute(t.id,collectToolInputs(t),{precision:state.precision,angle:state.angle});renderToolResult(out);await recordToolHistory(t,out);}catch(e){box.innerHTML="<strong>Error</strong><span class=\"ws-error\"></span>";$(".ws-error",box).textContent=errorMessage(e);}
 }
-async function runSelectedTool(){
-  var id=state.selectedTool,out=$("#toolResult"),text;
-  try{
-    if(id==="percent"){
-      var v=Number($("#pValue").value),p=Number($("#pPct").value),old=Number($("#pOld").value),nu=Number($("#pNew").value);
-      var change=old===0?"undefined":M.formatNumber((nu-old)/old*100)+"%";
-      text=M.formatNumber(p)+"% of "+M.formatNumber(v)+" = "+M.formatNumber(v*p/100)+"\nPercentage change: "+change;
-    }else if(id==="unit"){
-      var ur=U.tryEvaluate($("#uValue").value+" "+$("#uFrom").value+" to "+$("#uTo").value,{}, {angle:state.angle,precision:state.precision});
-      text=ur.display+(ur.approx?"\n"+ur.approx:"");
-    }else if(id==="engineering"){
-      var relationId=$("#engRelation").value,relation=U.ENGINEERING_RELATIONS[relationId],parts=[];
-      Object.keys(relation.variables).forEach(function(name){var el=$("#engVar-"+name),value=el?el.value.trim():"";if(value)parts.push(name+"="+value);});
-      var er=U.tryEvaluate("eng("+relationId+(parts.length?", "+parts.join(", "):"")+")",{}, {angle:state.angle,precision:state.precision});
-      text=er.display;
-    }else if(id==="loan"){
-      var lr=M.loan($("#lPrincipal").value,Number($("#lRate").value)/100,$("#lYears").value,$("#lFreq").value);
-      text="Payment: "+M.formatNumber(lr.payment)+"\nTotal interest: "+M.formatNumber(lr.totalInterest)+"\nTotal paid: "+M.formatNumber(lr.totalPaid)+"\nPayments: "+lr.schedule.length;
-    }else if(id==="triangle"){
-      var tr=M.triangleSSS($("#triA").value,$("#triB").value,$("#triC").value);
-      text="Angles: A "+M.formatNumber(tr.A)+"°, B "+M.formatNumber(tr.B)+"°, C "+M.formatNumber(tr.C)+"°\nArea: "+M.formatNumber(tr.area)+" · Perimeter: "+M.formatNumber(tr.perimeter);
-    }else if(id==="circle"){
-      var r=Number($("#circleR").value);if(!(r>0))throw new Error("Radius must be positive");
-      text="Diameter: "+M.formatNumber(2*r)+"\nCircumference: "+M.formatNumber(2*Math.PI*r)+"\nArea: "+M.formatNumber(Math.PI*r*r);
-    }else if(id==="date"){
-      var days=M.dateDiffDays($("#dateA").value,$("#dateB").value);text=days+" day"+(Math.abs(days)===1?"":"s");
-    }else if(id==="programmer"){
-      var val=M.parseBigIntBase($("#progValue").value,$("#progBase").value),width=Number($("#progWidth").value),raw=((val%(1n<<BigInt(width)))+(1n<<BigInt(width)))%(1n<<BigInt(width)),signed=M.bitInterpret(raw,width,true);
-      text="HEX  "+M.formatBase(raw,16)+"\nDEC  unsigned "+raw.toString()+" · signed "+signed.toString()+"\nOCT  "+M.formatBase(raw,8)+"\nBIN  "+M.formatBase(raw,2,width);
-    }else if(id==="number"){
-      var a=BigInt($("#numA").value),b=BigInt($("#numB").value),eg=extGcd(a,b);
-      text="gcd = "+eg[0].toString()+"\nlcm = "+M.lcmBig(a,b).toString()+"\nBézout: "+a+"·("+eg[1]+") + "+b+"·("+eg[2]+") = "+eg[0];
-    }
-    out.innerHTML="<strong>Result</strong><pre></pre>";$("pre",out).textContent=text;
-    await addHistory(tools.find(function(t){return t.id===id;}).name,{display:text,approx:""},"tool");
-  }catch(e){out.innerHTML="<strong>Error</strong><span class=\"ws-error\"></span>";$(".ws-error",out).textContent=errorMessage(e);}
+async function runSpecializedUnit(){
+  var t=T.REGISTRY.get("unit-converter"),box=$("#toolResult");try{var ur=U.tryEvaluate($("#uValue").value+" "+$("#uFrom").value+" to "+$("#uTo").value,{}, {angle:state.angle,precision:state.precision}),out={title:t.name,display:ur.display+(ur.approx?"\n"+ur.approx:""),warnings:[],details:{category:$("#uGroup").value}};renderToolResult(out);await recordToolHistory(t,out);}catch(e){box.innerHTML="<strong>Error</strong><span class=\"ws-error\"></span>";$(".ws-error",box).textContent=errorMessage(e);}
+}
+async function runSpecializedEngineering(){
+  var t=T.REGISTRY.get("engineering-relations"),box=$("#toolResult");try{var relationId=$("#engRelation").value,relation=U.ENGINEERING_RELATIONS[relationId],parts=[];Object.keys(relation.variables).forEach(function(name){var el=$("#engVar-"+name),value=el?el.value.trim():"";if(value)parts.push(name+"="+value);});var er=U.tryEvaluate("eng("+relationId+(parts.length?", "+parts.join(", "):"")+")",{}, {angle:state.angle,precision:state.precision}),out={title:relation.name,display:er.display,warnings:[],details:{relation:relationId}};renderToolResult(out);await recordToolHistory(t,out);}catch(e){box.innerHTML="<strong>Error</strong><span class=\"ws-error\"></span>";$(".ws-error",box).textContent=errorMessage(e);}
 }
 
 let worksheetSaveTimer=null;
