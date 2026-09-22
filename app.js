@@ -451,7 +451,7 @@ function dataCorrelation(method){
   }catch(e){var box=$("#dataAnalysisResult");box.textContent=errorMessage(e);box.classList.add("ws-error");}
 }
 async function dataRegression(){
-  var box=$("#dataAnalysisResult");
+  var box=$("#dataAnalysisResult"),revision=state.dataRevision;
   try{
     var ds=requireDataset(),cols=selectedDataColumns();if(cols.x===cols.y)throw new S.RegressionError("X and response must be different columns");
     box.classList.remove("ws-error");box.classList.add("muted");box.textContent=ds.rowCount>5000?"Fitting regression in worker…":"Fitting regression…";
@@ -460,6 +460,7 @@ async function dataRegression(){
       try{model=await statisticsWorker().run("regression",{dataset:ds.toJSON(),response:cols.y,predictors:[cols.x],options:{}});}
       catch(e){model=S.fitRegression(ds,cols.y,[cols.x]);}
     }else model=S.fitRegression(ds,cols.y,[cols.x]);
+    if(revision!==state.dataRevision)return;
     var intercept=model.coefficients[0],slope=model.coefficients[1],lines=[
       cols.y+" = "+dataNumber(intercept)+" + "+dataNumber(slope)+" · "+cols.x,
       "R² = "+dataNumber(model.r2)+"   adjusted R² = "+dataNumber(model.adjustedR2),
