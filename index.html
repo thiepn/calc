@@ -126,11 +126,27 @@
               <div id="matrixGrid" class="matrix-grid"></div>
               <div class="action-row">
                 <button data-matrix-op="det">det(A)</button>
+                <button data-matrix-op="trace">tr(A)</button>
                 <button data-matrix-op="rref">RREF</button>
                 <button data-matrix-op="inverse">A⁻¹</button>
                 <button data-matrix-op="transpose">Aᵀ</button>
                 <button data-matrix-op="rank">Rank</button>
+                <button data-matrix-op="nullity">Nullity</button>
+                <button data-matrix-op="nullspace">Null(A)</button>
+                <button data-matrix-op="colspace">Col(A)</button>
+                <button data-matrix-op="rowspace">Row(A)</button>
+                <button data-matrix-op="lu">LU</button>
+                <button data-matrix-op="qr">QR</button>
+                <button data-matrix-op="cholesky">Cholesky</button>
+                <button data-matrix-op="svd">SVD</button>
+                <button data-matrix-op="pinv">A⁺</button>
+                <button data-matrix-op="eigen">Eigen</button>
+                <button data-matrix-op="diag">Diagonalize</button>
+                <button data-matrix-op="charpoly">χA</button>
+                <button data-matrix-op="minpoly">mA</button>
+                <button data-matrix-op="jordan">Jordan</button>
               </div>
+              <div class="hint" style="margin-top:10px">Paste TSV/CSV directly into any matrix cell. Arrow keys move between cells. Exact fractions stay exact; numerical decompositions report residuals.</div>
             </section>
             <section class="panel result-panel">
               <h2>Result</h2>
@@ -218,6 +234,7 @@
   <script src="./algebra.js"></script>
   <script src="./calculus.js"></script>
   <script src="./units.js"></script>
+  <script src="./linear-algebra.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
