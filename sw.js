@@ -1,5 +1,5 @@
 "use strict";
-const CACHE="calc-shell-v2";
+const CACHE="calc-shell-v3";
 const ASSETS=["./","./index.html","./styles.css","./math.js","./algebra.js","./app.js","./manifest.webmanifest","./icon.svg"];
 const shellUrl=new URL("./index.html",self.registration.scope).href;
 
