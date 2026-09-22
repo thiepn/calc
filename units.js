@@ -228,6 +228,7 @@ class Quantity{
     return new Quantity(this.baseValue,this.dimension,{kind:this.kind,displayUnit:u,exact:this.exact&&u.exact});
   }
   displayMagnitude(){
+    if(this.customDisplayScale)return scalarDiv(this.baseValue,this.customDisplayScale);
     var u=this.displayUnit;if(!u)return this.baseValue;
     if(this.kind==="absolute-temperature"&&u.mode==="affine")return scalarDiv(scalarSub(this.baseValue,u.offset),u.scale);
     return scalarDiv(this.baseValue,u.scale);
@@ -556,7 +557,14 @@ function resultFor(value,options,metadata){
 const CONSTANT_REGISTRY={};
 function registerConstant(spec){
   var quantity=parseQuantityExpression(spec.value+"*("+spec.unit+")",{}, {angle:"RAD",complex:false});
-  if(spec.kind)quantity=new Quantity(quantity.baseValue,quantity.dimension,{kind:spec.kind,displayUnit:quantity.displayUnit,exact:spec.exact!==false&&quantity.exact});
+  var target=parseUnitExpression(spec.unit),simple=UNIT_REGISTRY.get(normalizeUnitInput(spec.unit).trim());
+  quantity=new Quantity(quantity.baseValue,quantity.dimension,{
+    kind:spec.kind||quantity.kind,
+    displayUnit:simple||null,
+    expressionUnits:simple?null:spec.unit,
+    customDisplayScale:simple?null:target.baseValue,
+    exact:spec.exact!==false&&quantity.exact&&target.exact
+  });
   CONSTANT_REGISTRY[spec.id]=Object.freeze({id:spec.id,name:spec.name,symbol:spec.symbol||spec.id,quantity:quantity,exact:spec.exact!==false,source:spec.source||"SI/CODATA",description:spec.description||""});
 }
 registerConstant({id:"c0",name:"speed of light in vacuum",value:"299792458",unit:"m/s",kind:"speed",exact:true,source:"SI defining constant"});
