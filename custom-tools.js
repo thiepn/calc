@@ -169,7 +169,7 @@ function formulaEnv(manifest,parsed){
   for(const v of manifest.variables){
     const value=parsed[v.name];
     if(value===null)continue;
-    env[v.name]=v.type==="quantity"?U.quantityFromUnit(value,v.unit):value;
+    env[v.name]=v.type==="quantity"?U.quantityFromUnit(value,v.unit):M.Rational.fromDecimal(String(value));
   }
   return env;
 }
