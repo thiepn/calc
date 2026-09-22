@@ -215,6 +215,7 @@ class Quantity{
     this.kind=options.kind||null;
     this.displayUnit=options.displayUnit||null;
     this.expressionUnits=options.expressionUnits||null;
+    this.customDisplayScale=options.customDisplayScale||null;
     this.exact=options.exact!==false&&isExactScalar(baseValue);
     Object.freeze(this);
   }
@@ -448,9 +449,19 @@ function unitTokensIn(raw){
 }
 function shouldTryQuantity(raw,env){
   if(/^\s*(convert|constant|eng)\s*\(/.test(raw))return true;
+  var normalized=normalizeUnitInput(raw),toks=unitTokensIn(raw);
+  for(var t of toks){
+    var found=lookupEnv(env,t);if(found.found&&found.value instanceof Quantity)return true;
+    var callPattern=new RegExp("\\b"+t.replace(/[.*+?^$()|[\\]\\\\]/g,"\\\\function shouldTryQuantity(raw,env){
+  if(/^\s*(convert|constant|eng)\s*\(/.test(raw))return true;
   var toks=unitTokensIn(raw);
   for(var t of toks){
     var found=lookupEnv(env,t);if(found.found&&found.value instanceof Quantity)return true;
+    if(UNIT_REGISTRY.get(t)||CONSTANT_REGISTRY[t])return true;
+  }
+  return /\s+to\s+/.test(raw);
+}")+"\\s*\\(");
+    if(M.FUNCTION_REGISTRY&&Object.prototype.hasOwnProperty.call(M.FUNCTION_REGISTRY,t)&&callPattern.test(normalized))continue;
     if(UNIT_REGISTRY.get(t)||CONSTANT_REGISTRY[t])return true;
   }
   return /\s+to\s+/.test(raw);
@@ -463,7 +474,6 @@ function parseQuantityExpression(raw,env,options){
 function parseUnitExpression(raw){
   var norm=normalizeUnitInput(raw),ast=M.parseExpression(norm),v=new QuantityEvaluator({},{}).eval(ast);
   if(!(v instanceof Quantity))throw new UnitError("INVALID_UNIT_EXPRESSION","Target must be a unit expression");
-  if(!M.isZero(M.sub(v.baseValue,rat(1)))&&!(v.displayUnit&&v.displayUnit.mode==="affine"))throw new UnitError("INVALID_UNIT_EXPRESSION","Target unit expression must have unit magnitude 1");
   return v;
 }
 
@@ -589,10 +599,10 @@ regRelation({id:"ohm",name:"Ohm's law",formula:"I*R",output:"V",variables:{V:vs(
 regRelation({id:"power",name:"Electrical power",formula:"V*I",output:"P",variables:{P:vs("W","power"),V:vs("V","voltage"),I:vs("A","current")},solvers:{
   P:g=>qMul(g.V,g.I),V:g=>qDiv(g.P,g.I),I:g=>qDiv(g.P,g.V)
 }});
-regRelation({id:"force",name:"Newton's second law",formula:"m*a",output:"F",variables:{F:vs("N","force"),m:vs("g","mass"),a:{dimension:DIMS.acceleration,kind:"acceleration",unit:"m"}},solvers:{
+regRelation({id:"force",name:"Newton's second law",formula:"m*a",output:"F",variables:{F:vs("N","force"),m:vs("g","mass"),a:{dimension:DIMS.acceleration,kind:"acceleration"}},solvers:{
   F:g=>qMul(g.m,g.a),m:g=>qDiv(g.F,g.a),a:g=>qDiv(g.F,g.m)
 }});
-regRelation({id:"kinetic",name:"Kinetic energy",formula:"0.5*m*v^2",output:"E",variables:{E:vs("J","energy"),m:vs("g","mass"),v:{dimension:DIMS.speed,kind:"speed",unit:"m"}},solvers:{
+regRelation({id:"kinetic",name:"Kinetic energy",formula:"0.5*m*v^2",output:"E",variables:{E:vs("J","energy"),m:vs("g","mass"),v:{dimension:DIMS.speed,kind:"speed"}},solvers:{
   E:g=>qMul(rat(1,2),qMul(g.m,qPow(g.v,rat(2)))),
   m:g=>qDiv(qMul(rat(2),g.E),qPow(g.v,rat(2))),
   v:g=>{var inner=qDiv(qMul(rat(2),g.E),g.m);return qCall("sqrt",[inner],{});}
@@ -637,6 +647,7 @@ function runCommand(raw,env,options){
 function tryEvaluate(raw,env,options){
   env=env||{};options=options||{};
   var command=runCommand(raw,env,options);if(command)return command;
+  if(/^\s*[A-Za-z_][A-Za-z0-9_]*(?:\s*\([^=]*\))?\s*=/.test(raw))return null;
   var toIndex=findTopLevelTo(raw);
   if(toIndex>=0){
     var left=raw.slice(0,toIndex).trim(),target=raw.slice(toIndex+4).trim(),q=parseQuantityExpression(left,env,options);
