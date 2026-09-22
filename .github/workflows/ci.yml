@@ -26,6 +26,8 @@ jobs:
           node --check linear-algebra.js
           node --check statistics.js
           node --check statistics-worker.js
+          node --check graph.js
+          node --check graph-worker.js
           node --check app.js
           node --check sw.js
           node --check tests/smoke.js
@@ -36,6 +38,7 @@ jobs:
           node --check tests/units.js
           node --check tests/linear-algebra.js
           node --check tests/statistics.js
+          node --check tests/graph.js
       - name: Core smoke tests
         run: node tests/smoke.js
       - name: Core kernel certification
@@ -52,3 +55,5 @@ jobs:
         run: node tests/linear-algebra.js
       - name: Probability Statistics and Data V2 certification
         run: node tests/statistics.js
+      - name: Graphing V2 certification
+        run: node tests/graph.js
