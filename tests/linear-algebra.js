@@ -137,6 +137,8 @@ zeroMatrix(L.cayleyHamiltonResidual(D),1e-12,"Cayley-Hamilton");
 const ea=L.eigenAnalysis(D,{domain:"complex"});
 eq(ea.mode,"exact","exact eigenanalysis mode");
 eq(ea.eigenspaces.length,2,"two eigenspaces");
+assert(ea.diagonalizable,"distinct diagonal matrix diagonalizable");
+assert(ea.eigenspaces.every(x=>x.algebraicMultiplicity===1&&x.geometricMultiplicity===1),"simple eigenvalue multiplicities");
 for(const item of ea.eigenspaces)for(const ev of item.space.vectors)zeroMatrix(new L.Matrix([D.multiply(ev).sub(ev.scale(item.scalar)).values]),1e-12,"eigenvector residual");
 const diag=L.diagonalize(new L.Matrix([[2,0],[0,3]]));
 assert(diag.residual<1e-12,"exact diagonalization residual");
@@ -178,6 +180,8 @@ eq(parsed.toString(),"[[1/3, 2], [2, 5]]","workspace exact parsing");
 const symbolic=L.Matrix.fromStrings([["x","1"],["0","x"]],{}, {symbolic:true});
 eq(symbolic.domain,"symbolic","symbolic matrix domain");
 eq(symbolic.trace().toString(),"2 * x","symbolic trace");
+eq(symbolic.determinant().toString(),"x ^ 2","symbolic determinant");
+eq(symbolic.rank(),2,"symbolic generic rank");
 
 // Matrix result summary routing.
 eq(L.resultSummary("rank",R).value.toString(),"1","result summary rank");
