@@ -64,6 +64,9 @@ eq(U.tryEvaluate("30 degC - 20 degC",{},{}).display,"10 Δ°C","absolute tempera
 eq(U.tryEvaluate("20 degC + 10 dC",{},{}).display,"30 °C","absolute plus difference");
 throwsCode(()=>U.tryEvaluate("20 degC + 10 degC",{},{}),"AFFINE_UNIT_ERROR","absolute temperatures cannot be added");
 throwsCode(()=>U.tryEvaluate("20 degC * 2",{},{}),"AFFINE_UNIT_ERROR","affine multiplication blocked");
+eq(U.tryEvaluate("-273.15 degC to K",{},{}).display,"0 K","absolute zero accepted");
+throwsCode(()=>U.tryEvaluate("-274 degC",{},{}),"PHYSICAL_DOMAIN_ERROR","below absolute zero rejected");
+throwsCode(()=>U.tryEvaluate("1 K - 2 dK",{},{}),"PHYSICAL_DOMAIN_ERROR","temperature arithmetic cannot cross below absolute zero");
 
 // SI vs IEC data.
 eq(U.tryEvaluate("1 KiB to B",{},{}).display,"1024 B","IEC KiB");
@@ -84,6 +87,8 @@ assert(g0.exact===true&&g0.metadata.source,"standard gravity metadata");
 const c0=U.tryEvaluate("c0",{},{}).value;
 eq(U.formatQuantity(c0),"299792458 m/s","direct exact speed-of-light constant");
 assert(U.CONSTANT_REGISTRY.h_planck.exact,"Planck constant exact by SI definition");
+assert(U.formatQuantity(U.CONSTANT_REGISTRY.h_planck.quantity).includes("J*s"),"Planck constant preserves declared composite unit");
+assert(U.formatQuantity(U.CONSTANT_REGISTRY.kB_const.quantity).includes("J/K"),"Boltzmann constant preserves declared composite unit");
 assert(U.CONSTANT_REGISTRY.G_const.exact===false,"gravitational constant marked measured");
 
 // Variable names win over unit symbols.
