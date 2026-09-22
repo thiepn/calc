@@ -13,59 +13,64 @@ Calc currently includes:
 - equation, system and inequality solving for certified algebraic subsets;
 - symbolic derivatives, multivariable calculus, verified antiderivatives, limits and Taylor polynomials;
 - numerical differentiation, adaptive integration and safeguarded root solving;
-- first-class physical quantities with SI dimensions;
-- exact unit conversion factors where definitions are exact;
-- SI and IEC prefix engines;
-- affine absolute-temperature and temperature-difference semantics;
-- explicit angle quantities;
-- typed physical constants with provenance;
-- dimension-checked engineering relations;
-- exact Matrix determinant/RREF/inverse/transpose/rank;
+- first-class physical quantities, exact unit conversions, physical constants and engineering relations;
+- canonical Matrix/Vector/Basis/LinearTransformation objects;
+- exact determinant/inverse/RREF/rank/nullity/subspace workflows;
+- basis coordinates, change of basis, projections and linear-system classification;
+- LU, Householder QR, Cholesky, symmetric eigendecomposition, SVD and pseudoinverse;
+- characteristic/minimal polynomials, eigenspaces, multiplicities, diagonalization and restricted exact Jordan form;
+- SVD least squares and condition diagnostics;
 - descriptive statistics and linear regression;
 - interactive 2D graphing;
 - specialized everyday/finance/geometry/date/programmer/number-theory tools;
 - persistent worksheets and local history;
 - offline/installable PWA support.
 
-Calc deliberately distinguishes:
+Calc deliberately distinguishes exact from approximate, unsupported from impossible, and structural algebra from numerical decompositions.
 
-- exact from approximate;
-- unsupported mathematics from no solution;
-- numerical non-convergence from a mathematical result;
-- physical dimension from semantic quantity kind.
+## Matrix workspace
 
-It does not claim to be a complete CAS.
+The Matrix workspace now supports:
+
+```text
+det(A)
+tr(A)
+RREF
+A^-1
+A^T
+rank / nullity
+
+Null(A)
+Col(A)
+Row(A)
+
+LU
+QR
+Cholesky
+SVD
+A+
+
+eigenanalysis
+diagonalization
+characteristic polynomial
+minimal polynomial
+Jordan form
+```
+
+Matrix input supports exact fractions and multi-cell TSV/CSV paste.
+
+Numerical decompositions report residual diagnostics instead of returning matrices without verification.
 
 ## Quantity examples
 
 ```text
 5 km + 300 m
-
 80 km / 1.25 hr to km/hr
-
 5 kg * 9.81 m/s^2
-
-1 cm^2 to m^2
-
 20 degC to degF
-
-30 degC - 20 degC
-
 sin(90 deg)
-
-1 KiB to B
-
 constant(g0)
-
 eng(ohm, V=12 V, R=6 ohm)
-```
-
-Quantity variables can also be assigned:
-
-```text
-d = 5 km
-t = 20 min
-d / t to km/hr
 ```
 
 ## Algebra commands
@@ -102,31 +107,14 @@ nderivative(sin(x), x, 0)
 root(cos(x)-x, x, 0, 1)
 ```
 
-## Engineering commands
-
-```text
-eng(ohm, V=12 V, R=6 ohm)
-
-eng(power, V=12 V, I=2 A)
-
-eng(force, F=10 N, m=2 kg)
-
-eng(wave, f=2 Hz, lambda=3 m)
-```
-
-The Tools workspace also exposes these relations through a normal form UI. Leave one variable blank to solve it, or fill every variable to verify consistency.
-
-## Run
-
-Open `index.html` through a static HTTP server, or use the GitHub Pages deployment.
-
 ## Architecture
 
-- `math.js` — Phase 1 deterministic numeric/parser kernel.
+- `math.js` — Phase 1 deterministic scalar/parser kernel.
 - `algebra.js` — Phase 2 symbolic expressions, polynomials, equations and solving.
 - `calculus.js` — Phase 3 symbolic calculus and numerical methods.
 - `calculus-worker.js` — Phase 3 numerical worker backend.
-- `units.js` — Phase 4 dimensions, quantities, units, constants and engineering.
+- `units.js` — Phase 4 dimensions, quantities, constants and engineering.
+- `linear-algebra.js` — Phase 5 Matrix/Vector/subspace/decomposition engine.
 - `app.js` — application state, persistence, workspaces, command palette and UI routing.
 - `styles.css` — responsive application design system.
 - `sw.js` + `manifest.webmanifest` — offline/installable PWA runtime.
@@ -137,14 +125,14 @@ No external runtime libraries are required.
 
 ## Verification
 
-GitHub Actions checks JavaScript syntax and runs:
+GitHub Actions checks syntax and runs cumulative certification for:
 
-- application/core smoke tests;
-- hardened core-kernel certification;
+- core numeric/parser behavior;
 - deterministic expression fuzzing;
-- symbolic algebra certification;
-- calculus and numerical-method certification;
-- units/quantities/constants/engineering certification.
+- symbolic algebra;
+- calculus/numerical methods;
+- units/quantities/constants/engineering;
+- Linear Algebra V2.
 
 See:
 
@@ -152,5 +140,6 @@ See:
 - `docs/math/ALGEBRA_SEMANTICS.md`
 - `docs/math/CALCULUS_NUMERICAL_SEMANTICS.md`
 - `docs/math/UNITS_SEMANTICS.md`
+- `docs/math/LINEAR_ALGEBRA_SEMANTICS.md`
 
 for the exact supported semantics and deliberate limitations.
