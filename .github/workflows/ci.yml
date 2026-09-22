@@ -23,6 +23,7 @@ jobs:
           node --check calculus.js
           node --check calculus-worker.js
           node --check units.js
+          node --check linear-algebra.js
           node --check app.js
           node --check sw.js
           node --check tests/smoke.js
@@ -31,6 +32,7 @@ jobs:
           node --check tests/algebra.js
           node --check tests/calculus.js
           node --check tests/units.js
+          node --check tests/linear-algebra.js
       - name: Core smoke tests
         run: node tests/smoke.js
       - name: Core kernel certification
@@ -43,3 +45,5 @@ jobs:
         run: node tests/calculus.js
       - name: Units quantities constants and engineering certification
         run: node tests/units.js
+      - name: Linear Algebra V2 certification
+        run: node tests/linear-algebra.js
