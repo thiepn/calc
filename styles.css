@@ -110,16 +110,34 @@ kbd{border:1px solid var(--line-strong);background:var(--surface-2);border-radiu
 .key.tall{grid-row:span 2}
 .key.wide{grid-column:span 2}
 
-.graph-layout{display:grid;grid-template-columns:290px minmax(0,1fr);gap:14px;height:calc(100vh - var(--topbar) - 49px)}
+.graph-layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:14px;height:calc(100vh - var(--topbar) - 49px)}
 .graph-controls{padding:18px;overflow:auto}
-.graph-controls textarea{width:100%;padding:12px;font-family:"SFMono-Regular",Consolas,monospace;line-height:1.6;margin-bottom:10px}
-.graph-controls .primary-btn{width:100%;margin-bottom:16px}
+.graph-controls textarea{width:100%;padding:12px;font-family:"SFMono-Regular",Consolas,monospace;line-height:1.6;margin-bottom:10px;resize:vertical}
+.graph-controls .primary-btn{width:100%;margin-bottom:10px}
+.graph-option{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);margin:7px 0 8px}
+.graph-option input{accent-color:var(--accent)}
+.graph-syntax{margin-bottom:12px}
 .graph-stage{position:relative;overflow:hidden;min-height:430px}
 #graphCanvas{width:100%;height:100%;display:block;touch-action:none}
 .graph-readout{position:absolute;right:12px;bottom:10px;background:color-mix(in srgb,var(--surface) 90%,transparent);border:1px solid var(--line);border-radius:7px;padding:5px 8px;font:11px "SFMono-Regular",Consolas,monospace;color:var(--muted);pointer-events:none}
-.graph-legend{display:grid;gap:5px;margin-bottom:14px}
-.legend-item{display:flex;gap:8px;align-items:center;font-size:12px}
+.graph-a11y{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.graph-legend{display:grid;gap:6px;margin:12px 0 14px}
+.legend-item{display:grid;grid-template-columns:18px 18px minmax(0,1fr);gap:7px;align-items:center;font-size:11px;min-width:0}
+.legend-item input{margin:0;accent-color:var(--accent)}
+.legend-item span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .legend-swatch{width:18px;height:3px;border-radius:2px;background:var(--accent)}
+.graph-sliders{display:grid;gap:8px;margin:10px 0 14px}
+.graph-slider{display:grid;gap:4px}
+.graph-slider label{font:11px "SFMono-Regular",Consolas,monospace;color:var(--muted)}
+.graph-slider input[type="range"]{width:100%;accent-color:var(--accent)}
+.graph-analysis{border-top:1px solid var(--line);padding-top:13px;margin-top:13px;display:grid;gap:8px}
+.graph-analysis h3{font-size:12px;margin:0}
+.graph-analysis-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.graph-analysis-grid input{width:100%;padding:7px 8px}
+.graph-analysis-actions{gap:5px}
+.graph-analysis-actions button{font-size:10px;padding:7px 8px}
+.graph-analysis-result{padding:10px;border-radius:9px;background:var(--surface-2);font-size:11px;line-height:1.55;min-height:42px;overflow:auto}
+.graph-analysis-result pre{margin:0;font:11px/1.55 "SFMono-Regular",Consolas,monospace;white-space:pre-wrap}
 
 .matrix-layout{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(300px,.7fr);gap:14px}
 .matrix-layout>.panel{padding:20px}
@@ -230,11 +248,11 @@ kbd{border:1px solid var(--line-strong);background:var(--surface-2);border-radiu
   .search-button span{display:none}
   .search-button kbd{border:0;background:transparent;padding:0;font-size:0}
   .search-button kbd:after{content:"⌕";font-size:19px;color:var(--text)}
-  .graph-layout,.matrix-layout,.data-layout,.tools-layout,.worksheet-layout{grid-template-columns:1fr;height:auto}\n  .data-wide-panel{grid-column:auto}
+  .graph-layout,.matrix-layout,.data-layout,.tools-layout,.worksheet-layout{grid-template-columns:1fr;height:auto}\n  .graph-controls{order:2}.graph-stage{order:1;height:58vh;min-height:360px}\n  .data-wide-panel{grid-column:auto}
   .graph-controls{order:2}
   .graph-stage{height:58vh;min-height:380px;order:1}
   .worksheet-side{order:-1}
-  .tool-form{grid-template-columns:1fr}\n  .data-control-grid,.distribution-params{grid-template-columns:1fr}\n  .histogram-row{grid-template-columns:92px minmax(0,1fr) 42px}
+  .tool-form{grid-template-columns:1fr}\n  .graph-analysis-grid{grid-template-columns:1fr}\n  .data-control-grid,.distribution-params{grid-template-columns:1fr}\n  .histogram-row{grid-template-columns:92px minmax(0,1fr) 42px}
   .field.full{grid-column:auto}
 }
 @media (max-width:620px){
