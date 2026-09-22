@@ -100,7 +100,12 @@ class BitInteger{
     width=integer(width,"Bit width",1);if(width>256)throw new ProgrammerError("Bit width is limited to 256");
     this.width=width;this.signed=!!signed;this.modulus=1n<<BigInt(width);this.mask=this.modulus-1n;this.raw=((BigInt(raw)%this.modulus)+this.modulus)%this.modulus;Object.freeze(this);
   }
-  static parse(text,base,width,signed){base=integer(base,"Base",2);if(![2,8,10,16].includes(base))throw new ProgrammerError("Base must be 2, 8, 10, or 16");return new BitInteger(M.parseBigIntBase(String(text),base),width,signed);}
+  static fromValue(value,width,signed,mode){
+    width=integer(width,"Bit width",1);const v=BigInt(value),min=signed?-(1n<<BigInt(width-1)):0n,max=signed?(1n<<BigInt(width-1))-1n:(1n<<BigInt(width))-1n;
+    if(mode==="strict"&&(v<min||v>max))throw new ProgrammerError("Value is outside the selected fixed-width range",{min:min.toString(),max:max.toString()});
+    return new BitInteger(v,width,signed);
+  }
+  static parse(text,base,width,signed,mode){base=integer(base,"Base",2);if(![2,8,10,16].includes(base))throw new ProgrammerError("Base must be 2, 8, 10, or 16");return BitInteger.fromValue(M.parseBigIntBase(String(text),base),width,signed,mode||"wrap");}
   value(){return this.signed&&this.raw>=(1n<<BigInt(this.width-1))?this.raw-this.modulus:this.raw;}
   withRaw(raw){return new BitInteger(raw,this.width,this.signed);}
   and(b){return this.withRaw(this.raw&this.assert(b).raw);}or(b){return this.withRaw(this.raw|this.assert(b).raw);}xor(b){return this.withRaw(this.raw^this.assert(b).raw);}not(){return this.withRaw((~this.raw)&this.mask);}
@@ -139,6 +144,13 @@ class Line2D{
 }
 
 function deg(x){return x*180/Math.PI;}function rad(x){return x*Math.PI/180;}
+function solveCircle(spec){
+  const vals=["radius","diameter","circumference","area"].map(k=>({key:k,value:spec[k]})).filter(x=>x.value!==undefined&&x.value!==null&&x.value!=="");
+  if(vals.length!==1)throw new GeometryError("Provide exactly one circle measure: radius, diameter, circumference, or area");
+  const item=vals[0],v=positive(item.value,item.key),r=item.key==="radius"?v:item.key==="diameter"?v/2:item.key==="circumference"?v/(2*Math.PI):Math.sqrt(v/Math.PI);
+  return {radius:r,diameter:2*r,circumference:2*Math.PI*r,area:Math.PI*r*r,source:item.key};
+}
+
 function triangleAreaHeron(a,b,c){const s=(a+b+c)/2,v=s*(s-a)*(s-b)*(s-c);if(v<-1e-12)throw new GeometryError("Sides do not form a triangle");return Math.sqrt(Math.max(0,v));}
 function validateTriangleSides(a,b,c){if(!(a>0&&b>0&&c>0)||a+b<=c||a+c<=b||b+c<=a)throw new GeometryError("Sides do not form a non-degenerate triangle");}
 function triangleFromSSS(a,b,c){
@@ -256,7 +268,7 @@ reg({id:"split-tip",name:"Split bill & tip",category:"Everyday",description:"Add
 reg({id:"compound-interest",name:"Compound interest",category:"Finance",description:"Future value with periodic or continuous compounding.",inputs:[{id:"principal",label:"Principal",type:"number",default:10000},{id:"rate",label:"Annual rate (%)",type:"number",default:5},{id:"years",label:"Years",type:"number",default:10,min:0},{id:"compounds",label:"Compounds/year",type:"integer",default:12,min:1},{id:"continuous",label:"Continuous",type:"boolean",required:false,default:false}],run:i=>{const fv=compoundFutureValue(i.principal,i.rate/100,i.years,i.compounds,i.continuous);return result("Future value "+fmt(fv),fv,{interest:fv-i.principal});}});
 reg({id:"present-value",name:"Present value",category:"Finance",description:"Discount a future value.",inputs:[{id:"future",label:"Future value",type:"number",default:10000},{id:"rate",label:"Annual rate (%)",type:"number",default:5},{id:"years",label:"Years",type:"number",default:5,min:0},{id:"compounds",label:"Compounds/year",type:"integer",default:12,min:1}],run:i=>{const pv=presentValue(i.future,i.rate/100,i.years,i.compounds);return result(fmt(pv),pv);}});
 reg({id:"annuity-payment",name:"Annuity payment",category:"Finance",description:"Payment for ordinary or annuity-due cash flows.",inputs:[{id:"pv",label:"Present value",type:"number",default:100000},{id:"periodicRate",label:"Periodic rate (%)",type:"number",default:0.5},{id:"periods",label:"Periods",type:"integer",default:120,min:1},{id:"timing",label:"Timing",type:"select",options:[["ordinary","End of period"],["due","Beginning of period"]],default:"ordinary"}],run:i=>{const p=annuityPayment(i.pv,i.periodicRate/100,i.periods,i.timing);return result(fmt(p),p);}});
-reg({id:"loan",name:"Loan & amortization",category:"Finance",description:"Payment, interest, total and reconciled amortization schedule.",inputs:[{id:"principal",label:"Principal",type:"number",default:250000,min:0},{id:"rate",label:"Annual rate (%)",type:"number",default:4.5},{id:"years",label:"Years",type:"number",default:30,min:0.0001},{id:"frequency",label:"Payments/year",type:"integer",default:12,min:1}],run:i=>{const l=loanSchedule(i.principal,i.rate/100,i.years,i.frequency);return result("Payment "+fmt(l.payment)+"\nTotal interest "+fmt(l.totalInterest)+"\nTotal paid "+fmt(l.totalPaid)+"\nPayments "+l.schedule.length,l,{payment:l.payment,totalInterest:l.totalInterest,totalPaid:l.totalPaid,payments:l.schedule.length});}});
+reg({id:"loan",name:"Loan & amortization",category:"Finance",description:"Payment, interest, total and reconciled amortization schedule.",inputs:[{id:"principal",label:"Principal",type:"number",default:250000,min:0},{id:"rate",label:"Annual rate (%)",type:"number",default:4.5},{id:"years",label:"Years",type:"number",default:30,min:0.0001},{id:"frequency",label:"Payments/year",type:"integer",default:12,min:1},{id:"currency",label:"Currency",type:"select",options:[["EUR","EUR"],["USD","USD"],["GBP","GBP"],["JPY","JPY"]],default:"EUR"}],run:i=>{const l=loanSchedule(i.principal,i.rate/100,i.years,i.frequency),payment=Money.fromMajor(l.payment,i.currency),interest=Money.fromMajor(l.totalInterest,i.currency),total=Money.fromMajor(l.totalPaid,i.currency);return result("Payment "+payment.toString()+"\nTotal interest "+interest.toString()+"\nTotal paid "+total.toString()+"\nPayments "+l.schedule.length,l,{payment:payment.toString(),totalInterest:interest.toString(),totalPaid:total.toString(),payments:l.schedule.length});}});
 reg({id:"npv",name:"NPV",category:"Finance",description:"Net present value with t=0 as the first cash flow.",inputs:[{id:"cashflows",label:"Cash flows",type:"cashflows",default:"-1000,400,400,400"},{id:"rate",label:"Discount rate (%)",type:"number",default:10}],run:i=>{const v=npv(i.rate/100,i.cashflows);return result(fmt(v),v,{timing:"first cash flow at t=0"});}});
 reg({id:"irr",name:"IRR",category:"Finance",description:"Find real IRRs in the certified search range and report multiplicity.",inputs:[{id:"cashflows",label:"Cash flows",type:"cashflows",default:"-1000,600,600"}],run:i=>{const roots=irrAll(i.cashflows),warnings=roots.length>1?["Multiple IRRs found; IRR is not unique."]:roots.length===0?["No IRR found in the certified search range."]:[];return result(roots.length?roots.map(r=>fmt(r*100)+"%").join(", "):"No IRR found",roots,{roots:roots},warnings);}});
 reg({id:"cagr",name:"CAGR",category:"Finance",description:"Compound annual growth rate.",inputs:[{id:"start",label:"Start value",type:"number",default:100},{id:"end",label:"End value",type:"number",default:200},{id:"years",label:"Years",type:"number",default:5,min:0.000001}],run:i=>{if(i.start<=0||i.end<0)throw new FinanceError("CAGR requires positive start and non-negative end");const v=Math.pow(i.end/i.start,1/i.years)-1;return result(fmt(v*100)+"%",v);}});
@@ -265,7 +277,7 @@ reg({id:"margin-markup",name:"Margin & markup",category:"Finance",description:"C
 reg({id:"break-even",name:"Break-even",category:"Finance",description:"Break-even units from fixed cost and contribution margin.",inputs:[{id:"fixed",label:"Fixed cost",type:"number",default:10000,min:0},{id:"price",label:"Price/unit",type:"number",default:50},{id:"variable",label:"Variable cost/unit",type:"number",default:30}],run:i=>{const c=i.price-i.variable;if(c<=0)throw new FinanceError("Contribution margin must be positive");const units=i.fixed/c;return result(fmt(units)+" units",units,{contributionMargin:c,wholeUnits:Math.ceil(units)});}});
 
 reg({id:"triangle",name:"Triangle solver",category:"Geometry",description:"Solve SSS, SAS, ASA/AAS, or ambiguous SSA triangles.",inputs:[{id:"a",label:"Side a",type:"number",required:false,default:3},{id:"b",label:"Side b",type:"number",required:false,default:4},{id:"c",label:"Side c",type:"number",required:false,default:5},{id:"A",label:"Angle A (°)",type:"number",required:false},{id:"B",label:"Angle B (°)",type:"number",required:false},{id:"C",label:"Angle C (°)",type:"number",required:false}],run:i=>{const sols=solveTriangle(i);if(!sols.length)return result("No triangle satisfies the supplied data",[],{},["0 solutions"]);const text=sols.map((t,k)=>"Solution "+(k+1)+" ("+t.case+")\na="+fmt(t.a)+" b="+fmt(t.b)+" c="+fmt(t.c)+"\nA="+fmt(t.A)+"° B="+fmt(t.B)+"° C="+fmt(t.C)+"°\nArea="+fmt(t.area)+" Perimeter="+fmt(t.perimeter)).join("\n\n");return result(text,sols,{solutions:sols.length});}});
-reg({id:"circle",name:"Circle",category:"Geometry",description:"Solve circle measures from radius.",inputs:[{id:"radius",label:"Radius",type:"number",default:3,min:0}],run:i=>{const r=positive(i.radius,"Radius");return result("Diameter "+fmt(2*r)+"\nCircumference "+fmt(2*Math.PI*r)+"\nArea "+fmt(Math.PI*r*r),{radius:r,diameter:2*r,circumference:2*Math.PI*r,area:Math.PI*r*r});}});
+reg({id:"circle",name:"Circle solver",category:"Geometry",description:"Solve all circle measures from exactly one known measure.",inputs:[{id:"radius",label:"Radius",type:"number",required:false,default:3},{id:"diameter",label:"Diameter",type:"number",required:false},{id:"circumference",label:"Circumference",type:"number",required:false},{id:"area",label:"Area",type:"number",required:false}],run:i=>{const v=solveCircle(i);return result("Radius "+fmt(v.radius)+"\nDiameter "+fmt(v.diameter)+"\nCircumference "+fmt(v.circumference)+"\nArea "+fmt(v.area),v,{source:v.source});}});
 reg({id:"rectangle",name:"Rectangle",category:"Geometry",description:"Area, perimeter, and diagonal.",inputs:[{id:"width",label:"Width",type:"number",default:4,min:0},{id:"height",label:"Height",type:"number",default:3,min:0}],run:i=>{const w=positive(i.width,"Width"),h=positive(i.height,"Height"),v={area:w*h,perimeter:2*(w+h),diagonal:Math.hypot(w,h)};return result("Area "+fmt(v.area)+"\nPerimeter "+fmt(v.perimeter)+"\nDiagonal "+fmt(v.diagonal),v);}});
 reg({id:"regular-polygon",name:"Regular polygon",category:"Geometry",description:"Area and perimeter of a regular polygon.",inputs:[{id:"sides",label:"Sides",type:"integer",default:6,min:3},{id:"side",label:"Side length",type:"number",default:2,min:0}],run:i=>{const n=i.sides,s=positive(i.side,"Side length"),per=n*s,area=n*s*s/(4*Math.tan(Math.PI/n));return result("Perimeter "+fmt(per)+"\nArea "+fmt(area),{perimeter:per,area:area});}});
 reg({id:"coordinate-distance",name:"Distance & midpoint",category:"Geometry",description:"Distance and midpoint between two points.",inputs:[{id:"x1",label:"x₁",type:"number",default:0},{id:"y1",label:"y₁",type:"number",default:0},{id:"x2",label:"x₂",type:"number",default:3},{id:"y2",label:"y₂",type:"number",default:4}],run:i=>{const d=Math.hypot(i.x2-i.x1,i.y2-i.y1),mid={x:(i.x1+i.x2)/2,y:(i.y1+i.y2)/2};return result("Distance "+fmt(d)+"\nMidpoint ("+fmt(mid.x)+", "+fmt(mid.y)+")",{distance:d,midpoint:mid});}});
@@ -277,7 +289,7 @@ reg({id:"age",name:"Age",category:"Dates & Time",description:"Calendar age on a 
 reg({id:"weekday",name:"Weekday & ISO week",category:"Dates & Time",description:"Weekday and ISO week number.",inputs:[{id:"date",label:"Date",type:"date",default:"2026-09-22"}],run:i=>{const w=weekday(i.date),iso=isoWeek(i.date);return result(w+" · ISO "+iso.year+"-W"+String(iso.week).padStart(2,"0"),{weekday:w,iso:iso});}});
 reg({id:"business-days",name:"Business days",category:"Dates & Time",description:"Monday–Friday business days, with optional holiday exclusions.",inputs:[{id:"start",label:"Start date",type:"date",default:"2026-09-21"},{id:"end",label:"End date",type:"date",default:"2026-09-28"},{id:"holidays",label:"Holidays (comma-separated YYYY-MM-DD)",type:"text",required:false,default:""}],run:i=>{const h=i.holidays?i.holidays.split(/[,;\s]+/).filter(Boolean):[],n=businessDays(i.start,i.end,h);return result(n+" business days",n,{weekend:"Saturday/Sunday",holidays:h});}});
 
-reg({id:"bit-inspector",name:"Bit integer inspector",category:"Programmer",description:"Synchronized binary/octal/decimal/hex with fixed width and signed interpretation.",inputs:[{id:"value",label:"Value",type:"text",default:"FF"},{id:"base",label:"Input base",type:"select",options:[[2,"Binary"],[8,"Octal"],[10,"Decimal"],[16,"Hexadecimal"]],default:"16"},{id:"width",label:"Width",type:"select",options:[[8,"8-bit"],[16,"16-bit"],[32,"32-bit"],[64,"64-bit"]],default:"8"},{id:"signed",label:"Signed",type:"boolean",required:false,default:true}],run:i=>{const b=BitInteger.parse(i.value,Number(i.base),Number(i.width),i.signed);return result("HEX "+b.format(16)+"\nDEC unsigned "+b.raw+" · interpreted "+b.value()+"\nOCT "+b.format(8)+"\nBIN "+b.format(2),b);}});
+reg({id:"bit-inspector",name:"Bit integer inspector",category:"Programmer",description:"Synchronized binary/octal/decimal/hex with fixed width and signed interpretation.",inputs:[{id:"value",label:"Value",type:"text",default:"FF"},{id:"base",label:"Input base",type:"select",options:[[2,"Binary"],[8,"Octal"],[10,"Decimal"],[16,"Hexadecimal"]],default:"16"},{id:"width",label:"Width",type:"select",options:[[8,"8-bit"],[16,"16-bit"],[32,"32-bit"],[64,"64-bit"]],default:"8"},{id:"signed",label:"Signed",type:"boolean",required:false,default:true},{id:"overflow",label:"Overflow",type:"select",options:[["wrap","Wrap"],["strict","Strict"]],default:"wrap"}],run:i=>{const b=BitInteger.parse(i.value,Number(i.base),Number(i.width),i.signed,i.overflow);return result("HEX "+b.format(16)+"\nDEC unsigned "+b.raw+" · interpreted "+b.value()+"\nOCT "+b.format(8)+"\nBIN "+b.format(2),b);}});
 reg({id:"bit-ops",name:"Bit operations",category:"Programmer",description:"AND/OR/XOR, shifts and rotations with explicit width.",inputs:[{id:"a",label:"A",type:"text",default:"F0"},{id:"b",label:"B",type:"text",default:"0F"},{id:"base",label:"Base",type:"select",options:[[2,"Binary"],[8,"Octal"],[10,"Decimal"],[16,"Hexadecimal"]],default:"16"},{id:"width",label:"Width",type:"select",options:[[8,"8-bit"],[16,"16-bit"],[32,"32-bit"],[64,"64-bit"]],default:"8"},{id:"operation",label:"Operation",type:"select",options:[["and","AND"],["or","OR"],["xor","XOR"],["shl","Shift left A by B"],["lshr","Logical right A by B"],["ashr","Arithmetic right A by B"],["rol","Rotate left A by B"],["ror","Rotate right A by B"]],default:"and"}],run:i=>{const a=BitInteger.parse(i.a,Number(i.base),Number(i.width),true),b=BitInteger.parse(i.b,Number(i.base),Number(i.width),true);let r;if(i.operation==="and")r=a.and(b);else if(i.operation==="or")r=a.or(b);else if(i.operation==="xor")r=a.xor(b);else{const n=Number(b.raw);r=i.operation==="shl"?a.shl(n):i.operation==="lshr"?a.shrLogical(n):i.operation==="ashr"?a.shrArithmetic(n):i.operation==="rol"?a.rol(n):a.ror(n);}return result("HEX "+r.format(16)+"\nDEC "+r.value()+"\nBIN "+r.format(2),r);}});
 
 reg({id:"gcd-bezout",name:"GCD / LCM / Bézout",category:"Number Theory",description:"Greatest common divisor, least common multiple, and Bézout coefficients.",inputs:[{id:"a",label:"a",type:"bigint",default:"240"},{id:"b",label:"b",type:"bigint",default:"46"}],run:i=>{const e=extGcd(i.a,i.b),l=lcmBig(i.a,i.b);return result("gcd = "+e.gcd+"\nlcm = "+l+"\n"+i.a+"·("+e.x+") + "+i.b+"·("+e.y+") = "+e.gcd,e);}});
@@ -289,6 +301,36 @@ reg({id:"divisors",name:"Divisors",category:"Number Theory",description:"List po
 
 reg({id:"unit-converter",name:"Unit converter",category:"Units & Measurement",description:"Typed physical, angle, temperature and information conversion.",specialized:true,inputs:[],run:function(){throw new ToolError("SPECIALIZED_TOOL","Unit converter uses the specialized unit runtime");}});
 reg({id:"engineering-relations",name:"Engineering relations",category:"Engineering",description:"Dimension-validated engineering FormulaRelations from Phase 4.",specialized:true,inputs:[],run:function(){throw new ToolError("SPECIALIZED_TOOL","Engineering relation tool uses the specialized engineering runtime");}});
+
+function serializeToolValue(v){
+  if(v===undefined)return {__type:"undefined"};
+  if(v===null||typeof v==="string"||typeof v==="number"||typeof v==="boolean")return v;
+  if(typeof v==="bigint")return {__type:"bigint",value:v.toString()};
+  if(v instanceof Money)return {__type:"money",value:v.toJSON()};
+  if(v instanceof DateValue)return {__type:"date",value:v.toString()};
+  if(v instanceof CalendarPeriod)return {__type:"calendar-period",years:v.years,months:v.months,days:v.days};
+  if(v instanceof Duration)return {__type:"duration",days:v.days};
+  if(v instanceof BitInteger)return {__type:"bit-integer",value:v.toJSON()};
+  if(v instanceof M.Rational||v instanceof M.Complex)return {__type:"math-value",value:M.serializeValue(v)};
+  if(Array.isArray(v))return v.map(serializeToolValue);
+  if(typeof v==="object"){const o={};Object.keys(v).forEach(k=>{if(typeof v[k]!=="function")o[k]=serializeToolValue(v[k]);});return o;}
+  return String(v);
+}
+function deserializeToolValue(v){
+  if(v===null||typeof v!=="object")return v;
+  if(Array.isArray(v))return v.map(deserializeToolValue);
+  if(v.__type==="undefined")return undefined;
+  if(v.__type==="bigint")return BigInt(v.value);
+  if(v.__type==="money")return Money.fromJSON(v.value);
+  if(v.__type==="date")return DateValue.parse(v.value);
+  if(v.__type==="calendar-period")return new CalendarPeriod(v.years,v.months,v.days);
+  if(v.__type==="duration")return new Duration(v.days);
+  if(v.__type==="bit-integer")return new BitInteger(BigInt(v.value.raw),v.value.width,v.value.signed);
+  if(v.__type==="math-value")return M.deserializeValue(v.value);
+  const o={};Object.keys(v).forEach(k=>o[k]=deserializeToolValue(v[k]));return o;
+}
+function serializeToolResult(out){return serializeToolValue(out);}
+function deserializeToolResult(data){return deserializeToolValue(data);}
 
 function validateRegistry(){
   const errors=[],ids=new Set();for(const t of REGISTRY.list()){if(ids.has(t.id))errors.push("duplicate "+t.id);ids.add(t.id);if(!t.name||!t.category)errors.push(t.id+": missing name/category");if(!categories.includes(t.category))errors.push(t.id+": unknown category");if(typeof t.run!=="function")errors.push(t.id+": no runtime");const inputIds=new Set();for(const i of t.inputs){if(inputIds.has(i.id))errors.push(t.id+": duplicate input "+i.id);inputIds.add(i.id);}}
@@ -303,8 +345,8 @@ global.CalcTools={
   FormulaRelation:FormulaRelation,ToolDefinition:ToolDefinition,ToolRegistry:ToolRegistry,REGISTRY:REGISTRY,
   leapYear:leapYear,daysInMonth:daysInMonth,addCalendarPeriod:addCalendarPeriod,elapsedDays:elapsedDays,calendarDifference:calendarDifference,weekday:weekday,isoWeek:isoWeek,businessDays:businessDays,
   extGcd:extGcd,mod:mod,modInverse:modInverse,crt:crt,isPrime:isPrime,primeFactors:primeFactors,divisors:divisors,
-  solveTriangle:solveTriangle,triangleFromSSS:triangleFromSSS,
+  solveTriangle:solveTriangle,triangleFromSSS:triangleFromSSS,solveCircle:solveCircle,
   compoundFutureValue:compoundFutureValue,presentValue:presentValue,annuityPayment:annuityPayment,loanSchedule:loanSchedule,npv:npv,irrAll:irrAll,
-  validateRegistry:validateRegistry
+  serializeToolValue:serializeToolValue,deserializeToolValue:deserializeToolValue,serializeToolResult:serializeToolResult,deserializeToolResult:deserializeToolResult,validateRegistry:validateRegistry
 };
 })(window);
