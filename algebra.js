@@ -191,6 +191,10 @@ function simplifyAst(ast){
       if(canonicalCompare(l,r,"*")>0){var mt=l;l=r;r=mt;}
     }else if(ast.op==="/"){
       if(isZeroNode(l))return lit(rat(0));if(isOneNode(r))return l;if(sameAst(l,r))return lit(rat(1));
+      if(isLit(r)&&isRat(r.value)&&l.type==="binary"&&l.op==="*"){
+        if(isLit(l.left)&&isRat(l.left.value))return simplifyAst(bin("*",lit(l.left.value.div(r.value)),l.right));
+        if(isLit(l.right)&&isRat(l.right.value))return simplifyAst(bin("*",lit(l.right.value.div(r.value)),l.left));
+      }
     }else if(ast.op==="^"){
       if(isIntegerLiteral(r)){if(r.value.n===1n)return l;if(r.value.n===0n&&!isZeroNode(l))return lit(rat(1));}
       if(isOneNode(l))return lit(rat(1));
