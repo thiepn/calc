@@ -753,9 +753,23 @@ function renderCustomLibrary(){
   if(!items.length){var none=document.createElement("div");none.className="hint";none.textContent="No custom tools yet.";box.appendChild(none);return;}
   items.forEach(function(m){var b=document.createElement("button");b.classList.toggle("active",state.customCurrent&&state.customCurrent.id===m.id);var name=document.createElement("span");name.textContent=m.name;var meta=document.createElement("small");meta.textContent=m.status+" · r"+m.revision+" · "+m.mode;b.append(name,meta);b.onclick=function(){editCustomTool(m.id);};box.appendChild(b);});
 }
+function renderCustomVersions(){
+  var box=$("#customVersionList");if(!box)return;box.innerHTML="";
+  var m=state.customCurrent,history=m&&m.history||[];
+  if(!history.length){box.className="custom-version-list muted";box.textContent="No previous revisions.";return;}
+  box.className="custom-version-list";
+  history.slice().reverse().forEach(function(entry,reverseIndex){
+    var actualIndex=history.length-1-reverseIndex,row=document.createElement("div");row.className="custom-version-row";
+    var meta=document.createElement("span");meta.textContent="r"+entry.revision+" · "+entry.status+" · "+new Date(entry.updatedAt).toLocaleString();
+    var b=document.createElement("button");b.className="small-btn";b.textContent="Restore";b.onclick=async function(){
+      try{var current=state.customLibrary.get(m.id)||m;CT.uninstall(current,T.REGISTRY);var restored=CT.restoreRevision(current,actualIndex);await persistCustom(restored);fillCustomBuilder(restored);toast("Revision restored as Draft");}catch(e){toast(errorMessage(e));}
+    };
+    row.append(meta,b);box.appendChild(row);
+  });
+}
 function populateCustomDuplicateSelect(){
   var el=$("#customDuplicateSelect");if(!el)return;el.innerHTML="";
-  T.REGISTRY.list().filter(function(t){return !t.specialized&&!String(t.id).startsWith("custom.");}).forEach(function(t){var o=document.createElement("option");o.value=t.id;o.textContent=t.name;el.appendChild(o);});
+  T.REGISTRY.list().filter(function(t){return CT.canDuplicateBuiltIn(t);}).forEach(function(t){var o=document.createElement("option");o.value=t.id;o.textContent=t.name;el.appendChild(o);});
 }
 function miniField(label,input){var wrap=document.createElement("div");wrap.className="mini-field";var l=document.createElement("label");l.textContent=label;wrap.append(l,input);return wrap;}
 function customInput(type,value,cls){var i=document.createElement("input");i.type=type||"text";i.value=value===undefined||value===null?"":value;if(cls)i.className=cls;return i;}
@@ -802,7 +816,7 @@ function fillCustomBuilder(manifest){
   $("#customOutputType").value=m.output&&m.output.type||"scalar";$("#customOutputUnit").value=m.output&&m.output.unit||"";
   $("#customVariableRows").innerHTML="";m.variables.forEach(addCustomVariableRow);$("#customTestRows").innerHTML="";m.tests.forEach(addCustomTestRow);
   $("#customStatusBadge").textContent=m.status+" · r"+m.revision;$("#customStatusBadge").className=customStatusClass(m.status);$("#customBuilderTitle").textContent=m.name;
-  updateCustomModeUi();renderCustomLibrary();renderCustomValidation(CT.validationReport(m,{skipTests:true}));
+  updateCustomModeUi();renderCustomLibrary();renderCustomVersions();renderCustomValidation(CT.validationReport(m,{skipTests:true}));
 }
 function newCustomTool(){fillCustomBuilder(CT.newFormulaDraft());}
 function editCustomTool(id){var m=state.customLibrary.get(id);if(m)fillCustomBuilder(m);}
@@ -843,7 +857,8 @@ async function duplicateBuiltInCustom(){
 function openCustomBuilder(){populateCustomDuplicateSelect();renderCustomLibrary();if(!state.customCurrent)newCustomTool();var d=$("#customToolDialog");if(!d.open)d.showModal();}
 async function loadCustomTools(){
   var items=[];try{items=await dbAll("customTools");}catch(e){}
-  state.customLibrary=new CT.CustomToolLibrary(items);state.customLibrary.installAll(T.REGISTRY);renderToolList();renderCustomLibrary();
+  state.customLibrary=new CT.CustomToolLibrary(items);var report=state.customLibrary.installAll(T.REGISTRY);renderToolList();renderCustomLibrary();
+  if(report.failed.length){console.warn("Custom tools not installed",report.failed);toast(report.failed.length+" custom tool"+(report.failed.length===1?"":"s")+" need validation");}
 }
 
 let worksheetSaveTimer=null;
