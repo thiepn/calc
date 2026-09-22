@@ -291,7 +291,7 @@ function deserializeAst(o){
 }
 
 function normalizeInput(s){
-  return String(s).normalize("NFKC").replace(/[−–—]/g,"-").replace(/[×·⋅]/g,"*").replace(/÷/g,"/").replace(/π/g,"pi").replace(/√/g,"sqrt").replace(/²/g,"^2").replace(/³/g,"^3").replace(/\*\*/g,"^").replace(/\u00a0/g," ");
+  return String(s).replace(/[−–—]/g,"-").replace(/[×·⋅]/g,"*").replace(/÷/g,"/").replace(/π/g,"pi").replace(/√/g,"sqrt").replace(/²/g,"^2").replace(/³/g,"^3").replace(/\*\*/g,"^").replace(/\u00a0/g," ").normalize("NFKC");
 }
 function isIdentifierStart(c){return /[\p{L}_]/u.test(c);}
 function isIdentifierPart(c){return /[\p{L}\p{N}_]/u.test(c);}
