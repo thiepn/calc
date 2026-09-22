@@ -9,6 +9,7 @@ const S=window.CalcStatistics;
 const G=window.CalcGraph;
 const T=window.CalcTools;
 const CT=window.CalcCustomTools;
+const NB=window.CalcNotebook;
 const $=function(s,r){return (r||document).querySelector(s);};
 const $$=function(s,r){return Array.from((r||document).querySelectorAll(s));};
 const uid=function(){return crypto.randomUUID?crypto.randomUUID():"id-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);};
@@ -861,82 +862,184 @@ async function loadCustomTools(){
   if(report.failed.length){console.warn("Custom tools not installed",report.failed);toast(report.failed.length+" custom tool"+(report.failed.length===1?"":"s")+" need validation");}
 }
 
-let worksheetSaveTimer=null;
+let worksheetSaveTimer=null,worksheetEvalTimer=null,worksheetCheckpointAt=0;
+function createNotebook(){
+  return NB.normalizeNotebook({schema:NB.SCHEMA,id:uid(),title:"Untitled notebook",createdAt:Date.now(),updatedAt:Date.now(),revision:1,blocks:[NB.newBlock("math")],versions:[],settings:{autoRun:true}});
+}
+function checkpointWorksheet(reason){
+  if(!state.activeWorksheet)return;var t=Date.now();
+  if(t-worksheetCheckpointAt>900){state.activeWorksheet=NB.commitRevision(state.activeWorksheet,reason||"edit");worksheetCheckpointAt=t;}
+}
 function newWorksheet(){
-  var ws={id:uid(),title:"Untitled worksheet",createdAt:Date.now(),updatedAt:Date.now(),revision:1,blocks:[{id:uid(),type:"math",source:""}]};
-  state.worksheets.unshift(ws);state.activeWorksheet=ws;renderWorksheetArea();saveWorksheet(ws,true);
+  var ws=createNotebook();state.worksheets.unshift(ws);state.activeWorksheet=ws;renderWorksheetArea();saveWorksheet(ws,true);
 }
 async function loadWorksheets(){
-  try{state.worksheets=(await dbAll("worksheets")).sort(function(a,b){return b.updatedAt-a.updatedAt;});}
-  catch(e){state.worksheets=[];}
+  var raw=[];try{raw=(await dbAll("worksheets")).sort(function(a,b){return b.updatedAt-a.updatedAt;});}catch(e){}
+  state.worksheets=[];var recovered=0;
+  raw.forEach(function(item){var rec=NB.recoveryNormalize(item);if(rec.recovered)recovered++;state.worksheets.push(rec.document);});
   if(!state.worksheets.length)newWorksheet();else{state.activeWorksheet=state.worksheets[0];renderWorksheetArea();}
+  if(recovered)toast(recovered+" notebook"+(recovered===1?"":"s")+" opened in recovery mode");
 }
 function scheduleWorksheetSave(){
-  clearTimeout(worksheetSaveTimer);worksheetSaveTimer=setTimeout(function(){if(state.activeWorksheet)saveWorksheet(state.activeWorksheet,false);},250);
+  clearTimeout(worksheetSaveTimer);worksheetSaveTimer=setTimeout(function(){if(state.activeWorksheet)saveWorksheet(state.activeWorksheet,false);},300);
+}
+function scheduleWorksheetEval(){
+  clearTimeout(worksheetEvalTimer);if(!state.activeWorksheet||!state.activeWorksheet.settings.autoRun)return;
+  worksheetEvalTimer=setTimeout(function(){runWorksheet(false);},220);
 }
 async function saveWorksheet(ws,immediate){
-  ws.updatedAt=Date.now();ws.revision=(ws.revision||0)+1;
-  try{await dbPut("worksheets",JSON.parse(JSON.stringify(ws)));if(immediate)toast("Worksheet saved");}
-  catch(e){toast("Could not save worksheet: "+errorMessage(e));}
+  ws.updatedAt=Date.now();
+  try{await dbPut("worksheets",JSON.parse(JSON.stringify(ws)));if(immediate)toast("Notebook saved");}
+  catch(e){toast("Could not save notebook: "+errorMessage(e));}
   renderWorksheetList();
+}
+function replaceActiveWorksheet(next){
+  state.activeWorksheet=next;var i=state.worksheets.findIndex(function(w){return w.id===next.id;});
+  if(i>=0)state.worksheets[i]=next;else state.worksheets.unshift(next);
 }
 function renderWorksheetArea(){
   if(!state.activeWorksheet)return;
-  $("#worksheetTitle").value=state.activeWorksheet.title;
-  renderWorksheetList();renderWorksheetBlocks();recalcWorksheet(false);
+  $("#worksheetTitle").value=state.activeWorksheet.title;$("#worksheetAutoRun").checked=state.activeWorksheet.settings.autoRun!==false;
+  renderWorksheetList();renderWorksheetBlocks();renderWorksheetVersions();renderWorksheetRecovery();
+  if(state.activeWorksheet.blocks.some(function(b){return b.status!=="clean"&&b.type!=="text";}))runWorksheet(false);
+}
+function renderWorksheetRecovery(){
+  var b=$("#worksheetRecoveryBanner"),r=state.activeWorksheet&&state.activeWorksheet.recovery;
+  if(r&&r.safeMode){b.classList.remove("hidden");b.textContent="Recovery mode · "+(r.issues||[]).join(" · ");}
+  else{b.classList.add("hidden");b.textContent="";}
 }
 function renderWorksheetList(){
   var list=$("#worksheetList");if(!list)return;list.innerHTML="";
   state.worksheets.sort(function(a,b){return b.updatedAt-a.updatedAt;}).forEach(function(ws){
-    var b=document.createElement("button");b.textContent=ws.title||"Untitled worksheet";b.classList.toggle("active",state.activeWorksheet&&ws.id===state.activeWorksheet.id);
-    b.onclick=function(){state.activeWorksheet=ws;renderWorksheetArea();};list.appendChild(b);
+    var b=document.createElement("button"),name=document.createElement("span"),meta=document.createElement("small");
+    name.textContent=ws.title||"Untitled notebook";meta.textContent="r"+ws.revision+" · "+ws.blocks.length+" blocks";b.append(name,meta);
+    b.classList.toggle("active",state.activeWorksheet&&ws.id===state.activeWorksheet.id);
+    b.onclick=function(){state.activeWorksheet=ws;worksheetCheckpointAt=0;renderWorksheetArea();};list.appendChild(b);
   });
+}
+function renderWorksheetVersions(){
+  var box=$("#worksheetVersionList");if(!box)return;box.innerHTML="";var versions=state.activeWorksheet.versions||[];
+  if(!versions.length){box.className="worksheet-version-list muted";box.textContent="No previous revisions.";return;}
+  box.className="worksheet-version-list";
+  versions.slice().reverse().forEach(function(entry,reverseIndex){
+    var actual=versions.length-1-reverseIndex,row=document.createElement("div");row.className="worksheet-version-row";
+    var s=document.createElement("span");s.textContent="r"+entry.snapshot.revision+" · "+(entry.reason||"edit")+" · "+new Date(entry.snapshot.updatedAt).toLocaleString();
+    var b=document.createElement("button");b.className="small-btn";b.textContent="Restore";b.onclick=function(){
+      try{var restored=NB.restoreVersion(state.activeWorksheet,actual);replaceActiveWorksheet(restored);renderWorksheetArea();saveWorksheet(restored,false);toast("Notebook version restored");}catch(e){toast(errorMessage(e));}
+    };row.append(s,b);box.appendChild(row);
+  });
+}
+function worksheetTypeName(type){return {math:"Math",text:"Text",tool:"Tool",matrix:"Matrix",data:"Data",graph:"Graph"}[type]||type;}
+function wsMini(label,el,full){
+  var wrap=document.createElement("div");wrap.className="field"+(full?" full":"");var l=document.createElement("label");l.textContent=label;wrap.append(l,el);return wrap;
+}
+function wsSelect(options,value){
+  var s=document.createElement("select");options.forEach(function(o){var op=document.createElement("option");op.value=o[0];op.textContent=o[1];if(String(o[0])===String(value))op.selected=true;s.appendChild(op);});return s;
+}
+function wsInput(value,placeholder){
+  var i=document.createElement("input");i.type="text";i.value=value===undefined||value===null?"":value;i.placeholder=placeholder||"";return i;
+}
+function matrixRowsText(rows){return (rows||[]).map(function(r){return r.join(", ");}).join("\n");}
+function parseMatrixRowsText(text){
+  var lines=String(text||"").replace(/\r/g,"").split("\n").map(function(x){return x.trim();}).filter(Boolean);if(!lines.length)return [["0"]];
+  return lines.map(function(line){return (line.indexOf("\t")>=0?line.split("\t"):line.split(",")).map(function(x){return x.trim()||"0";});});
+}
+function renderWorksheetBlockConfig(block,wrap){
+  if(block.type==="math"||block.type==="text"){
+    var ed=document.createElement("textarea");ed.className="ws-editor";ed.rows=block.type==="math"?2:4;ed.value=block.source||"";ed.placeholder=block.type==="math"?"Expression, assignment, or {{block:id}} reference":"Markdown-style notes…";wrap.appendChild(ed);
+    ed.addEventListener("input",function(){editWorksheetBlock(block.id,{source:ed.value},false);});
+    ed.addEventListener("change",function(){scheduleWorksheetSave();});
+    return;
+  }
+  var cfg=document.createElement("div");cfg.className="ws-block-config";
+  if(block.type==="tool"){
+    var tools=T.REGISTRY.list().map(function(t){return [t.id,t.name];}),tool=wsSelect(tools,block.config.toolId||"percentage-of"),inputs=document.createElement("textarea");inputs.value=JSON.stringify(block.config.inputs||{},null,2);inputs.rows=4;
+    cfg.append(wsMini("Tool",tool),wsMini("Inputs JSON",inputs,true));tool.onchange=function(){editWorksheetBlock(block.id,{config:Object.assign({},block.config,{toolId:tool.value})},true);};
+    inputs.addEventListener("change",function(){try{var parsed=JSON.parse(inputs.value||"{}");editWorksheetBlock(block.id,{config:Object.assign({},block.config,{inputs:parsed})},true);}catch(e){toast("Invalid Tool inputs JSON");}});
+  }else if(block.type==="matrix"){
+    var ops=["det","trace","rref","inverse","transpose","rank","nullity","nullspace","colspace","rowspace","lu","qr","cholesky","svd","pinv","eigen","diag","charpoly","minpoly","jordan"].map(function(x){return [x,x];}),op=wsSelect(ops,block.config.operation||"det"),rows=document.createElement("textarea");rows.value=matrixRowsText(block.config.rows);rows.rows=5;
+    cfg.append(wsMini("Operation",op),wsMini("Rows · CSV/TSV",rows,true));op.onchange=function(){editWorksheetBlock(block.id,{config:Object.assign({},block.config,{operation:op.value})},true);};
+    rows.addEventListener("change",function(){editWorksheetBlock(block.id,{config:Object.assign({},block.config,{rows:parseMatrixRowsText(rows.value)})},true);});
+  }else if(block.type==="data"){
+    var op=wsSelect([["summary","Summary"],["dataset","Dataset"],["correlation","Pearson correlation"],["regression","Regression"]],block.config.operation||"summary");
+    var x=wsInput(block.config.x||"","x column"),y=wsInput(block.config.y||"","y column"),response=wsInput(block.config.response||"","response"),pred=wsInput((block.config.predictors||[]).join(", "), "x1, x2");
+    cfg.append(wsMini("Operation",op),wsMini("X",x),wsMini("Y",y),wsMini("Response",response),wsMini("Predictors",pred,true));
+    var src=document.createElement("textarea");src.value=block.source||"";src.rows=6;src.placeholder="x,y\n1,2\n2,4";cfg.append(wsMini("Dataset CSV/TSV",src,true));
+    function update(){editWorksheetBlock(block.id,{source:src.value,config:{operation:op.value,x:x.value.trim(),y:y.value.trim(),response:response.value.trim(),predictors:pred.value.split(",").map(function(v){return v.trim();}).filter(Boolean)}},true);}
+    [op,x,y,response,pred].forEach(function(el){el.addEventListener("change",update);});src.addEventListener("change",update);
+  }else if(block.type==="graph"){
+    var src=document.createElement("textarea");src.value=block.source||"";src.rows=6;src.placeholder="sin(x)\nx^2/5";
+    cfg.append(wsMini("Graph expressions",src,true));src.addEventListener("input",function(){editWorksheetBlock(block.id,{source:src.value},false);});
+    var actions=document.createElement("div");actions.className="ws-graph-actions";var open=document.createElement("button");open.textContent="Open in Graph";open.onclick=function(){$("#graphExpressions").value=block.source||"";switchView("graph");plotGraph();};actions.appendChild(open);wrap.append(cfg,actions);return;
+  }
+  wrap.appendChild(cfg);
 }
 function renderWorksheetBlocks(){
   var area=$("#worksheetBlocks");area.innerHTML="";var ws=state.activeWorksheet;
   ws.blocks.forEach(function(block,index){
-    var wrap=document.createElement("div");wrap.className="ws-block "+block.type;wrap.dataset.block=block.id;
+    var wrap=document.createElement("div");wrap.className="ws-block "+block.type+" "+block.status;wrap.dataset.block=block.id;
     var head=document.createElement("div");head.className="ws-block-head";
-    var type=document.createElement("span");type.textContent=block.type==="math"?"Math":"Text";
+    var left=document.createElement("div");left.className="ws-block-head-left";var type=document.createElement("span");type.className="ws-block-type";type.textContent=worksheetTypeName(block.type);
+    var status=document.createElement("span");status.className="ws-block-status "+block.status;status.dataset.wsStatus=block.id;status.textContent=block.status;
+    var id=document.createElement("span");id.className="ws-block-id";id.textContent=block.id;left.append(type,status,id);
     var acts=document.createElement("div");acts.className="ws-block-actions";
-    [["↑","up"],["↓","down"],["×","delete"]].forEach(function(a){var b=document.createElement("button");b.textContent=a[0];b.dataset.wsAction=a[1];b.dataset.blockId=block.id;b.setAttribute("aria-label",a[1]+" block");acts.appendChild(b);});
-    head.append(type,acts);wrap.appendChild(head);
-    var ed=document.createElement("textarea");ed.className="ws-editor";ed.rows=block.type==="math"?2:3;ed.value=block.source||"";ed.dataset.blockInput=block.id;ed.placeholder=block.type==="math"?"Expression or assignment":"Notes…";wrap.appendChild(ed);
-    if(block.type==="math"){var res=document.createElement("div");res.className="ws-result muted";res.dataset.blockResult=block.id;res.textContent="";wrap.appendChild(res);}
-    area.appendChild(wrap);
+    [["Ref","ref"],["Copy","duplicate"],["↑","up"],["↓","down"],["×","delete"]].forEach(function(a){var b=document.createElement("button");b.textContent=a[0];b.dataset.wsAction=a[1];b.dataset.blockId=block.id;b.setAttribute("aria-label",a[1]+" block");acts.appendChild(b);});
+    head.append(left,acts);wrap.appendChild(head);renderWorksheetBlockConfig(block,wrap);
+    if(block.type!=="text"){var res=document.createElement("div");res.className="ws-result";res.dataset.blockResult=block.id;wrap.appendChild(res);}
+    area.appendChild(wrap);updateBlockResult(block);
   });
-  $$("[data-block-input]").forEach(function(ed){ed.addEventListener("input",function(){
-    var b=state.activeWorksheet.blocks.find(function(x){return x.id===ed.dataset.blockInput;});if(!b)return;b.source=ed.value;recalcWorksheet(true);scheduleWorksheetSave();
-  });});
   $$("[data-ws-action]").forEach(function(btn){btn.onclick=function(){mutateBlock(btn.dataset.blockId,btn.dataset.wsAction);};});
 }
-function recalcWorksheet(resultsOnly){
-  var ws=state.activeWorksheet;if(!ws)return;var env={};
-  ws.blocks.forEach(function(block){
-    if(block.type!=="math")return;
-    block.result="";block.error="";
-    if(!String(block.source||"").trim()){updateBlockResult(block);return;}
-    try{
-      var res=evaluateInput(block.source,env,true);block.result=res.display+(res.approx?" "+res.approx:"");
-    }catch(e){block.error=errorMessage(e);}
-    updateBlockResult(block);
-  });
+function editWorksheetBlock(id,patch,immediate){
+  checkpointWorksheet("edit block");var ws=state.activeWorksheet,b=ws.blocks.find(function(x){return x.id===id;});if(!b)return;
+  if(patch.source!==undefined)b.source=patch.source;if(patch.config!==undefined)b.config=patch.config;if(patch.title!==undefined)b.title=patch.title;b.updatedAt=Date.now();
+  replaceActiveWorksheet(NB.markDirty(ws,id));updateAllWorksheetResults();scheduleWorksheetSave();if(immediate)runWorksheet(false);else scheduleWorksheetEval();
 }
+function updateAllWorksheetResults(){state.activeWorksheet.blocks.forEach(updateBlockResult);renderWorksheetVersions();}
 function updateBlockResult(block){
-  var el=$('[data-block-result="'+block.id+'"]');if(!el)return;
-  el.textContent=block.error?block.error:(block.result||"");el.classList.toggle("ws-error",!!block.error);el.classList.toggle("muted",!block.error&&!block.result);
+  var wrap=$('[data-block="'+block.id+'"]'),status=$('[data-ws-status="'+block.id+'"]'),el=$('[data-block-result="'+block.id+'"]');
+  if(wrap){["idle","dirty","stale","clean","error","blocked"].forEach(function(x){wrap.classList.toggle(x,block.status===x);});}
+  if(status){status.textContent=block.status;status.className="ws-block-status "+block.status;}
+  if(!el)return;el.innerHTML="";
+  var main=document.createElement("div");main.textContent=block.result&&block.result.error?block.result.error:(block.result&&block.result.display||"");el.appendChild(main);
+  el.classList.toggle("ws-error",block.status==="error");el.classList.toggle("muted",!main.textContent||block.status==="stale"||block.status==="dirty"||block.status==="blocked");
+  var meta=document.createElement("div");meta.className="ws-result-meta";
+  if(block.dependencies&&block.dependencies.length){var d=document.createElement("span");d.textContent=block.dependencies.length+" dep";meta.appendChild(d);}
+  if(block.result&&block.result.kind&&block.result.kind!=="none"){var k=document.createElement("span");k.textContent=block.result.kind;meta.appendChild(k);}
+  if(block.producedSymbols&&block.producedSymbols.length){var s=document.createElement("span");s.textContent="defines "+block.producedSymbols.join(", ");meta.appendChild(s);}
+  if(meta.childNodes.length)el.appendChild(meta);
+}
+function runWorksheet(showToast){
+  if(!state.activeWorksheet)return;try{
+    var out=NB.evaluateNotebook(state.activeWorksheet,{angle:state.angle,precision:state.precision}),next=out.document;replaceActiveWorksheet(next);updateAllWorksheetResults();scheduleWorksheetSave();
+    if(showToast!==false){var errors=out.evaluations.filter(function(x){return x.status==="error"||x.status==="blocked";}).length;toast(errors?errors+" block"+(errors===1?"":"s")+" need attention":"Notebook up to date");}
+  }catch(e){toast(errorMessage(e));}
 }
 function mutateBlock(id,action){
   var ws=state.activeWorksheet,i=ws.blocks.findIndex(function(b){return b.id===id;});if(i<0)return;
-  if(action==="delete"){ws.blocks.splice(i,1);}
-  else if(action==="up"&&i>0){var a=ws.blocks[i-1];ws.blocks[i-1]=ws.blocks[i];ws.blocks[i]=a;}
-  else if(action==="down"&&i<ws.blocks.length-1){var d=ws.blocks[i+1];ws.blocks[i+1]=ws.blocks[i];ws.blocks[i]=d;}
-  renderWorksheetBlocks();recalcWorksheet(false);scheduleWorksheetSave();
+  try{
+    if(action==="ref"){var ref="{{block:"+id+"}}";navigator.clipboard&&navigator.clipboard.writeText(ref);toast("Copied "+ref);return;}
+    if(action==="delete")ws=NB.removeBlock(ws,id);
+    else if(action==="duplicate")ws=NB.duplicateBlock(ws,id);
+    else if(action==="up"&&i>0)ws=NB.moveBlock(ws,id,i-1);
+    else if(action==="down"&&i<ws.blocks.length-1)ws=NB.moveBlock(ws,id,i+1);
+    replaceActiveWorksheet(ws);renderWorksheetBlocks();renderWorksheetVersions();scheduleWorksheetSave();scheduleWorksheetEval();
+  }catch(e){toast(errorMessage(e));}
 }
 function addBlock(type){
-  if(!state.activeWorksheet)return;
-  state.activeWorksheet.blocks.push({id:uid(),type:type,source:""});renderWorksheetBlocks();recalcWorksheet(false);scheduleWorksheetSave();
-  var inputs=$$("[data-block-input]");if(inputs.length)inputs[inputs.length-1].focus();
+  if(!state.activeWorksheet)return;try{var ws=NB.addBlock(state.activeWorksheet,type);replaceActiveWorksheet(ws);renderWorksheetBlocks();renderWorksheetVersions();scheduleWorksheetSave();var inputs=$$("[data-block='"+ws.blocks[ws.blocks.length-1].id+"'] textarea");if(inputs.length)inputs[0].focus();}catch(e){toast(errorMessage(e));}
+}
+async function importNotebookFile(file){
+  try{var text=await file.text(),nb=NB.importNotebook(text);state.worksheets.unshift(nb);state.activeWorksheet=nb;await saveWorksheet(nb,false);renderWorksheetArea();toast("Notebook imported");}catch(e){toast(errorMessage(e));}
+}
+function downloadText(name,textValue,type){
+  var blob=new Blob([textValue],{type:type||"text/plain"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
+}
+function exportNotebookJson(){
+  try{var doc=NB.exportNotebook(state.activeWorksheet),name=(state.activeWorksheet.title||"notebook").replace(/[^A-Za-z0-9._-]+/g,"-")+".calcnb.json";downloadText(name,JSON.stringify(doc,null,2),"application/json");}catch(e){toast(errorMessage(e));}
+}
+function exportNotebookMarkdown(){
+  try{var name=(state.activeWorksheet.title||"notebook").replace(/[^A-Za-z0-9._-]+/g,"-")+".md";downloadText(name,NB.markdownExport(state.activeWorksheet),"text/markdown");}catch(e){toast(errorMessage(e));}
 }
 
 async function renderHistory(){
@@ -987,7 +1090,6 @@ const commands=[
   {id:"engineering.wave",title:"Wave relation",keywords:"engineering wave frequency wavelength speed",run:function(){switchView("calculate");$("#expressionInput").value="eng(wave, f=2 Hz, lambda=3 m)";previewExpression();$("#expressionInput").focus();}},
   {id:"action.theme",title:"Change Theme",keywords:"light dark oled graphite",run:cycleTheme}
 ];
-tools.forEach(function(t){commands.push({id:"tool."+t.id,title:t.name,keywords:t.desc,run:function(){state.selectedTool=t.id;renderToolList();renderTool();switchView("tools");}});});
 let commandIndex=0,commandMatches=[];
 function openCommands(){
   var d=$("#commandDialog");if(!d.open)d.showModal();$("#commandInput").value="";commandIndex=0;renderCommands("");setTimeout(function(){$("#commandInput").focus();},0);
@@ -1075,8 +1177,10 @@ function bindEvents(){
   $("#customValidateBtn").onclick=function(){validateCustomBuilder(true);};$("#customSaveDraftBtn").onclick=function(){saveCustomDraft(true);};$("#customActivateBtn").onclick=activateCustomTool;$("#customArchiveBtn").onclick=archiveCustomTool;$("#customExportBtn").onclick=exportCustomTool;$("#customDeleteBtn").onclick=deleteCustomTool;
   $("#customDuplicateBtn").onclick=duplicateBuiltInCustom;$("#customImportBtn").onclick=function(){$("#customImportFile").click();};$("#customImportFile").onchange=function(){if(this.files&&this.files[0])importCustomFile(this.files[0]);this.value="";};
   $("#customMode").onchange=updateCustomModeUi;$("#customOutputType").onchange=scheduleCustomValidation;$("#customOutputUnit").oninput=scheduleCustomValidation;$("#customName").oninput=scheduleCustomValidation;$("#customDescription").oninput=scheduleCustomValidation;$("#customExpression").oninput=scheduleCustomValidation;
-  $("#addMathBlock").onclick=function(){addBlock("math");};$("#addTextBlock").onclick=function(){addBlock("text");};$("#newWorksheetBtn").onclick=newWorksheet;
-  $("#worksheetTitle").addEventListener("input",function(){if(state.activeWorksheet){state.activeWorksheet.title=this.value||"Untitled worksheet";scheduleWorksheetSave();renderWorksheetList();}});
+  $("[data-add-ws-block]").forEach(function(b){b.onclick=function(){addBlock(b.dataset.addWsBlock);};});$("#newWorksheetBtn").onclick=newWorksheet;$("#runWorksheetBtn").onclick=function(){runWorksheet(true);};
+  $("#worksheetAutoRun").onchange=function(){if(!state.activeWorksheet)return;checkpointWorksheet("auto-run setting");state.activeWorksheet.settings.autoRun=this.checked;scheduleWorksheetSave();if(this.checked)runWorksheet(false);};
+  $("#worksheetImportBtn").onclick=function(){$("#worksheetImportFile").click();};$("#worksheetImportFile").onchange=function(){if(this.files&&this.files[0])importNotebookFile(this.files[0]);this.value="";};$("#worksheetExportBtn").onclick=exportNotebookJson;$("#worksheetMarkdownBtn").onclick=exportNotebookMarkdown;
+  $("#worksheetTitle").addEventListener("change",function(){if(state.activeWorksheet){checkpointWorksheet("rename notebook");state.activeWorksheet.title=this.value||"Untitled notebook";state.activeWorksheet.updatedAt=Date.now();scheduleWorksheetSave();renderWorksheetList();renderWorksheetVersions();}});
   $("#clearHistoryBtn").onclick=async function(){if(!confirm("Clear calculation history?"))return;state.history=[];try{await dbClear("history");}catch(e){}renderHistory();};
   window.addEventListener("resize",function(){if(state.view==="graph")drawGraph();});
 }
