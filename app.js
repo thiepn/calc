@@ -3,6 +3,7 @@
 const M=window.CalcMath;
 const A=window.CalcAlgebra;
 const C=window.CalcCalculus;
+const U=window.CalcUnits;
 const $=function(s,r){return (r||document).querySelector(s);};
 const $$=function(s,r){return Array.from((r||document).querySelectorAll(s));};
 const uid=function(){return crypto.randomUUID?crypto.randomUUID():"id-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);};
@@ -123,12 +124,25 @@ function evaluateInput(raw,env,commit){
   var calculus=C&&C.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
   if(calculus)return calculus;
   var symbolic=A&&A.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
-  return symbolic||M.evaluate(raw,env,calcOptions(commit));
+  if(symbolic)return symbolic;
+  if(U){
+    var assignment=String(raw).match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?!=)(.+)$/s);
+    if(assignment){
+      var quantityAssigned=U.tryEvaluate(assignment[2],env,{angle:state.angle,precision:state.precision,commit:false});
+      if(quantityAssigned&&quantityAssigned.quantity){
+        if(commit)env[assignment[1]]=quantityAssigned.value;
+        return Object.assign({},quantityAssigned,{display:assignment[1]+" = "+quantityAssigned.display,assignment:assignment[1],metadata:Object.assign({},quantityAssigned.metadata,{assignment:assignment[1]})});
+      }
+    }
+    var quantity=U.tryEvaluate(raw,env,{angle:state.angle,precision:state.precision,commit:commit});
+    if(quantity)return quantity;
+  }
+  return M.evaluate(raw,env,calcOptions(commit));
 }
 function setCalcResult(res,preview){
   $("#exactResult").textContent=res.display;
   $("#approxResult").textContent=res.approx||"";
-  $("#calcStatus").textContent=preview?"Preview":(res.symbolic?"Symbolic":(res.exact?"Exact":"Approximate"));
+  $("#calcStatus").textContent=preview?"Preview":(res.symbolic?"Symbolic":(res.quantity?"Quantity":(res.exact?"Exact":"Approximate")));
   var graphAction=$('[data-result-action="graph"]'),saveAction=$('[data-result-action="save"]'),op=res.metadata&&res.metadata.operation;
   var graphBlocked=!!res.symbolic||["integral","nintegral","nderivative","root","limit"].indexOf(op)>=0;
   if(graphAction)graphAction.disabled=graphBlocked;
@@ -324,7 +338,8 @@ function renderTool(){
   var t=tools.find(function(x){return x.id===state.selectedTool;})||tools[0],body="";
   if(t.id==="percent")body=field("Value","pValue","number",200)+field("Percentage","pPct","number",15)+field("Old value","pOld","number",100)+field("New value","pNew","number",120);
   else if(t.id==="unit"){
-    body=field("Value","uValue","number",1)+selectField("Category","uGroup",Object.keys(M.UNIT_GROUPS).concat(["temperature"]).map(function(x){return [x,x[0].toUpperCase()+x.slice(1)];}))+'<div class="field"><label>From</label><select id="uFrom"></select></div><div class="field"><label>To</label><select id="uTo"></select></div>';
+    var unitCats=Object.keys(U.CONVERTER_CATEGORIES);
+    body=field("Value","uValue","text","1")+selectField("Category","uGroup",unitCats.map(function(x){var label=x.replace(/([A-Z])/g," $1").replace(/^./,function(c){return c.toUpperCase();});return [x,label];}))+'<div class="field"><label>From</label><select id="uFrom"></select></div><div class="field"><label>To</label><select id="uTo"></select></div>';
   }else if(t.id==="loan")body=field("Principal","lPrincipal","number",250000)+field("Annual rate (%)","lRate","number",4.5)+field("Years","lYears","number",30)+field("Payments / year","lFreq","number",12);
   else if(t.id==="triangle")body=field("Side a","triA","number",3)+field("Side b","triB","number",4)+field("Side c","triC","number",5);
   else if(t.id==="circle")body=field("Radius","circleR","number",3);
@@ -335,9 +350,14 @@ function renderTool(){
   $("#toolRun").onclick=runSelectedTool;
   if(t.id==="unit"){updateUnitSelects();$("#uGroup").onchange=updateUnitSelects;}
 }
+function prettyUnitLabel(u){
+  var simple=U.UNIT_REGISTRY.get(u);
+  if(simple&&u.indexOf("/")<0&&u.indexOf("*")<0&&u.indexOf("^")<0)return simple.symbol;
+  return String(u).replace(/\^2/g,"²").replace(/\^3/g,"³").replace(/\/hr/g,"/h").replace(/USgal/g,"gal (US)").replace(/USfloz/g,"fl oz (US)");
+}
 function updateUnitSelects(){
-  var group=$("#uGroup").value,units=group==="temperature"?["C","F","K"]:Object.keys(M.UNIT_GROUPS[group]||{});
-  ["#uFrom","#uTo"].forEach(function(sel,idx){var el=$(sel);el.innerHTML="";units.forEach(function(u,i){var o=document.createElement("option");o.value=u;o.textContent=u;if((idx===0&&i===0)||(idx===1&&i===Math.min(1,units.length-1)))o.selected=true;el.appendChild(o);});});
+  var group=$("#uGroup").value,units=(U.CONVERTER_CATEGORIES[group]||[]).slice();
+  ["#uFrom","#uTo"].forEach(function(sel,idx){var el=$(sel);el.innerHTML="";units.forEach(function(u,i){var o=document.createElement("option");o.value=u;o.textContent=prettyUnitLabel(u);if((idx===0&&i===0)||(idx===1&&i===Math.min(1,units.length-1)))o.selected=true;el.appendChild(o);});});
 }
 function extGcd(a,b){
   var oldR=a,r=b,oldS=1n,s=0n,oldT=0n,t=1n;
@@ -352,8 +372,8 @@ async function runSelectedTool(){
       var change=old===0?"undefined":M.formatNumber((nu-old)/old*100)+"%";
       text=M.formatNumber(p)+"% of "+M.formatNumber(v)+" = "+M.formatNumber(v*p/100)+"\nPercentage change: "+change;
     }else if(id==="unit"){
-      var uv=M.convertUnit($("#uValue").value,$("#uFrom").value,$("#uTo").value,$("#uGroup").value);
-      text=M.formatNumber(uv)+" "+$("#uTo").value;
+      var ur=U.tryEvaluate($("#uValue").value+" "+$("#uFrom").value+" to "+$("#uTo").value,{}, {angle:state.angle,precision:state.precision});
+      text=ur.display+(ur.approx?"\n"+ur.approx:"");
     }else if(id==="loan"){
       var lr=M.loan($("#lPrincipal").value,Number($("#lRate").value)/100,$("#lYears").value,$("#lFreq").value);
       text="Payment: "+M.formatNumber(lr.payment)+"\nTotal interest: "+M.formatNumber(lr.totalInterest)+"\nTotal paid: "+M.formatNumber(lr.totalPaid)+"\nPayments: "+lr.schedule.length;
@@ -493,6 +513,11 @@ const commands=[
   {id:"calculus.limit",title:"Evaluate limit",keywords:"calculus limit lhopital",run:function(){switchView("calculate");$("#expressionInput").value="limit(sin(x)/x, x, 0)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.taylor",title:"Taylor polynomial",keywords:"calculus series maclaurin taylor",run:function(){switchView("calculate");$("#expressionInput").value="taylor(exp(x), x, 0, 5)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.root",title:"Numerical root",keywords:"calculus numerical root bisection newton secant",run:function(){switchView("calculate");$("#expressionInput").value="root(cos(x)-x, x, 0, 1)";previewExpression();$("#expressionInput").focus();}},
+  {id:"units.convert",title:"Convert quantity",keywords:"units convert measurement quantity",run:function(){switchView("calculate");$("#expressionInput").value="80 km / 1.25 hr to km/hr";previewExpression();$("#expressionInput").focus();}},
+  {id:"units.constant",title:"Physical constant",keywords:"physics constants g0 c0 planck",run:function(){switchView("calculate");$("#expressionInput").value="constant(g0)";previewExpression();$("#expressionInput").focus();}},
+  {id:"engineering.ohm",title:"Ohm's law",keywords:"engineering voltage current resistance",run:function(){switchView("calculate");$("#expressionInput").value="eng(ohm, V=12 V, R=6 ohm)";previewExpression();$("#expressionInput").focus();}},
+  {id:"engineering.force",title:"Newton's second law",keywords:"engineering force mass acceleration",run:function(){switchView("calculate");$("#expressionInput").value="eng(force, F=10 N, m=2 kg)";previewExpression();$("#expressionInput").focus();}},
+  {id:"engineering.wave",title:"Wave relation",keywords:"engineering wave frequency wavelength speed",run:function(){switchView("calculate");$("#expressionInput").value="eng(wave, f=2 Hz, lambda=3 m)";previewExpression();$("#expressionInput").focus();}},
   {id:"action.theme",title:"Change Theme",keywords:"light dark oled graphite",run:cycleTheme}
 ];
 tools.forEach(function(t){commands.push({id:"tool."+t.id,title:t.name,keywords:t.desc,run:function(){state.selectedTool=t.id;renderToolList();renderTool();switchView("tools");}});});
