@@ -485,12 +485,29 @@ function commandResult(display,kind,details){
 function parseDirection(s){s=(s||"both").trim().toLowerCase();if(s==="left"||s==="-")return "left";if(s==="right"||s==="+")return "right";return "both";}
 function runCommand(raw,options){
   raw=String(raw).trim();options=options||{};
-  var m=raw.match(/^(diff|partial|integrate|integral|limit|taylor|root|nderivative|nintegral)\s*\((.*)\)$/s);if(!m)return null;
+  var m=raw.match(/^(diff|partial|gradient|jacobian|hessian|integrate|integral|limit|taylor|root|nderivative|nintegral)\s*\((.*)\)$/s);if(!m)return null;
   var cmd=m[1],args=splitArgs(m[2]);
   if(cmd==="diff"||cmd==="partial"){
     if(args.length<1||args.length>3)throw new CalculusError("ARITY_ERROR",cmd+" expects expression, variable, optional order");
     var d=differentiate(args[0],args[1]||undefined,args[2]===undefined?1:Number(args[2])),dd=d.toString();if(d.restrictions.length)dd+="   where "+d.restrictions.map(function(r){return r.toString();}).join(", ");
     return commandResult(dd,"symbolic-derivative",{value:d,exact:true,symbolic:true,metadata:{operation:cmd,variable:args[1]||null,order:args[2]||1,restrictions:d.restrictions.map(function(r){return r.toString();})}});
+  }
+  if(cmd==="gradient"){
+    if(args.length<2)throw new CalculusError("ARITY_ERROR","gradient expects expression followed by one or more variables");
+    var gv=args.slice(1),gr=gradient(args[0],gv),gd="["+gr.map(function(e){return e.toString();}).join(", ")+"]";
+    return commandResult(gd,"gradient",{value:gr,exact:true,symbolic:true,metadata:{operation:"gradient",variables:gv}});
+  }
+  if(cmd==="hessian"){
+    if(args.length<2)throw new CalculusError("ARITY_ERROR","hessian expects expression followed by one or more variables");
+    var hv=args.slice(1),hm=hessian(args[0],hv),hd="["+hm.map(function(row){return "["+row.map(function(e){return e.toString();}).join(", ")+"]";}).join(", ")+"]";
+    return commandResult(hd,"hessian",{value:hm,exact:true,symbolic:true,metadata:{operation:"hessian",variables:hv}});
+  }
+  if(cmd==="jacobian"){
+    if(args.length<2)throw new CalculusError("ARITY_ERROR","jacobian expects semicolon-separated expressions followed by variables");
+    var exprParts=args[0].split(";").map(function(s){return s.trim();}).filter(Boolean),jv=args.slice(1);
+    if(!exprParts.length)throw new CalculusError("ARITY_ERROR","jacobian requires at least one expression");
+    var jm=jacobian(exprParts,jv),jd="["+jm.map(function(row){return "["+row.map(function(e){return e.toString();}).join(", ")+"]";}).join(", ")+"]";
+    return commandResult(jd,"jacobian",{value:jm,exact:true,symbolic:true,metadata:{operation:"jacobian",variables:jv,expressions:exprParts}});
   }
   if(cmd==="integrate"){
     if(args.length<1||args.length>2)throw new CalculusError("ARITY_ERROR","integrate expects expression and optional variable");
