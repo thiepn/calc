@@ -19,14 +19,18 @@ jobs:
       - name: Syntax check
         run: |
           node --check math.js
+          node --check algebra.js
           node --check app.js
           node --check sw.js
           node --check tests/smoke.js
           node --check tests/core-kernel.js
           node --check tests/core-fuzz.js
+          node --check tests/algebra.js
       - name: Core smoke tests
         run: node tests/smoke.js
       - name: Core kernel certification
         run: node tests/core-kernel.js
       - name: Deterministic expression fuzzing
         run: node tests/core-fuzz.js
+      - name: Symbolic algebra certification
+        run: node tests/algebra.js
