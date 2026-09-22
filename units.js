@@ -521,7 +521,7 @@ function resultFor(value,options,metadata){
 
 const CONSTANT_REGISTRY={};
 function registerConstant(spec){
-  var quantity=parseQuantityExpression(spec.value+" "+spec.unit,{}, {angle:"RAD",complex:false});
+  var quantity=parseQuantityExpression(spec.value+"*("+spec.unit+")",{}, {angle:"RAD",complex:false});
   if(spec.kind)quantity=new Quantity(quantity.baseValue,quantity.dimension,{kind:spec.kind,displayUnit:quantity.displayUnit,exact:spec.exact!==false&&quantity.exact});
   CONSTANT_REGISTRY[spec.id]=Object.freeze({id:spec.id,name:spec.name,symbol:spec.symbol||spec.id,quantity:quantity,exact:spec.exact!==false,source:spec.source||"SI/CODATA",description:spec.description||""});
 }
