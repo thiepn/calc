@@ -335,3 +335,42 @@ kbd{border:1px solid var(--line-strong);background:var(--surface-2);border-radiu
 .custom-version-list{display:grid;gap:6px}
 .custom-version-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-size:10px;color:var(--muted)}
 .custom-version-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.worksheet-actions{align-items:center}
+.worksheet-auto{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)}
+.worksheet-auto input{accent-color:var(--accent)}
+.worksheet-block-add{padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.worksheet-recovery{margin-top:12px;padding:10px 12px;border:1px solid var(--danger);border-radius:9px;color:var(--danger);font-size:11px}
+.worksheet-side-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:14px}
+.worksheet-side-actions button:first-child{grid-column:1/-1}
+.worksheet-side-section{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}
+.worksheet-side-section h3{font-size:11px;margin:0 0 8px}
+.worksheet-version-list{display:grid;gap:5px;margin-bottom:14px}
+.worksheet-version-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 8px;border:1px solid var(--line);border-radius:8px;font-size:9px;color:var(--muted)}
+.worksheet-version-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ws-block{position:relative}
+.ws-block.stale,.ws-block.dirty{border-style:dashed}
+.ws-block.error{border-color:color-mix(in srgb,var(--danger) 55%,var(--line))}
+.ws-block.blocked{opacity:.78}
+.ws-block-head-left{display:flex;align-items:center;gap:7px;min-width:0}
+.ws-block-type{font-weight:800}
+.ws-block-status{font-size:8px;padding:3px 5px;border-radius:999px;background:var(--surface-3)}
+.ws-block-status.clean{color:var(--accent)}
+.ws-block-status.error{color:var(--danger)}
+.ws-block-status.blocked,.ws-block-status.stale,.ws-block-status.dirty{color:var(--muted)}
+.ws-block-id{font-family:"SFMono-Regular",Consolas,monospace;text-transform:none;letter-spacing:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:190px}
+.ws-block-config{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.ws-block-config .full{grid-column:1/-1}
+.ws-block-config textarea{width:100%;min-height:88px;padding:8px;font:11px/1.45 "SFMono-Regular",Consolas,monospace;resize:vertical}
+.ws-block-config input,.ws-block-config select{width:100%}
+.ws-result{white-space:pre-wrap;overflow:auto}
+.ws-result-meta{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px;font-size:9px;color:var(--muted)}
+.ws-result-meta span{padding:3px 5px;border-radius:999px;background:var(--surface-3)}
+.ws-block-ref{font-family:"SFMono-Regular",Consolas,monospace}
+.ws-graph-actions{padding:0 12px 10px}
+@media(max-width:700px){
+  .ws-block-config{grid-template-columns:1fr}
+  .ws-block-config .full{grid-column:auto}
+  .worksheet-side-actions{grid-template-columns:1fr}
+  .worksheet-side-actions button:first-child{grid-column:auto}
+}
