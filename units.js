@@ -407,11 +407,13 @@ function qCall(name,args,options){
 }
 
 function normalizeUnitInput(raw){
-  return String(raw)
+  var s=String(raw)
     .replace(/Δ\s*°\s*C/g,"dC").replace(/Δ\s*°\s*F/g,"dF").replace(/Δ\s*K/g,"dK")
     .replace(/°\s*C/g,"degC").replace(/°\s*F/g,"degF")
     .replace(/Ω/g,"ohm").replace(/[µμ]/g,"u")
     .replace(/\bkm\/h\b/g,"km/hr");
+  s=s.replace(/\/\s*((?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)\s+([A-Za-z_][A-Za-z0-9_]*(?:\s*\^\s*[+-]?\d+)?)/gi,function(_,num,unit){return "/("+num+"*"+unit+")";});
+  return s;
 }
 function lookupEnv(env,name){
   var cur=env;
