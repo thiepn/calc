@@ -145,9 +145,11 @@ function simplifyAst(ast){
     var l=simplifyAst(ast.left),r=simplifyAst(ast.right),fold=exactFold(ast.op,l,r);if(fold)return fold;
     if(ast.op==="+"){
       if(isZeroNode(l))return r;if(isZeroNode(r))return l;
+      if(isLit(r)&&isRat(r.value)&&r.value.n<0n)return simplifyAst(bin("-",l,lit(r.value.neg())));
       if(sameAst(l,r))return bin("*",lit(rat(2)),l);
     }else if(ast.op==="-"){
       if(isZeroNode(r))return l;if(isZeroNode(l))return simplifyAst(unary("-",r));if(sameAst(l,r))return lit(rat(0));
+      if(isLit(r)&&isRat(r.value)&&r.value.n<0n)return simplifyAst(bin("+",l,lit(r.value.neg())));
     }else if(ast.op==="*"){
       if(isZeroNode(l)||isZeroNode(r))return lit(rat(0));if(isOneNode(l))return r;if(isOneNode(r))return l;
       if(isMinusOneNode(l))return simplifyAst(unary("-",r));if(isMinusOneNode(r))return simplifyAst(unary("-",l));
