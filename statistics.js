@@ -172,8 +172,10 @@ function describe(values,options){
   const source=values instanceof DataColumn?values.values:values;
   const nums=source.map(numericValue).filter(v=>v!==null),missing=source.length-nums.length;if(!nums.length)throw new StatisticsError("EMPTY_SAMPLE","No numeric observations");
   const w=welford(nums),sum=kahanSum(nums),sample=options.variance!=="population";
+  const present=source.filter(v=>!isMissing(v)),allExact=present.length>0&&present.every(exactNumeric);
+  let exactMean=null;if(allExact){let s=new M.Rational(0n);for(const v of present)s=s.add(v);exactMean=s.div(new M.Rational(BigInt(present.length)));}
   return {
-    count:w.n,missing:missing,sum:sum,mean:w.mean,median:median(nums),min:w.min,max:w.max,
+    count:w.n,missing:missing,sum:sum,mean:w.mean,exactMean:exactMean,median:median(nums),min:w.min,max:w.max,
     q1:quantile(nums,0.25),q3:quantile(nums,0.75),iqr:quantile(nums,0.75)-quantile(nums,0.25),
     variancePopulation:w.m2/w.n,varianceSample:w.n>1?w.m2/(w.n-1):NaN,
     sdPopulation:Math.sqrt(w.m2/w.n),sdSample:w.n>1?Math.sqrt(w.m2/(w.n-1)):NaN,
@@ -387,7 +389,7 @@ class GammaDistribution extends Distribution{
 class BetaDistribution extends Distribution{
   constructor(a,b){if(!(a>0&&b>0))throw new DistributionError("Beta parameters must be > 0");super("Beta",{a:a,b:b},false);this.a=a;this.b=b;}
   pdf(x){if(x<0||x>1)return 0;if(x===0||x===1)return 0;return Math.exp((this.a-1)*Math.log(x)+(this.b-1)*Math.log1p(-x)-Math.log(betaFn(this.a,this.b)));}
-  cdf(x){return x<=0?0:x>=1?1:regularizedBeta(x,this.a,this.b);}quantile(p){return invertCdf(this,p,0,1);}mean(){return this.a/(this.a+this.b);}variance(){return this.a*this.b/((this.a+this.b)**2*(this.a+this.b+1));}
+  cdf(x){return x<=0?0:x>=1?1:regularizedBeta(x,this.a,this.b);}sf(x){return x<=0?1:x>=1?0:regularizedBeta(1-x,this.b,this.a);}quantile(p){return invertCdf(this,p,0,1);}mean(){return this.a/(this.a+this.b);}variance(){return this.a*this.b/((this.a+this.b)**2*(this.a+this.b+1));}
   sample(rng){const x=new GammaDistribution(this.a,1).sample(rng),y=new GammaDistribution(this.b,1).sample(rng);return x/(x+y);}
 }
 class ChiSquare extends GammaDistribution{
@@ -402,7 +404,7 @@ class StudentT extends Distribution{
 class FDistribution extends Distribution{
   constructor(d1,d2){if(!(d1>0&&d2>0))throw new DistributionError("F dfs must be > 0");super("F",{d1:d1,d2:d2},false);this.d1=d1;this.d2=d2;}
   pdf(x){if(x<=0)return 0;const a=this.d1/2,b=this.d2/2;return Math.exp(a*Math.log(this.d1/this.d2)+(a-1)*Math.log(x)-(a+b)*Math.log1p(this.d1*x/this.d2)-Math.log(betaFn(a,b)));}
-  cdf(x){if(x<=0)return 0;return regularizedBeta((this.d1*x)/(this.d1*x+this.d2),this.d1/2,this.d2/2);}quantile(p){return invertCdf(this,p,0,10);}mean(){return this.d2>2?this.d2/(this.d2-2):Infinity;}variance(){const d1=this.d1,d2=this.d2;return d2>4?2*d2*d2*(d1+d2-2)/(d1*(d2-2)**2*(d2-4)):Infinity;}sample(rng){return (new ChiSquare(this.d1).sample(rng)/this.d1)/(new ChiSquare(this.d2).sample(rng)/this.d2);}
+  cdf(x){if(x<=0)return 0;return regularizedBeta((this.d1*x)/(this.d1*x+this.d2),this.d1/2,this.d2/2);}sf(x){if(x<=0)return 1;return regularizedBeta(this.d2/(this.d2+this.d1*x),this.d2/2,this.d1/2);}quantile(p){return invertCdf(this,p,0,10);}mean(){return this.d2>2?this.d2/(this.d2-2):Infinity;}variance(){const d1=this.d1,d2=this.d2;return d2>4?2*d2*d2*(d1+d2-2)/(d1*(d2-2)**2*(d2-4)):Infinity;}sample(rng){return (new ChiSquare(this.d1).sample(rng)/this.d1)/(new ChiSquare(this.d2).sample(rng)/this.d2);}
 }
 
 function twoSidedPFromT(t,df){const d=new StudentT(df);return clamp01(2*d.sf(Math.abs(t)));}
@@ -425,7 +427,8 @@ function welchT(a,b,alternative){
   return new HypothesisTest({null:"mu1 - mu2 = 0",alternative:alternative||"two-sided",statistic:t,distribution:"t",df:df,pValue:p,estimate:sx.mean-sy.mean,se:se,n1:x.length,n2:y.length,method:"Welch two-sample t"});
 }
 function pairedT(dataset,a,b,alternative){
-  const p=pairedNumeric(dataset,a,b),diff=p.map(x=>x.a-x.b),res=oneSampleT(diff,0,alternative);res.method="paired t";res.pairs=p.length;res.excluded=dataset.rowCount-p.length;return res;
+  const p=pairedNumeric(dataset,a,b),diff=p.map(x=>x.a-x.b),res=oneSampleT(diff,0,alternative);
+  return new HypothesisTest({null:res.null,alternative:res.alternative,statistic:res.statistic,distribution:res.distribution,df:res.df,pValue:res.pValue,estimate:res.estimate,se:res.se,n:res.n,method:"paired t",pairs:p.length,excluded:dataset.rowCount-p.length});
 }
 function wilsonInterval(successes,n,confidence){
   if(!Number.isInteger(successes)||!Number.isInteger(n)||n<=0||successes<0||successes>n)throw new InferenceError("Invalid proportion counts");
