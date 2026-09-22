@@ -2,6 +2,7 @@
 "use strict";
 const M=window.CalcMath;
 const A=window.CalcAlgebra;
+const C=window.CalcCalculus;
 const $=function(s,r){return (r||document).querySelector(s);};
 const $$=function(s,r){return Array.from((r||document).querySelectorAll(s));};
 const uid=function(){return crypto.randomUUID?crypto.randomUUID():"id-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);};
@@ -119,6 +120,8 @@ function backspaceExpression(){
 }
 function calcOptions(commit){return {angle:state.angle,precision:state.precision,complex:true,commit:commit};}
 function evaluateInput(raw,env,commit){
+  var calculus=C&&C.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
+  if(calculus)return calculus;
   var symbolic=A&&A.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
   return symbolic||M.evaluate(raw,env,calcOptions(commit));
 }
@@ -126,8 +129,9 @@ function setCalcResult(res,preview){
   $("#exactResult").textContent=res.display;
   $("#approxResult").textContent=res.approx||"";
   $("#calcStatus").textContent=preview?"Preview":(res.symbolic?"Symbolic":(res.exact?"Exact":"Approximate"));
-  var graphAction=$('[data-result-action="graph"]'),saveAction=$('[data-result-action="save"]');
-  if(graphAction)graphAction.disabled=!!res.symbolic;
+  var graphAction=$('[data-result-action="graph"]'),saveAction=$('[data-result-action="save"]'),op=res.metadata&&res.metadata.operation;
+  var graphBlocked=!!res.symbolic||["integral","nintegral","nderivative","root","limit"].indexOf(op)>=0;
+  if(graphAction)graphAction.disabled=graphBlocked;
   if(saveAction)saveAction.disabled=!!res.symbolic;
 }
 let previewTimer=null;
@@ -480,6 +484,12 @@ const commands=[
   {id:"algebra.factor",title:"Factor polynomial",keywords:"algebra polynomial factor",run:function(){switchView("calculate");$("#expressionInput").value="factor(x^2 - 5*x + 6)";previewExpression();$("#expressionInput").focus();}},
   {id:"algebra.system",title:"Solve linear system",keywords:"algebra simultaneous equations system",run:function(){switchView("calculate");$("#expressionInput").value="system(x + y = 3; x - y = 1)";previewExpression();$("#expressionInput").focus();}},
   {id:"algebra.inequality",title:"Solve inequality",keywords:"algebra inequality interval",run:function(){switchView("calculate");$("#expressionInput").value="inequality(x^2 - 1 <= 0, x)";previewExpression();$("#expressionInput").focus();}},
+  {id:"calculus.diff",title:"Differentiate expression",keywords:"calculus derivative diff",run:function(){switchView("calculate");$("#expressionInput").value="diff(x^3 + sin(x), x)";previewExpression();$("#expressionInput").focus();}},
+  {id:"calculus.integrate",title:"Find antiderivative",keywords:"calculus integral integrate antiderivative",run:function(){switchView("calculate");$("#expressionInput").value="integrate(x^2 + cos(x), x)";previewExpression();$("#expressionInput").focus();}},
+  {id:"calculus.definite",title:"Definite integral",keywords:"calculus definite integral area",run:function(){switchView("calculate");$("#expressionInput").value="integral(x^2, x, 0, 3)";previewExpression();$("#expressionInput").focus();}},
+  {id:"calculus.limit",title:"Evaluate limit",keywords:"calculus limit lhopital",run:function(){switchView("calculate");$("#expressionInput").value="limit(sin(x)/x, x, 0)";previewExpression();$("#expressionInput").focus();}},
+  {id:"calculus.taylor",title:"Taylor polynomial",keywords:"calculus series maclaurin taylor",run:function(){switchView("calculate");$("#expressionInput").value="taylor(exp(x), x, 0, 5)";previewExpression();$("#expressionInput").focus();}},
+  {id:"calculus.root",title:"Numerical root",keywords:"calculus numerical root bisection newton secant",run:function(){switchView("calculate");$("#expressionInput").value="root(cos(x)-x, x, 0, 1)";previewExpression();$("#expressionInput").focus();}},
   {id:"action.theme",title:"Change Theme",keywords:"light dark oled graphite",run:cycleTheme}
 ];
 tools.forEach(function(t){commands.push({id:"tool."+t.id,title:t.name,keywords:t.desc,run:function(){state.selectedTool=t.id;renderToolList();renderTool();switchView("tools");}});});
