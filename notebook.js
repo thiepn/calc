@@ -107,7 +107,7 @@ function walkStrings(v,fn){
   else if(v&&typeof v==="object")Object.keys(v).forEach(k=>walkStrings(v[k],fn));
 }
 function buildDependencies(doc){
-  doc=normalizeNotebook(doc);const indexById=new Map(),producer=new Map(),dependents=new Map(),errors=[];
+  doc=doc&&doc.schema===SCHEMA?doc:normalizeNotebook(doc);const indexById=new Map(),producer=new Map(),dependents=new Map(),errors=[];
   doc.blocks.forEach((b,i)=>indexById.set(b.id,i));
   doc.blocks.forEach(function(block,index){
     const deps=new Set(),refs=explicitRefs(block.source);if(block.config)walkStrings(block.config,s=>explicitRefs(s).forEach(id=>refs.push(id)));
@@ -122,7 +122,7 @@ function buildDependencies(doc){
     }else block.producedSymbols=[];
     block.dependencies=Array.from(deps);block.dependencies.forEach(function(id){if(!dependents.has(id))dependents.set(id,new Set());dependents.get(id).add(block.id);});
   });
-  return {indexById:indexById,dependents:dependents,errors:errors};
+  return {document:doc,indexById:indexById,dependents:dependents,errors:errors};
 }
 function markDirty(doc,blockId){
   doc=normalizeNotebook(doc);const graph=buildDependencies(doc),queue=[blockId],seen=new Set();
