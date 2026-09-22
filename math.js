@@ -315,7 +315,7 @@ class Tokenizer{
   take(v){if(this.current.value===v){var t=this.current;this.next();return t;}return null;}
   expect(v){if(this.current.value!==v)throw new ParseError("Expected '"+v+"' at position "+this.current.start,this.current.start,this.current.end);var t=this.current;this.next();return t;}
 }
-function startsAtom(t){return t.type==="num"||t.type==="id"||t.value==="(";}
+function startsAtom(t){return t.type==="id"||t.value==="(";}
 
 class Parser{
   constructor(source){this.t=new Tokenizer(source);this.nodes=0;}
