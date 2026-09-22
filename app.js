@@ -313,7 +313,8 @@ function analyzeData(){
 
 const tools=[
   {id:"percent",name:"Percentage",desc:"Percentage, percentage change, and reverse percentage."},
-  {id:"unit",name:"Unit converter",desc:"Convert common physical and information units."},
+  {id:"unit",name:"Unit converter",desc:"Convert typed physical, temperature, angle, and information quantities."},
+  {id:"engineering",name:"Engineering relations",desc:"Solve dimensional engineering relations from any sufficient set of known values."},
   {id:"loan",name:"Loan & amortization",desc:"Payment, total interest, and amortization."},
   {id:"triangle",name:"Triangle (SSS)",desc:"Solve a triangle from three sides."},
   {id:"circle",name:"Circle",desc:"Radius, diameter, circumference, and area."},
@@ -340,6 +341,9 @@ function renderTool(){
   else if(t.id==="unit"){
     var unitCats=Object.keys(U.CONVERTER_CATEGORIES);
     body=field("Value","uValue","text","1")+selectField("Category","uGroup",unitCats.map(function(x){var label=x.replace(/([A-Z])/g," $1").replace(/^./,function(c){return c.toUpperCase();});return [x,label];}))+'<div class="field"><label>From</label><select id="uFrom"></select></div><div class="field"><label>To</label><select id="uTo"></select></div>';
+  }else if(t.id==="engineering"){
+    var relationOptions=Object.keys(U.ENGINEERING_RELATIONS).map(function(id){return [id,U.ENGINEERING_RELATIONS[id].name];});
+    body=selectField("Relation","engRelation",relationOptions)+'<div id="engFields" class="field full"></div>';
   }else if(t.id==="loan")body=field("Principal","lPrincipal","number",250000)+field("Annual rate (%)","lRate","number",4.5)+field("Years","lYears","number",30)+field("Payments / year","lFreq","number",12);
   else if(t.id==="triangle")body=field("Side a","triA","number",3)+field("Side b","triB","number",4)+field("Side c","triC","number",5);
   else if(t.id==="circle")body=field("Radius","circleR","number",3);
@@ -349,6 +353,33 @@ function renderTool(){
   $("#toolRunner").innerHTML=toolFrame(t,body);
   $("#toolRun").onclick=runSelectedTool;
   if(t.id==="unit"){updateUnitSelects();$("#uGroup").onchange=updateUnitSelects;}
+  if(t.id==="engineering"){renderEngineeringFields();$("#engRelation").onchange=renderEngineeringFields;}
+}
+const ENGINEERING_DEFAULTS={
+  ohm:{V:"12 V",I:"",R:"6 ohm"},
+  power:{P:"",V:"12 V",I:"2 A"},
+  force:{F:"10 N",m:"2 kg",a:""},
+  kinetic:{E:"",m:"2 kg",v:"3 m/s"},
+  wave:{v:"",f:"2 Hz",lambda:"3 m"},
+  density:{rho:"",m:"1 kg",V:"1 L"}
+};
+function renderEngineeringFields(){
+  var holder=$("#engFields"),select=$("#engRelation");if(!holder||!select)return;
+  var relation=U.ENGINEERING_RELATIONS[select.value];if(!relation)return;
+  holder.innerHTML="";
+  var grid=document.createElement("div");grid.className="tool-form";grid.style.gridColumn="1 / -1";
+  Object.keys(relation.variables).forEach(function(name){
+    var spec=relation.variables[name],wrap=document.createElement("div");wrap.className="field";
+    var label=document.createElement("label");label.setAttribute("for","engVar-"+name);
+    label.textContent=name+(spec.kind?" · "+spec.kind:"");
+    var input=document.createElement("input");input.id="engVar-"+name;input.type="text";
+    input.placeholder=spec.unit?("e.g. 1 "+prettyUnitLabel(spec.unit)):"quantity with compatible units";
+    input.value=(ENGINEERING_DEFAULTS[relation.id]&&ENGINEERING_DEFAULTS[relation.id][name])||"";
+    wrap.append(label,input);grid.appendChild(wrap);
+  });
+  var hint=document.createElement("div");hint.className="hint";hint.style.gridColumn="1 / -1";
+  hint.textContent="Leave exactly one variable blank to solve it, or fill every variable to check consistency.";
+  grid.appendChild(hint);holder.appendChild(grid);
 }
 function prettyUnitLabel(u){
   var simple=U.UNIT_REGISTRY.get(u);
@@ -374,6 +405,11 @@ async function runSelectedTool(){
     }else if(id==="unit"){
       var ur=U.tryEvaluate($("#uValue").value+" "+$("#uFrom").value+" to "+$("#uTo").value,{}, {angle:state.angle,precision:state.precision});
       text=ur.display+(ur.approx?"\n"+ur.approx:"");
+    }else if(id==="engineering"){
+      var relationId=$("#engRelation").value,relation=U.ENGINEERING_RELATIONS[relationId],parts=[];
+      Object.keys(relation.variables).forEach(function(name){var el=$("#engVar-"+name),value=el?el.value.trim():"";if(value)parts.push(name+"="+value);});
+      var er=U.tryEvaluate("eng("+relationId+(parts.length?", "+parts.join(", "):"")+")",{}, {angle:state.angle,precision:state.precision});
+      text=er.display;
     }else if(id==="loan"){
       var lr=M.loan($("#lPrincipal").value,Number($("#lRate").value)/100,$("#lYears").value,$("#lFreq").value);
       text="Payment: "+M.formatNumber(lr.payment)+"\nTotal interest: "+M.formatNumber(lr.totalInterest)+"\nTotal paid: "+M.formatNumber(lr.totalPaid)+"\nPayments: "+lr.schedule.length;
