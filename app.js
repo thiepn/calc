@@ -89,7 +89,8 @@ async function dbAll(store){
 function switchView(view){
   if(!VIEW_META[view])return;
   state.view=view;
-  $$("[data-view-panel]").forEach(function(el){el.classList.toggle("active",el.dataset.viewPanel===view);});
+  if(location.hash!=="#"+view)history.replaceState(null,"","#"+view);
+  $("[data-view-panel]").forEach(function(el){el.classList.toggle("active",el.dataset.viewPanel===view);});
   $$(".nav-item").forEach(function(el){el.classList.toggle("active",el.dataset.view===view);});
   $("#viewTitle").textContent=VIEW_META[view][0];$("#viewSubtitle").textContent=VIEW_META[view][1];
   closeMobileNav();
@@ -534,7 +535,9 @@ async function init(){
   $("#graphExpressions").value="sin(x)\nx^2 / 5";plotGraph();
   try{state.history=(await dbAll("history")).sort(function(a,b){return b.time-a.time;});}catch(e){}
   await loadWorksheets();
-  switchView("calculate");
+  var initial=(location.hash||"").replace(/^#/,"");
+  switchView(VIEW_META[initial]?initial:"calculate");
+  window.addEventListener("hashchange",function(){var v=(location.hash||"").replace(/^#/,"");if(VIEW_META[v]&&v!==state.view)switchView(v);});
   if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(function(){});
 }
 window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();state.installPrompt=e;$("#installBtn").classList.remove("hidden");});
