@@ -288,11 +288,21 @@ function activate(raw){
 function archive(raw){
   const manifest=normalizeManifest(raw),history=(manifest.history||[]).concat([snapshot(manifest)]).slice(-MAX_HISTORY);return normalizeManifest(Object.assign({},manifest,{status:"archived",revision:manifest.revision+1,updatedAt:now(),history:history}));
 }
+function restoreRevision(raw,index){
+  const current=normalizeManifest(raw),entry=current.history&&current.history[index];if(!entry||!entry.manifest)throw new CustomToolValidationError("Unknown revision snapshot");
+  const restored=clone(entry.manifest);restored.id=current.id;restored.status="draft";restored.revision=current.revision+1;restored.updatedAt=now();restored.createdAt=current.createdAt;restored.history=(current.history||[]).concat([snapshot(current)]).slice(-MAX_HISTORY);
+  return normalizeManifest(restored);
+}
 function newFormulaDraft(){
   return normalizeManifest({id:makeId(),name:"My formula",description:"",mode:"formula",status:"draft",variables:[{name:"x",label:"x",type:"number",default:1}],expression:"x*2",output:{type:"scalar",label:"Result"},tests:[{name:"Example",inputs:{x:2},expected:{value:4},tolerance:1e-9}]});
 }
+function canDuplicateBuiltIn(tool){
+  if(typeof tool==="string")tool=T.REGISTRY.get(tool);
+  if(!tool||tool.specialized||String(tool.id).startsWith("custom."))return false;
+  return tool.inputs.every(i=>["number","integer","percent"].includes(i.type));
+}
 function duplicateBuiltIn(toolId){
-  const base=T.REGISTRY.get(toolId);if(!base)throw new CustomToolValidationError("Unknown built-in tool '"+toolId+"'");if(base.specialized||String(base.id).startsWith("custom."))throw new CustomToolValidationError("This tool cannot be duplicated in custom-tools v1");
+  const base=T.REGISTRY.get(toolId);if(!base)throw new CustomToolValidationError("Unknown built-in tool '"+toolId+"'");if(!canDuplicateBuiltIn(base))throw new CustomToolValidationError("This built-in uses input types that Custom Tools v1 cannot proxy safely");
   return normalizeManifest({id:makeId(),name:base.name+" copy",description:"Based on "+base.name,mode:"builtin-proxy",status:"draft",baseToolId:base.id,variables:base.inputs.map(i=>({name:i.id,label:i.label,type:i.type==="integer"?"integer":i.type==="percent"?"percent":"number",default:i.default===undefined?"":i.default,required:i.required!==false,min:i.min,max:i.max})),tests:[{name:"Built-in parity",inputs:Object.fromEntries(base.inputs.filter(i=>i.default!==undefined).map(i=>[i.id,i.default])),expected:{display:T.REGISTRY.execute(base.id,Object.fromEntries(base.inputs.filter(i=>i.default!==undefined).map(i=>[i.id,i.default])),{}).display}}]});
 }
 function installActive(manifest,registry){
@@ -315,6 +325,10 @@ function importManifest(text){
   if(!doc||typeof doc!=="object"||Array.isArray(doc))throw new CustomToolImportError("Import root must be an object");
   strictKeys(doc,new Set(["schema","exportedAt","tool"]),"");if(doc.schema!==SCHEMA)throw new CustomToolImportError("Unsupported custom-tool schema");
   if(!doc.tool||typeof doc.tool!=="object"||Array.isArray(doc.tool))throw new CustomToolImportError("Import needs a tool object");
+  strictKeys(doc.tool,new Set(["schema","id","name","description","aliases","mode","status","variables","tests","expression","relation","output","baseToolId","createdAt","updatedAt","revision"]),"tool.");
+  if(Array.isArray(doc.tool.variables))doc.tool.variables.forEach((v,i)=>{if(!v||typeof v!=="object"||Array.isArray(v))throw new CustomToolImportError("tool.variables["+i+"] must be an object");strictKeys(v,new Set(["name","label","type","required","default","unit","min","max","nonzero","positive","description"]),"tool.variables["+i+"].");});
+  if(Array.isArray(doc.tool.tests))doc.tool.tests.forEach((t,i)=>{if(!t||typeof t!=="object"||Array.isArray(t))throw new CustomToolImportError("tool.tests["+i+"] must be an object");strictKeys(t,new Set(["name","inputs","expected","tolerance"]),"tool.tests["+i+"].");if(t.expected&&typeof t.expected==="object")strictKeys(t.expected,new Set(["value","display"]),"tool.tests["+i+"].expected.");});
+  if(doc.tool.output&&typeof doc.tool.output==="object")strictKeys(doc.tool.output,new Set(["type","unit","label"]),"tool.output.");
   const raw=clone(doc.tool);raw.id=makeId();raw.status="draft";raw.revision=1;raw.history=[];raw.createdAt=now();raw.updatedAt=now();
   const m=normalizeManifest(raw),report=validationReport(m,{skipTests:true});
   if(!report.stages.find(s=>s.stage==="semantic"&&s.pass))throw new CustomToolImportError("Imported tool failed semantic validation",{report:report});
@@ -327,14 +341,18 @@ class CustomToolLibrary{
   get(id){return this.items.get(id)||null;}
   put(raw){const m=normalizeManifest(raw);this.items.set(m.id,m);return m;}
   remove(id){return this.items.delete(id);}
-  installAll(registry){registry=registry||T.REGISTRY;for(const m of this.items.values())installActive(m,registry);}
+  installAll(registry){
+    registry=registry||T.REGISTRY;const installed=[],failed=[];
+    for(const m of this.items.values())if(m.status==="active"){try{const tool=installActive(m,registry);if(tool)installed.push(tool.id);}catch(e){failed.push({id:m.id,name:m.name,error:e.message,code:e.code||"ERROR"});}}
+    return {installed:installed,failed:failed};
+  }
 }
 
 global.CalcCustomTools={
   VERSION:"1.0.0-custom-tools",SCHEMA:SCHEMA,
   CustomToolError:CustomToolError,CustomToolSchemaError:CustomToolSchemaError,CustomToolValidationError:CustomToolValidationError,CustomToolTestError:CustomToolTestError,CustomToolImportError:CustomToolImportError,
   normalizeManifest:normalizeManifest,validationReport:validationReport,compile:compile,executeManifest:executeManifest,runTests:runTests,
-  revise:revise,activate:activate,archive:archive,newFormulaDraft:newFormulaDraft,duplicateBuiltIn:duplicateBuiltIn,installActive:installActive,uninstall:uninstall,
+  revise:revise,activate:activate,archive:archive,restoreRevision:restoreRevision,newFormulaDraft:newFormulaDraft,canDuplicateBuiltIn:canDuplicateBuiltIn,duplicateBuiltIn:duplicateBuiltIn,installActive:installActive,uninstall:uninstall,
   exportManifest:exportManifest,importManifest:importManifest,CustomToolLibrary:CustomToolLibrary
 };
 })(window);
