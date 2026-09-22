@@ -695,9 +695,9 @@ function runCommand(raw,options){
   raw=String(raw).trim();options=options||{};
   var m=raw.match(/^(simplify|expand|factor|solve|inequality|substitute)\s*\((.*)\)$/s);if(!m)return null;
   var cmd=m[1],args=splitArgs(m[2]);
-  if(cmd==="simplify"){if(args.length<1||args.length>2)throw new M.ArityError("simplify",1,args.length);var se=simplify(args[0],args[1]);return commandResult(se.toString(),"symbolic",{value:se,metadata:{operation:"simplify",restrictions:se.restrictions.map(r=>r.toString())}});}
-  if(cmd==="expand"){var ex=expand(args[0],args[1]);return commandResult(ex.toString(),"symbolic",{value:ex,metadata:{operation:"expand",restrictions:ex.restrictions.map(r=>r.toString())}});}
-  if(cmd==="factor"){var fa=factor(args[0],args[1]);return commandResult(fa.toString(),"symbolic",{value:fa,metadata:{operation:"factor",restrictions:fa.restrictions.map(r=>r.toString())}});}
+  if(cmd==="simplify"){if(args.length<1||args.length>2)throw new M.ArityError("simplify",1,args.length);var se=simplify(args[0],args[1]),sd=se.toString();if(se.restrictions.length)sd+="   where "+se.restrictions.map(r=>r.toString()).join(", ");return commandResult(sd,"symbolic",{value:se,metadata:{operation:"simplify",restrictions:se.restrictions.map(r=>r.toString())}});}
+  if(cmd==="expand"){var ex=expand(args[0],args[1]),ed=ex.toString();if(ex.restrictions.length)ed+="   where "+ex.restrictions.map(r=>r.toString()).join(", ");return commandResult(ed,"symbolic",{value:ex,metadata:{operation:"expand",restrictions:ex.restrictions.map(r=>r.toString())}});}
+  if(cmd==="factor"){var fa=factor(args[0],args[1]),fd=fa.toString();if(fa.restrictions.length)fd+="   where "+fa.restrictions.map(r=>r.toString()).join(", ");return commandResult(fd,"symbolic",{value:fa,metadata:{operation:"factor",restrictions:fa.restrictions.map(r=>r.toString())}});}
   if(cmd==="solve"){
     if(args.length<1||args.length>3)throw new EquationError("solve expects solve(equation, variable?)");
     var ss=solveEquation(args[0],args[1]||undefined,{domain:args[2]||"real"}),display=ss.toString();
