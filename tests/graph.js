@@ -136,6 +136,16 @@ eq(parsed.session.series[2].type,"polar","polar parser");
 eq(parsed.session.series[3].type,"implicit","implicit parser");
 eq(parsed.session.series[4].type,"inequality","inequality parser");
 
+const parsedAdvanced=G.parseGraphText("slider(a;1;-2;2;0.1)\npiecewise(-x;-inf;0;() | x;0;inf;[))\na*x",{env:{}});
+eq(parsedAdvanced.errors.length,0,"slider and piecewise syntax");
+eq(parsedAdvanced.session.sliders.get("a").value,1,"slider parsed value");
+eq(parsedAdvanced.session.series[0].type,"piecewise","piecewise parsed type");
+approx(parsedAdvanced.session.series[1].evaluate(2,parsedAdvanced.session.sliderEnv()),2,1e-12,"slider feeds parsed function");
+const pwTraceLeft=parsedAdvanced.session.series[0].trace(-2,{});
+const pwTraceZero=parsedAdvanced.session.series[0].trace(0,{});
+approx(pwTraceLeft.y,2,1e-12,"piecewise left branch");
+approx(pwTraceZero.y,0,1e-12,"piecewise closed zero branch");
+
 parsed=G.parseGraphText("sin(x)\nparametric(bad)",{env:{}});
 eq(parsed.session.series.length,1,"invalid graph line quarantined");
 eq(parsed.errors.length,1,"invalid graph line error");
