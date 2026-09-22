@@ -126,6 +126,9 @@ function setCalcResult(res,preview){
   $("#exactResult").textContent=res.display;
   $("#approxResult").textContent=res.approx||"";
   $("#calcStatus").textContent=preview?"Preview":(res.symbolic?"Symbolic":(res.exact?"Exact":"Approximate"));
+  var graphAction=$('[data-result-action="graph"]'),saveAction=$('[data-result-action="save"]');
+  if(graphAction)graphAction.disabled=!!res.symbolic;
+  if(saveAction)saveAction.disabled=!!res.symbolic;
 }
 let previewTimer=null;
 function previewExpression(){
