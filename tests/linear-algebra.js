@@ -30,7 +30,7 @@ eq(M.formatValue(A.trace()),"5","trace");
 
 // Complex adjoint and inner product convention <u,v> = sum conj(u_i)v_i.
 const ci=new M.Complex(new M.Rational(1n),new M.Rational(1n));
-const cm=new L.Matrix([[ci,new M.Complex(0,1)],[new M.Rational(2n),new M.Rational(3n)]]);
+const cm=new L.Matrix([[ci,new M.Complex(new M.Rational(0n),new M.Rational(1n))],[new M.Rational(2n),new M.Rational(3n)]]);
 eq(cm.conjugateTranspose().toString(),"[[1 − i, 2], [−i, 3]]","complex adjoint");
 const u=new L.Vector([ci,new M.Rational(2n)]);
 const v=new L.Vector([new M.Rational(1n),new M.Complex(0,1)]);
