@@ -26,6 +26,7 @@ assert(cancelled.restrictions.some(r=>r.toString().includes("x - 1")&&r.toString
 
 // Expansion and polynomial recognition.
 eq(A.expand("(x + 1)^3","x").toString(),"x ^ 3 + 3 * x ^ 2 + 3 * x + 1","binomial expansion");
+eq(A.collect("x + 2*x^2 + x","x").toString(),"2 * x ^ 2 + 2 * x","collect like terms into polynomial order");
 const p=A.Polynomial.fromAst(M.parseExpression("2*x^3 - 3*x + 5"),"x");
 eq(p.degree,3,"polynomial degree");
 eq(p.derivative().toString(),"6 * x ^ 2 - 3","polynomial derivative");
@@ -48,6 +49,12 @@ const irr=A.solveEquation("x^2 - 2 = 0","x");
 eq(irr.type,"finite","irrational quadratic finite roots");
 eq(irr.values.length,2,"irrational quadratic two roots");
 assert(irr.values.every(v=>v.verified),"quadratic candidates verified");
+assert(irr.values.some(v=>v.toString()==="sqrt(2)")&&irr.values.some(v=>v.toString()==="-sqrt(2)"),"quadratic radicals simplified");
+
+const cubic=A.solveEquation("x^3 - x^2 - 2*x + 2 = 0","x");
+eq(cubic.type,"finite","higher polynomial reducible to quadratic");
+eq(cubic.values.length,3,"cubic rational plus irrational roots");
+assert(cubic.values.some(v=>v.toString()==="1"),"cubic rational root retained");
 
 // Rational equation extraneous/domain protection.
 const rational=A.solveEquation("(x^2 - 1)/(x - 1) = 0","x");
@@ -104,6 +111,9 @@ assert(simplifyCommand.display.startsWith("x + 1")&&simplifyCommand.display.incl
 const solveCommand=A.runCommand("solve(x^2 - 5*x + 6 = 0, x)");
 assert(solveCommand.display.includes("x ∈"),"solve command");
 eq(A.runCommand("substitute(x^2 + 1, x, 3)").display,"10","substitute command");
+eq(A.runCommand("collect(x + 2*x^2 + x, x)").display,"2 * x ^ 2 + 2 * x","collect command");
+const systemCommand=A.runCommand("system(x + y = 3; x - y = 1)");
+assert(systemCommand.display.includes("x = 2")&&systemCommand.display.includes("y = 1"),"system command");
 eq(A.runCommand("inequality(x^2 - 1 <= 0, x)").display,"x ∈ [-1, 1]","inequality command");
 eq(A.runCommand("2+2"),null,"ordinary input ignored by algebra command router");
 
