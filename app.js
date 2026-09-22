@@ -4,6 +4,7 @@ const M=window.CalcMath;
 const A=window.CalcAlgebra;
 const C=window.CalcCalculus;
 const U=window.CalcUnits;
+const LA=window.CalcLinearAlgebra;
 const $=function(s,r){return (r||document).querySelector(s);};
 const $$=function(s,r){return Array.from((r||document).querySelectorAll(s));};
 const uid=function(){return crypto.randomUUID?crypto.randomUUID():"id-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);};
@@ -253,8 +254,8 @@ function resetGraph(){Object.assign(state.graph,{xMin:-10,xMax:10,yMin:-10,yMax:
 
 function matrixValues(){
   var rows=parseInt($("#matrixRows").value,10),cols=parseInt($("#matrixCols").value,10),grid=[];
-  for(var r=0;r<rows;r++){var row=[];for(var c=0;c<cols;c++){var el=$('[data-mcell="'+r+'-'+c+'"]');row.push(el?el.value||"0":"0");}grid.push(row);}
-  return M.matrixFromStrings(grid,state.env,calcOptions(false));
+  for(var r=0;r<rows;r++){var row=[];for(var cc=0;cc<cols;cc++){var el=$('[data-mcell="'+r+'-'+cc+'"]');row.push(el?el.value||"0":"0");}grid.push(row);}
+  return LA.Matrix.fromStrings(grid,state.env,{angle:state.angle,symbolic:true});
 }
 function renderMatrixGrid(preserve){
   var rows=Math.max(1,Math.min(10,parseInt($("#matrixRows").value,10)||1)),cols=Math.max(1,Math.min(10,parseInt($("#matrixCols").value,10)||1));
@@ -263,30 +264,100 @@ function renderMatrixGrid(preserve){
   var grid=$("#matrixGrid");grid.innerHTML="";
   for(var r=0;r<rows;r++){
     var row=document.createElement("div");row.className="matrix-row";row.style.gridTemplateColumns="repeat("+cols+", 92px)";
-    for(var c=0;c<cols;c++){
-      var input=document.createElement("input");input.className="matrix-cell";input.dataset.mcell=r+"-"+c;input.setAttribute("aria-label","Row "+(r+1)+", column "+(c+1));
-      input.value=old[r+"-"+c]!==undefined?old[r+"-"+c]:(r===c?"1":"0");row.appendChild(input);
+    for(var cc=0;cc<cols;cc++){
+      var input=document.createElement("input");input.className="matrix-cell";input.dataset.mcell=r+"-"+cc;input.dataset.row=r;input.dataset.col=cc;input.setAttribute("aria-label","Row "+(r+1)+", column "+(cc+1));
+      input.value=old[r+"-"+cc]!==undefined?old[r+"-"+cc]:(r===cc?"1":"0");row.appendChild(input);
     }
     grid.appendChild(row);
   }
+  bindMatrixCellInteractions();
+}
+function focusMatrixCell(r,c){
+  var rows=parseInt($("#matrixRows").value,10),cols=parseInt($("#matrixCols").value,10);
+  r=Math.max(0,Math.min(rows-1,r));c=Math.max(0,Math.min(cols-1,c));
+  var el=$('[data-mcell="'+r+'-'+c+'"]');if(el){el.focus();el.select();}
+}
+function bindMatrixCellInteractions(){
+  $$("[data-mcell]").forEach(function(input){
+    input.addEventListener("keydown",function(e){
+      var r=Number(input.dataset.row),c=Number(input.dataset.col);
+      if(e.key==="ArrowUp"){e.preventDefault();focusMatrixCell(r-1,c);}
+      else if(e.key==="ArrowDown"||e.key==="Enter"){e.preventDefault();focusMatrixCell(r+1,c);}
+      else if(e.key==="ArrowLeft"&&input.selectionStart===0&&input.selectionEnd===0){e.preventDefault();focusMatrixCell(r,c-1);}
+      else if(e.key==="ArrowRight"&&input.selectionStart===input.value.length&&input.selectionEnd===input.value.length){e.preventDefault();focusMatrixCell(r,c+1);}
+    });
+    input.addEventListener("paste",function(e){
+      var text=e.clipboardData&&e.clipboardData.getData("text/plain");if(!text||(!/[\t\n,]/.test(text)))return;
+      var raw=text.replace(/\r\n?/g,"\n").trim();if(!raw)return;
+      var lines=raw.split("\n"),parsed=lines.map(function(line){return line.indexOf("\t")>=0?line.split("\t"):line.split(",");});
+      if(parsed.length===1&&parsed[0].length===1)return;
+      e.preventDefault();
+      var sr=Number(input.dataset.row),sc=Number(input.dataset.col),needRows=Math.min(10,Math.max(parseInt($("#matrixRows").value,10),sr+parsed.length)),needCols=Math.min(10,Math.max(parseInt($("#matrixCols").value,10),sc+Math.max.apply(null,parsed.map(function(r){return r.length;}))));
+      var snapshot={};$$("[data-mcell]").forEach(function(el){snapshot[el.dataset.mcell]=el.value;});
+      $("#matrixRows").value=needRows;$("#matrixCols").value=needCols;renderMatrixGrid(false);
+      Object.keys(snapshot).forEach(function(k){var el=$('[data-mcell="'+k+'"]');if(el)el.value=snapshot[k];});
+      parsed.forEach(function(row,ri){row.forEach(function(value,ci){var rr=sr+ri,cc=sc+ci;if(rr<needRows&&cc<needCols){var el=$('[data-mcell="'+rr+'-'+cc+'"]');if(el)el.value=value.trim();}});});
+      focusMatrixCell(sr,sc);
+    });
+  });
 }
 function matrixHtml(A){
-  var rows=M.matrixToStrings(A,state.precision),wrap=document.createElement("div");wrap.className="matrix-render";
+  if(!(A instanceof LA.Matrix))A=new LA.Matrix(A);
+  var rows=LA.formatMatrix(A,state.precision),wrap=document.createElement("div");wrap.className="matrix-render";
   rows.forEach(function(vals){var r=document.createElement("div");r.className="matrix-render-row";vals.forEach(function(v){var s=document.createElement("span");s.textContent=v;r.appendChild(s);});wrap.appendChild(r);});
   return wrap;
 }
+function matrixResultSection(box,title,content){
+  var section=document.createElement("div");section.style.marginBottom="18px";
+  var h=document.createElement("div");h.style.fontWeight="700";h.style.fontSize="12px";h.style.marginBottom="8px";h.textContent=title;section.appendChild(h);
+  if(content instanceof LA.Matrix)section.appendChild(matrixHtml(content));
+  else if(content instanceof LA.Vector){var pre=document.createElement("div");pre.textContent=content.toString(state.precision);pre.style.fontFamily="monospace";section.appendChild(pre);}
+  else{var pre2=document.createElement("div");pre2.textContent=String(content);pre2.style.whiteSpace="pre-wrap";pre2.style.fontFamily="monospace";section.appendChild(pre2);}
+  box.appendChild(section);
+}
+function renderDecomposition(box,d){
+  ["P","L","U","Q","R","S","V","D","J"].forEach(function(k){if(d[k] instanceof LA.Matrix)matrixResultSection(box,k,d[k]);});
+  if(d.singularValues)matrixResultSection(box,"Singular values","["+d.singularValues.map(function(x){return M.formatNumber(x,state.precision);}).join(", ")+"]");
+  var meta=[];["rank","residual","residual1","residual2","orthogonalityResidual","threshold","method"].forEach(function(k){if(d[k]!==undefined)meta.push(k+": "+(typeof d[k]==="number"?M.formatNumber(d[k],state.precision):d[k]));});
+  if(meta.length)matrixResultSection(box,"Diagnostics",meta.join("\n"));
+}
+function renderEigenResult(box,e){
+  if(e.mode==="numeric-symmetric"){
+    matrixResultSection(box,"Eigenvalues","["+e.values.map(function(x){return M.formatNumber(x,state.precision);}).join(", ")+"]");
+    matrixResultSection(box,"Eigenvectors",e.eigenvectors);
+    matrixResultSection(box,"Diagnostics","method: "+e.method+"\nresidual: "+M.formatNumber(e.residual,state.precision));
+    return;
+  }
+  matrixResultSection(box,"Characteristic polynomial",e.characteristicPolynomial.toString());
+  matrixResultSection(box,"Eigenvalues",e.solutions.toString());
+  matrixResultSection(box,"Diagonalizable",e.diagonalizable?"Yes":"No");
+  e.eigenspaces.forEach(function(item){
+    var label="λ = "+item.value.toString()+" · algebraic "+item.algebraicMultiplicity+" · geometric "+item.geometricMultiplicity;
+    matrixResultSection(box,label,item.space.toString(state.precision));
+  });
+}
 function runMatrix(op){
   var box=$("#matrixResult");try{
-    var A=matrixValues(),res;
-    if(op==="det")res=M.determinant(A);
-    else if(op==="rref")res=M.rref(A).matrix;
-    else if(op==="inverse")res=M.inverse(A);
-    else if(op==="transpose")res=M.transpose(A);
-    else if(op==="rank")res=new M.Rational(BigInt(M.rank(A)));
-    box.innerHTML="";
-    if(Array.isArray(res))box.appendChild(matrixHtml(res));else box.textContent=M.formatValue(res,state.precision);
-    box.classList.remove("muted");
-  }catch(e){box.textContent=errorMessage(e);box.classList.add("ws-error");}
+    var matrix=matrixValues(),result=LA.resultSummary(op,matrix,{relTol:1e-10,rankTol:1e-10,maxIterations:300});
+    box.innerHTML="";box.classList.remove("muted","ws-error");
+    if(result.kind==="scalar")matrixResultSection(box,result.label,M.formatValue(result.value,state.precision));
+    else if(result.kind==="matrix")matrixResultSection(box,result.label,result.value);
+    else if(result.kind==="basis"){
+      matrixResultSection(box,result.label,result.value.toString(state.precision));
+      matrixResultSection(box,"Dimension",String(result.value.dimension()));
+      if(result.value.sourceColumns)matrixResultSection(box,"Original pivot columns",result.value.sourceColumns.map(function(x){return x+1;}).join(", "));
+    }else if(result.kind==="polynomial")matrixResultSection(box,result.label,result.value.toString());
+    else if(result.kind==="eigen")renderEigenResult(box,result.value);
+    else if(result.kind==="decomposition")renderDecomposition(box,result.value);
+    if(result.metadata){
+      var meta=[];if(result.metadata.pivots)meta.push("pivot columns: "+result.metadata.pivots.map(function(x){return x+1;}).join(", "));
+      if(result.metadata.operations)meta.push("row operations: "+result.metadata.operations.length);
+      ["residual1","residual2","rank","method"].forEach(function(k){if(result.metadata[k]!==undefined)meta.push(k+": "+result.metadata[k]);});
+      if(meta.length)matrixResultSection(box,"Metadata",meta.join("\n"));
+    }
+  }catch(e){
+    box.innerHTML="";box.textContent=errorMessage(e);box.classList.add("ws-error");
+  }
 }
 
 function parseNumericColumn(rows,index){
