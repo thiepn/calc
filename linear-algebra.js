@@ -419,11 +419,11 @@ function leastSquares(A,b,options){
   return {solution:x,residualVector:r,residualNorm:r.norm(),rank:pinv.rank,method:"svd-least-squares"};
 }
 
-function characteristicPolynomial(A){
-  if(!(A instanceof Matrix))A=new Matrix(A);if(!A.isSquare())throw new MatrixShapeError("Characteristic polynomial requires a square matrix");
-  const n=A.rows;let B=Matrix.identity(n),coeff=[rat(1)];
+function characteristicPolynomial(X){
+  if(!(X instanceof Matrix))X=new Matrix(X);if(!X.isSquare())throw new MatrixShapeError("Characteristic polynomial requires a square matrix");
+  const n=X.rows;let B=Matrix.identity(n),coeff=[rat(1)];
   for(let k=1;k<=n;k++){
-    const AB=A.multiply(B),ck=sDiv(sNeg(AB.trace()),rat(k));coeff.push(ck);B=AB.add(Matrix.identity(n).scale(ck));
+    const AB=X.multiply(B),ck=sDiv(sNeg(AB.trace()),rat(k));coeff.push(ck);B=AB.add(Matrix.identity(n).scale(ck));
   }
   const p=new A.Polynomial("lambda");
   for(let k=0;k<=n;k++)p.set(n-k,coeff[k]);
@@ -484,11 +484,11 @@ function isUnitary(A,options){
 }
 function isPositiveDefinite(A,options){try{cholesky(A,options);return true;}catch(e){if(e.code==="NOT_POSITIVE_DEFINITE")return false;throw e;}}
 
-function minimalPolynomial(A){
-  if(!(A instanceof Matrix))A=new Matrix(A);if(!A.isSquare()||!A.exact)throw new UnsupportedLinearAlgebraError("Minimal polynomial certification currently requires an exact square matrix");
-  const n=A.rows,powers=[Matrix.identity(n)];
+function minimalPolynomial(X){
+  if(!(X instanceof Matrix))X=new Matrix(X);if(!X.isSquare()||!X.exact)throw new UnsupportedLinearAlgebraError("Minimal polynomial certification currently requires an exact square matrix");
+  const n=X.rows,powers=[Matrix.identity(n)];
   for(let k=1;k<=n*n;k++){
-    powers.push(powers[k-1].multiply(A));
+    powers.push(powers[k-1].multiply(X));
     const rows=[];for(let i=0;i<n;i++)for(let j=0;j<n;j++)rows.push(powers.map(P=>P.data[i][j]));
     const N=nullSpace(new Matrix(rows));
     for(const v of N.vectors){
