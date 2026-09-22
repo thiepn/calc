@@ -150,8 +150,9 @@ function triangleResult(a,b,c,A,B,C,caseName){
   const area=triangleAreaHeron(a,b,c),s=(a+b+c)/2;return {a:a,b:b,c:c,A:A,B:B,C:C,area:area,perimeter:a+b+c,inradius:area/s,circumradius:a*b*c/(4*area),case:caseName};
 }
 function solveTriangle(spec){
-  const a=spec.a===""||spec.a===undefined?null:positive(spec.a,"a"),b=spec.b===""||spec.b===undefined?null:positive(spec.b,"b"),c=spec.c===""||spec.c===undefined?null:positive(spec.c,"c");
-  const A0=spec.A===""||spec.A===undefined?null:finite(spec.A,"A"),B0=spec.B===""||spec.B===undefined?null:finite(spec.B,"B"),C0=spec.C===""||spec.C===undefined?null:finite(spec.C,"C");
+  const blank=function(v){return v===""||v===undefined||v===null;};
+  const a=blank(spec.a)?null:positive(spec.a,"a"),b=blank(spec.b)?null:positive(spec.b,"b"),c=blank(spec.c)?null:positive(spec.c,"c");
+  const A0=blank(spec.A)?null:finite(spec.A,"A"),B0=blank(spec.B)?null:finite(spec.B,"B"),C0=blank(spec.C)?null:finite(spec.C,"C");
   for(const x of [A0,B0,C0])if(x!==null&&!(x>0&&x<180))throw new GeometryError("Angles must lie between 0° and 180°");
   const sides=[a,b,c].filter(x=>x!==null).length,angles=[A0,B0,C0].filter(x=>x!==null).length;
   if(sides===3)return [triangleFromSSS(a,b,c)];
