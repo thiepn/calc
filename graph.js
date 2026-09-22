@@ -376,6 +376,7 @@ function parseGraphLine(line,options){
   if(m)return new PolarPlot(m[1].trim(),parseFiniteScalar(m[3],options.env),parseFiniteScalar(m[4],options.env),{parameter:m[2],label:line});
   m=line.match(/^implicit\((.*)\)$/);if(m)return new ImplicitPlot(m[1].trim(),{label:line});
   m=line.match(/^ineq\((.*)\)$/);if(m)return new InequalityPlot(m[1].trim(),{label:line});
+  if(/^\s*(?:parametric|polar|implicit|ineq|piecewise|slider)\s*\(/.test(line))throw new GraphDomainError("Malformed Graph V2 constructor syntax");
   const fn=line.replace(/^\s*[A-Za-z_]\w*\s*\(x\)\s*=\s*/,"");return new FunctionPlot(fn,{label:line});
 }
 function parseGraphText(text,options){
