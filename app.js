@@ -99,7 +99,7 @@ function switchView(view){
   if(!VIEW_META[view])return;
   state.view=view;
   if(location.hash!=="#"+view)history.replaceState(null,"","#"+view);
-  $("[data-view-panel]").forEach(function(el){el.classList.toggle("active",el.dataset.viewPanel===view);});
+  $$("[data-view-panel]").forEach(function(el){el.classList.toggle("active",el.dataset.viewPanel===view);});
   $$(".nav-item").forEach(function(el){el.classList.toggle("active",el.dataset.view===view);});
   $("#viewTitle").textContent=VIEW_META[view][0];$("#viewSubtitle").textContent=VIEW_META[view][1];
   closeMobileNav();
