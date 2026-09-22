@@ -33,7 +33,7 @@ const ci=new M.Complex(new M.Rational(1n),new M.Rational(1n));
 const cm=new L.Matrix([[ci,new M.Complex(new M.Rational(0n),new M.Rational(1n))],[new M.Rational(2n),new M.Rational(3n)]]);
 eq(cm.conjugateTranspose().toString(),"[[1 − i, 2], [−i, 3]]","complex adjoint");
 const u=new L.Vector([ci,new M.Rational(2n)]);
-const v=new L.Vector([new M.Rational(1n),new M.Complex(0,1)]);
+const v=new L.Vector([new M.Rational(1n),new M.Complex(new M.Rational(0n),new M.Rational(1n))]);
 eq(M.formatValue(u.dot(v)),"1 + i","Hermitian inner product");
 eq(u.cross?new L.Vector([1,0,0]).cross(new L.Vector([0,1,0])).toString():"","[0, 0, 1]","cross product");
 
