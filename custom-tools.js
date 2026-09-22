@@ -83,7 +83,10 @@ function validateAst(ast,variableNames){
 }
 function variableInputSchema(v,relationMode){
   let type=v.type==="integer"?"integer":v.type==="percent"?"percent":"number";
-  return {id:v.name,label:v.label||v.name+(v.type==="quantity"&&v.unit?" ("+v.unit+")":v.type==="percent"?" (%)":""),type:type,required:relationMode?false:v.required!==false,default:v.default,min:v.min,max:v.max};
+  const out={id:v.name,label:v.label||v.name+(v.type==="quantity"&&v.unit?" ("+v.unit+")":v.type==="percent"?" (%)":""),type:type,required:relationMode?false:v.required!==false,default:v.default};
+  if(v.min!==null&&v.min!==undefined)out.min=v.min;
+  if(v.max!==null&&v.max!==undefined)out.max=v.max;
+  return out;
 }
 function normalizeVariable(v,index){
   if(!v||typeof v!=="object")throw new CustomToolSchemaError("Variable "+(index+1)+" must be an object");
