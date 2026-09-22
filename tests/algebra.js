@@ -99,7 +99,8 @@ eq(restored.toString(),original.toString(),"symbolic serialization expression");
 eq(restored.restrictions.map(r=>r.toString()).join("|"),original.restrictions.map(r=>r.toString()).join("|"),"symbolic serialization restrictions");
 
 // Calculate command surface.
-const simplifyCommand=A.runCommand("simplify((x^2-1)/(x-1))");\nassert(simplifyCommand.display.startsWith("x + 1")&&simplifyCommand.display.includes("≠ 0"),"simplify command surfaces domain restriction");
+const simplifyCommand=A.runCommand("simplify((x^2-1)/(x-1))");
+assert(simplifyCommand.display.startsWith("x + 1")&&simplifyCommand.display.includes("≠ 0"),"simplify command surfaces domain restriction");
 const solveCommand=A.runCommand("solve(x^2 - 5*x + 6 = 0, x)");
 assert(solveCommand.display.includes("x ∈"),"solve command");
 eq(A.runCommand("substitute(x^2 + 1, x, 3)").display,"10","substitute command");
