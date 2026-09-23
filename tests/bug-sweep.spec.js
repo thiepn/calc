@@ -295,6 +295,29 @@ test("notebook title input is recovery-safe before blur",async({page})=>{
   expect(recovery.document.title).toBe("Unsaved title probe");
 });
 
+test("overlapping slow notebook saves serialize without false conflict or recovery loss",async({page})=>{
+  const errors=await openApp(page);await goView(page,"worksheet");
+  const auto=page.locator("#worksheetAutoRun");if(await auto.isChecked())await auto.uncheck();
+  await page.evaluate(()=>{
+    const P=window.CalcPersistence,original=P.saveNotebookIncremental;let first=true;
+    P.saveNotebookIncremental=async function(db,doc,expected,options){
+      if(first){first=false;await new Promise(r=>setTimeout(r,700));}
+      return original(db,doc,expected,options);
+    };
+  });
+  const editor=page.locator(".ws-editor").first();
+  await editor.fill("1+1");
+  await page.waitForTimeout(360);
+  await editor.fill("2+2");
+  await expect.poll(async()=>page.evaluate(async()=>{
+    const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();const docs=await P.loadNotebooks(db);
+    const active=docs.find(x=>!/conflict copy/.test(x.title||""));return {source:active&&active.blocks[0]&&active.blocks[0].source,conflicts:docs.filter(x=>/conflict copy/.test(x.title||"")).length};
+  }),{timeout:5000,intervals:[100,200,300,500]}).toEqual({source:"2+2",conflicts:0});
+  const recovery=await page.evaluate(()=>sessionStorage.getItem("calc.notebook.recovery"));
+  expect(recovery).toBeNull();
+  expect(errors).toEqual([]);
+});
+
 test("rapid edits in two notebooks persist independently after switching",async({page})=>{
   const errors=await openApp(page);await goView(page,"worksheet");
   await page.locator("#worksheetTitle").fill("Notebook A");

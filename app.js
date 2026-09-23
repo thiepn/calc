@@ -923,7 +923,7 @@ async function loadCustomTools(){
   if(report.failed.length){console.warn("Custom tools not installed",report.failed);toast(report.failed.length+" custom tool"+(report.failed.length===1?"":"s")+" need validation");}return true;
 }
 
-let worksheetSaveTimers=new Map(),worksheetEvalTimer=null,worksheetCheckpointAt=0,worksheetTitleEditCheckpointed=false;
+let worksheetSaveTimers=new Map(),worksheetSaveChains=new Map(),worksheetEvalTimer=null,worksheetCheckpointAt=0,worksheetTitleEditCheckpointed=false;
 function createNotebook(){
   return NB.normalizeNotebook({schema:NB.SCHEMA,id:uid(),title:"Untitled notebook",createdAt:Date.now(),updatedAt:Date.now(),revision:1,blocks:[NB.newBlock("math")],versions:[],settings:{autoRun:true}});
 }
@@ -957,13 +957,18 @@ function scheduleWorksheetEval(){
   clearTimeout(worksheetEvalTimer);if(!state.activeWorksheet||!state.activeWorksheet.settings.autoRun)return;
   var id=state.activeWorksheet.id;worksheetEvalTimer=setTimeout(function(){if(state.activeWorksheet&&state.activeWorksheet.id===id)runWorksheet(false);},220);
 }
-async function saveWorksheet(ws,immediate){
+function notebookPayloadMatchesCurrent(id,payload){
+  var current=state.worksheets.find(function(w){return w.id===id;});if(!current)return true;
+  try{return JSON.stringify(current)===JSON.stringify(payload);}catch(e){return false;}
+}
+async function saveWorksheetNow(ws,immediate){
   if(ws&&ws.recovery&&ws.recovery.persistenceCorruption){if(immediate)toast("Storage recovery notebooks are read-only to protect the original corrupted record");return false;}
   var wasActive=!!(state.activeWorksheet&&state.activeWorksheet.id===ws.id);ws.updatedAt=Date.now();var expected=state.persistedRevisions.worksheets.has(ws.id)?state.persistedRevisions.worksheets.get(ws.id):null,saved=false;
   if(expected!==null&&expected!==undefined&&Number(ws.revision||0)<=Number(expected))ws.revision=Number(expected)+1;
   var payload=JSON.parse(JSON.stringify(ws));
   try{
-    await P.saveNotebookIncremental(persistenceDb,payload,expected);publishPersistenceChange(P.STORES.notebooks,payload,"put");state.persistedRevisions.worksheets.set(ws.id,ws.revision||0);clearSessionRecovery(ws.id);saved=true;if(immediate)toast("Notebook saved");
+    await P.saveNotebookIncremental(persistenceDb,payload,expected);publishPersistenceChange(P.STORES.notebooks,payload,"put");state.persistedRevisions.worksheets.set(ws.id,payload.revision||0);
+    if(notebookPayloadMatchesCurrent(ws.id,payload))clearSessionRecovery(ws.id);saved=true;if(immediate)toast("Notebook saved");
   }catch(e){
     if(e&&e.code==="REVISION_CONFLICT"){
       try{
@@ -974,6 +979,13 @@ async function saveWorksheet(ws,immediate){
     }else{toast("Could not save notebook: "+errorMessage(e));saved=false;}
   }
   renderWorksheetList();return saved;
+}
+function saveWorksheet(ws,immediate){
+  if(!ws)return Promise.resolve(false);var id=ws.id,previous=worksheetSaveChains.get(id)||Promise.resolve(),run;
+  run=previous.catch(function(){}).then(function(){return saveWorksheetNow(ws,immediate);});
+  worksheetSaveChains.set(id,run);
+  run.finally(function(){if(worksheetSaveChains.get(id)===run)worksheetSaveChains.delete(id);});
+  return run;
 }
 function replaceActiveWorksheet(next){
   state.activeWorksheet=next;var i=state.worksheets.findIndex(function(w){return w.id===next.id;});
@@ -1170,6 +1182,7 @@ function formatBytes(bytes){
 function currentClientSettings(){return {theme:state.theme,angle:state.angle,precision:state.precision,deviceId:syncManager.deviceId};}
 async function flushPendingPersistence(){
   clearTimeout(worksheetEvalTimer);var pendingIds=Array.from(worksheetSaveTimers.keys());worksheetSaveTimers.forEach(function(timer){clearTimeout(timer);});worksheetSaveTimers.clear();
+  Array.from(worksheetSaveChains.keys()).forEach(function(id){if(pendingIds.indexOf(id)<0)pendingIds.push(id);});
   var recoveryBundle=readSessionRecoveryBundle();Object.keys(recoveryBundle.entries||{}).forEach(function(id){if(pendingIds.indexOf(id)<0)pendingIds.push(id);});
   if(state.activeWorksheet&&pendingIds.indexOf(state.activeWorksheet.id)<0)pendingIds.push(state.activeWorksheet.id);
   for(const id of pendingIds){
