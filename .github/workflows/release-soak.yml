@@ -1,0 +1,102 @@
+name: Calc Release Soak
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: calc-release-soak-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node-gate:
+    name: Deterministic RC gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax
+        run: |
+          node --check persistence.js
+          node --check app.js
+          node --check sw.js
+          node --check playwright.config.js
+          node --check tests/release-gate.js
+          node --check tests/release-soak.spec.js
+      - name: Cumulative deterministic certification
+        run: |
+          node tests/smoke.js
+          node tests/core-kernel.js
+          node tests/core-fuzz.js
+          node tests/algebra.js
+          node tests/calculus.js
+          node tests/units.js
+          node tests/linear-algebra.js
+          node tests/statistics.js
+          node tests/graph.js
+          node tests/tools.js
+          node tests/custom-tools.js
+          node tests/notebook.js
+          node tests/persistence.js
+          node tests/persistence-integration.js
+      - name: Release-candidate static gate
+        run: node tests/release-gate.js
+
+  browser-soak:
+    name: Browser soak · ${{ matrix.project }}
+    needs: node-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: chromium
+            browser: chromium
+          - project: firefox
+            browser: firefox
+          - project: webkit
+            browser: webkit
+          - project: mobile-chromium
+            browser: chromium
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install pinned release test tooling
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Install browser
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Run production soak
+        run: npx playwright test tests/release-soak.spec.js --project=${{ matrix.project }}
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: calc-release-soak-${{ matrix.project }}
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+  rc-gate:
+    name: RC certification
+    if: always()
+    needs: [node-gate, browser-soak]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce all certification gates
+        run: |
+          echo "node-gate=${{ needs.node-gate.result }}"
+          echo "browser-soak=${{ needs.browser-soak.result }}"
+          if [ "${{ needs.node-gate.result }}" != "success" ] || [ "${{ needs.browser-soak.result }}" != "success" ]; then
+            echo "Release candidate rejected."
+            exit 1
+          fi
+          echo "Release candidate certified."
