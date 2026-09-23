@@ -85,6 +85,8 @@ class MemoryDb{
 
   const checked=await P.validateBackup(JSON.stringify(backup));
   eq(checked.payloadHash,backup.manifest.payloadHash,"backup verifies");
+  const future=JSON.parse(JSON.stringify(backup));future.app.dbVersion=P.DB_VERSION+1;
+  await throwsCode(()=>P.validateBackup(future),"BACKUP_ERROR","future database backup rejected");
 
   if(!global.crypto&&require("crypto").webcrypto)global.crypto=require("crypto").webcrypto;
   const encrypted=await P.encryptBackup(backup,"correct horse battery staple",{iterations:1000});
