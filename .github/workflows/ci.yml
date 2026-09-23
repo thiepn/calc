@@ -31,6 +31,7 @@ jobs:
           node --check tools.js
           node --check custom-tools.js
           node --check notebook.js
+          node --check persistence.js
           node --check app.js
           node --check sw.js
           node --check tests/smoke.js
@@ -45,6 +46,7 @@ jobs:
           node --check tests/tools.js
           node --check tests/custom-tools.js
           node --check tests/notebook.js
+          node --check tests/persistence.js
       - name: Core smoke tests
         run: node tests/smoke.js
       - name: Core kernel certification
@@ -69,3 +71,5 @@ jobs:
         run: node tests/custom-tools.js
       - name: Worksheets and Notebooks V2 certification
         run: node tests/notebook.js
+      - name: Persistence backup and sync certification
+        run: node tests/persistence.js
