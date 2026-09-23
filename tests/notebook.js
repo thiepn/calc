@@ -64,7 +64,7 @@ nb=doc([
 ]);
 run=N.evaluateNotebook(nb,{precision:12,angle:"RAD"});nb=run.document;
 eq(nb.blocks[0].status,"clean","assumption-aware CAS block clean");
-eq(nb.blocks[0].result.display,"x","assumption-aware CAS block result");
+eq(nb.blocks[0].result.display,"x assuming x>0","assumption-aware CAS block result");
 assert(nb.blocks[1].result.display.includes("a ≠ 0")&&nb.blocks[1].result.display.includes("a = 0 and b = 0"),"parameterized CAS block result");
 assert(!nb.blocks[0].dependencies.includes("assume")&&!nb.blocks[1].dependencies.includes("solve"),"CAS command names are not notebook dependencies");
 
