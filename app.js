@@ -844,26 +844,26 @@ async function persistCustom(manifest){
 async function saveCustomDraft(showToast){
   var raw=builderManifest(),current=state.customLibrary.get(raw.id),draft;
   if(current){CT.uninstall(current,T.REGISTRY);draft=CT.revise(current,raw);}else{raw.status="draft";draft=CT.normalizeManifest(raw);}
-  await persistCustom(draft);fillCustomBuilder(draft);if(showToast!==false)toast("Custom tool saved as Draft");return draft;
+  draft=await persistCustom(draft);fillCustomBuilder(draft);if(showToast!==false)toast("Custom tool saved as Draft");return draft;
 }
 async function activateCustomTool(){
-  try{var draft=await saveCustomDraft(false),activated=CT.activate(draft),m=activated.manifest;CT.installActive(m,T.REGISTRY);await persistCustom(m);fillCustomBuilder(m);renderCustomValidation(activated.report);toast("Custom tool activated");}
+  try{var draft=await saveCustomDraft(false),activated=CT.activate(draft),m=await persistCustom(activated.manifest);if(m.status==="active")CT.installActive(m,T.REGISTRY);fillCustomBuilder(m);renderCustomValidation(activated.report);toast(m.status==="active"?"Custom tool activated":"Custom tool saved as conflict Draft");}
   catch(e){toast(errorMessage(e));validateCustomBuilder(true);}
 }
 async function archiveCustomTool(){
-  try{var current=state.customCurrent&&state.customLibrary.get(state.customCurrent.id);if(!current)throw new Error("Save the custom tool first");CT.uninstall(current,T.REGISTRY);var m=CT.archive(current);await persistCustom(m);fillCustomBuilder(m);toast("Custom tool archived");}catch(e){toast(errorMessage(e));}
+  try{var current=state.customCurrent&&state.customLibrary.get(state.customCurrent.id);if(!current)throw new Error("Save the custom tool first");CT.uninstall(current,T.REGISTRY);var m=await persistCustom(CT.archive(current));fillCustomBuilder(m);toast(m.status==="archived"?"Custom tool archived":"Local archive preserved as conflict Draft");}catch(e){toast(errorMessage(e));}
 }
 async function deleteCustomTool(){
-  var current=state.customCurrent&&state.customLibrary.get(state.customCurrent.id);if(!current)return;if(!confirm("Delete custom tool '"+current.name+"'?"))return;CT.uninstall(current,T.REGISTRY);state.customLibrary.remove(current.id);await dbDelete("customTools",current.id);renderCustomLibrary();renderToolList();newCustomTool();toast("Custom tool deleted");
+  var current=state.customCurrent&&state.customLibrary.get(state.customCurrent.id);if(!current)return;if(!confirm("Delete custom tool '"+current.name+"'?"))return;CT.uninstall(current,T.REGISTRY);state.customLibrary.remove(current.id);state.persistedRevisions.customTools.delete(current.id);await dbDelete(P.STORES.customTools,current.id);renderCustomLibrary();renderToolList();newCustomTool();toast("Custom tool deleted");
 }
 function exportCustomTool(){
   try{var m=state.customCurrent&&state.customLibrary.get(state.customCurrent.id)||CT.normalizeManifest(builderManifest()),doc=CT.exportManifest(m),blob=new Blob([JSON.stringify(doc,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=m.name.replace(/[^A-Za-z0-9._-]+/g,"-").replace(/^-+|-+$/g,"")+".calctool.json";a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},1000);}catch(e){toast(errorMessage(e));}
 }
 async function importCustomFile(file){
-  try{var text=await file.text(),m=CT.importManifest(text);await persistCustom(m);fillCustomBuilder(m);toast("Imported as Draft");}catch(e){toast(errorMessage(e));}
+  try{var text=await file.text(),m=await persistCustom(CT.importManifest(text));fillCustomBuilder(m);toast("Imported as Draft");}catch(e){toast(errorMessage(e));}
 }
 async function duplicateBuiltInCustom(){
-  try{var m=CT.duplicateBuiltIn($("#customDuplicateSelect").value);await persistCustom(m);fillCustomBuilder(m);toast("Built-in duplicated as Draft");}catch(e){toast(errorMessage(e));}
+  try{var m=await persistCustom(CT.duplicateBuiltIn($("#customDuplicateSelect").value));fillCustomBuilder(m);toast("Built-in duplicated as Draft");}catch(e){toast(errorMessage(e));}
 }
 function openCustomBuilder(){populateCustomDuplicateSelect();renderCustomLibrary();if(!state.customCurrent)newCustomTool();var d=$("#customToolDialog");if(!d.open)d.showModal();}
 async function loadCustomTools(){
