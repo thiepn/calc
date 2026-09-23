@@ -25,9 +25,11 @@
         <button class="nav-item" data-view="tools"><span>◇</span><b>Tools</b></button>
         <button class="nav-item" data-view="worksheet"><span>▧</span><b>Worksheet</b></button>
         <button class="nav-item" data-view="history"><span>↺</span><b>History</b></button>
+        <button class="nav-item" data-view="settings"><span>⚙</span><b>Data & Backup</b></button>
       </nav>
       <div class="sidebar-bottom">
         <button id="installBtn" class="sidebar-action hidden">Install</button>
+        <button id="updateBtn" class="sidebar-action hidden">Update ready</button>
         <button id="themeBtn" class="sidebar-action" title="Change theme">Theme</button>
       </div>
     </aside>
@@ -318,6 +320,48 @@
           </div>
         </section>
 
+        <section class="workspace" id="view-settings" data-view-panel="settings">
+          <div class="settings-grid">
+            <section class="panel settings-panel">
+              <div class="section-heading"><div><h2>Backup & Restore</h2><p>Portable, integrity-checked local backup.</p></div></div>
+              <div class="action-row">
+                <button id="fullBackupBtn" class="primary-btn">Download full backup</button>
+                <button id="restoreBackupBtn">Choose backup</button>
+                <input id="restoreBackupFile" type="file" accept=".json,.calcbackup.json,application/json" hidden>
+              </div>
+              <div class="settings-form">
+                <div class="field"><label for="restoreMode">Restore mode</label><select id="restoreMode"><option value="merge">Merge</option><option value="replace">Replace all local data</option></select></div>
+                <div class="field"><label for="restoreConflictPolicy">Merge conflicts</label><select id="restoreConflictPolicy"><option value="newer">Keep newer revision</option><option value="conflict-copy">Create conflict copy</option><option value="incoming">Prefer backup</option></select></div>
+              </div>
+              <div id="restorePreview" class="settings-status muted">No backup selected.</div>
+              <button id="applyRestoreBtn" class="danger-ghost" disabled>Apply restore</button>
+            </section>
+
+            <section class="panel settings-panel">
+              <div class="section-heading"><div><h2>Integrity & Storage</h2><p>Database schema, quota, persistence, and recovery journal.</p></div></div>
+              <div class="action-row">
+                <button id="integrityCheckBtn">Run integrity check</button>
+                <button id="persistentStorageBtn">Request persistent storage</button>
+              </div>
+              <div id="storageStatus" class="settings-status">Checking storage…</div>
+              <div id="integrityStatus" class="settings-status muted">Integrity check has not run.</div>
+              <div id="recoveryStatus" class="settings-status muted">Checking recovery journal…</div>
+            </section>
+
+            <section class="panel settings-panel">
+              <div class="section-heading"><div><h2>App Update</h2><p>Updates activate only when you choose to restart.</p></div></div>
+              <div id="updateStatus" class="settings-status">Current app shell is active.</div>
+              <div class="action-row"><button id="checkUpdateBtn">Check for update</button><button id="applyUpdateBtn" class="primary-btn" disabled>Restart & update</button></div>
+            </section>
+
+            <section class="panel settings-panel">
+              <div class="section-heading"><div><h2>Cross-device architecture</h2><p>Local-first by default; no cloud provider is enabled.</p></div></div>
+              <div id="syncStatus" class="settings-status"></div>
+              <p class="hint">Full backup files are the supported portable transfer mechanism in this phase. The sync adapter boundary is implemented, but remote synchronization remains disabled until a provider is explicitly configured in a later phase.</p>
+            </section>
+          </div>
+        </section>
+
         <section class="workspace" id="view-history" data-view-panel="history">
           <section class="panel history-panel">
             <div class="section-heading">
@@ -411,6 +455,7 @@
   <script src="./tools.js"></script>
   <script src="./custom-tools.js"></script>
   <script src="./notebook.js"></script>
+  <script src="./persistence.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
