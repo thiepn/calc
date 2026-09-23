@@ -7,10 +7,16 @@ self.addEventListener("install",function(event){
   event.waitUntil(caches.open(CACHE).then(function(cache){return cache.addAll(ASSETS);}));
 });
 
+self.addEventListener("message",function(event){
+  var message=event.data||{};
+  if(message.type==="SKIP_WAITING"){self.skipWaiting();return;}
+  if(message.type==="GET_VERSION"&&event.source&&event.source.postMessage)event.source.postMessage({type:"SW_VERSION",version:CACHE});
+});
+
 self.addEventListener("activate",function(event){
   event.waitUntil(caches.keys().then(function(keys){
     return Promise.all(keys.filter(function(k){return k.startsWith("calc-shell-")&&k!==CACHE;}).map(function(k){return caches.delete(k);}));
-  }).then(function(){return self.clients.claim();}));
+  }).then(function(){return self.clients.claim();}).then(function(){return self.clients.matchAll({type:"window",includeUncontrolled:true});}).then(function(clients){clients.forEach(function(client){client.postMessage({type:"SW_ACTIVATED",version:CACHE});});}));
 });
 
 self.addEventListener("fetch",function(event){
