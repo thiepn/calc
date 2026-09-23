@@ -1098,9 +1098,13 @@ async function flushPendingPersistence(){
 }
 async function createBackupArtifact(){
   await flushPendingPersistence();
-  var backup=await P.buildBackup({db:persistenceDb,appVersion:"phase-12",clientSettings:currentClientSettings()}),password=$("#backupPassword")?$("#backupPassword").value:"",payload=backup,suffix=".calcbackup.json";
-  if(password){payload=await P.encryptBackup(backup,password);suffix=".calcbackup.enc.json";}
-  var stamp=new Date().toISOString().replace(/[:.]/g,"-"),name="calc-"+stamp+suffix,blob=P.buildBackupBlob(payload);
+  var password=$("#backupPassword")?$("#backupPassword").value:"",suffix=".calcbackup.json",blob,backup=null,payload=null;
+  if(password){
+    backup=await P.buildBackup({db:persistenceDb,appVersion:"phase-12",clientSettings:currentClientSettings()});payload=await P.encryptBackup(backup,password);suffix=".calcbackup.enc.json";blob=P.buildBackupBlob(payload);
+  }else{
+    var streamed=await P.buildBackupBlobFromDb({db:persistenceDb,appVersion:"phase-12",clientSettings:currentClientSettings()});blob=streamed.blob;
+  }
+  var stamp=new Date().toISOString().replace(/[:.]/g,"-"),name="calc-"+stamp+suffix;
   return {backup:backup,payload:payload,name:name,blob:blob,mime:"application/json",encrypted:!!password};
 }
 async function downloadFullBackup(){
@@ -1487,7 +1491,7 @@ async function init(){
   if(toolRoute){var decoded=decodeURIComponent(toolRoute[1]);if(T.REGISTRY.get(decoded))state.selectedTool=decoded;initial="tools";}
   switchView(VIEW_META[initial]?initial:"calculate");if(initial==="tools"){renderToolList();renderTool();history.replaceState(null,"","#tools/"+encodeURIComponent(state.selectedTool));}
   window.addEventListener("hashchange",function(){var raw=(location.hash||"").replace(/^#/,""),m=raw.match(/^tools\/(.+)$/),v=raw;if(m){var id=decodeURIComponent(m[1]);if(T.REGISTRY.get(id)){state.selectedTool=id;renderToolList();renderTool();}v="tools";}if(VIEW_META[v]&&v!==state.view)switchView(v);});
-  await refreshPersistenceSettings();await P.cleanupJournal(persistenceDb).catch(function(){});await P.cleanupTrash(persistenceDb).catch(function(){});
+  await P.cleanupJournal(persistenceDb).catch(function(){});await P.cleanupTrash(persistenceDb).catch(function(){});await refreshPersistenceSettings();
   await registerServiceWorker();
 }
 window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();state.installPrompt=e;$("#installBtn").classList.remove("hidden");});
