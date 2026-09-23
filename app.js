@@ -35,7 +35,7 @@ const state={
   installPrompt:null,history:[],worksheets:[],activeWorksheet:null,
   graph:{session:null,drag:null,pinch:null,pointers:new Map(),geometries:[],worker:null},
   selectedTool:"percentage-of",toolSearch:"",customLibrary:new CT.CustomToolLibrary(),customCurrent:null,customValidationTimer:null,dataset:null,statisticsWorker:null,dataRevision:0,
-  restoreRaw:null,restoreBackup:null,restorePlan:null,swRegistration:null,updateWaiting:null,reloadingForUpdate:false
+  restoreRaw:null,restoreBackup:null,restorePlan:null,swRegistration:null,updateWaiting:null,reloadingForUpdate:false,persistedRevisions:{worksheets:new Map(),customTools:new Map()}
 };
 
 function toast(msg){
@@ -66,6 +66,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener&&matchMedia("(prefer
 function openDb(){return persistenceDb.open();}
 function dbPut(store,value){
   return persistenceDb.repository(store).put(value).then(function(result){publishPersistenceChange(store,value,"put");return result;});
+}
+function dbPutVersioned(store,value,expectedRevision){
+  return persistenceDb.repository(store).putVersioned(value,expectedRevision).then(function(result){publishPersistenceChange(store,value,"put");return result;});
 }
 function dbDelete(store,key){
   return persistenceDb.repository(store).delete(key).then(function(result){persistenceCoordinator.publish({entityType:store,entityId:String(key),revision:Date.now(),action:"delete"});return result;});
@@ -826,7 +829,18 @@ function validateCustomBuilder(full){
   try{var report=CT.validationReport(builderManifest(),{skipTests:!full});renderCustomValidation(report);return report;}catch(e){var report={ok:false,stages:[{stage:"builder",pass:false,message:e.message}],tests:[]};renderCustomValidation(report);return report;}
 }
 function scheduleCustomValidation(){clearTimeout(state.customValidationTimer);state.customValidationTimer=setTimeout(function(){validateCustomBuilder(false);},180);}
-async function persistCustom(manifest){state.customLibrary.put(manifest);await dbPut("customTools",manifest);renderCustomLibrary();renderToolList();return manifest;}
+async function persistCustom(manifest){
+  var expected=state.persistedRevisions.customTools.has(manifest.id)?state.persistedRevisions.customTools.get(manifest.id):null;
+  try{
+    await dbPutVersioned(P.STORES.customTools,manifest,expected);state.persistedRevisions.customTools.set(manifest.id,manifest.revision||0);state.customLibrary.put(manifest);renderCustomLibrary();renderToolList();return manifest;
+  }catch(e){
+    if(e&&e.code==="REVISION_CONFLICT"){
+      var conflict=JSON.parse(JSON.stringify(manifest));conflict.id=uid();conflict.name=(conflict.name||"Custom tool")+" (conflict copy)";conflict.status="draft";conflict.revision=(conflict.revision||1)+1;conflict.updatedAt=Date.now();conflict.history=conflict.history||[];
+      await persistenceDb.repository(P.STORES.customTools).put(conflict);state.persistedRevisions.customTools.set(conflict.id,conflict.revision);state.customLibrary.put(conflict);state.customCurrent=conflict;renderCustomLibrary();renderToolList();toast("A newer custom-tool revision exists; local changes were saved as a Draft conflict copy");return conflict;
+    }
+    throw e;
+  }
+}
 async function saveCustomDraft(showToast){
   var raw=builderManifest(),current=state.customLibrary.get(raw.id),draft;
   if(current){CT.uninstall(current,T.REGISTRY);draft=CT.revise(current,raw);}else{raw.status="draft";draft=CT.normalizeManifest(raw);}
@@ -854,7 +868,7 @@ async function duplicateBuiltInCustom(){
 function openCustomBuilder(){populateCustomDuplicateSelect();renderCustomLibrary();if(!state.customCurrent)newCustomTool();var d=$("#customToolDialog");if(!d.open)d.showModal();}
 async function loadCustomTools(){
   var items=[];try{items=await dbAll("customTools");}catch(e){}
-  state.customLibrary=new CT.CustomToolLibrary(items);var report=state.customLibrary.installAll(T.REGISTRY);renderToolList();renderCustomLibrary();
+  state.customLibrary=new CT.CustomToolLibrary(items);state.persistedRevisions.customTools=new Map(items.map(function(x){return [x.id,x.revision||0];}));var report=state.customLibrary.installAll(T.REGISTRY);renderToolList();renderCustomLibrary();
   if(report.failed.length){console.warn("Custom tools not installed",report.failed);toast(report.failed.length+" custom tool"+(report.failed.length===1?"":"s")+" need validation");}
 }
 
@@ -871,8 +885,8 @@ function newWorksheet(){
 }
 async function loadWorksheets(){
   var raw=[];try{raw=(await dbAll("worksheets")).sort(function(a,b){return b.updatedAt-a.updatedAt;});}catch(e){}
-  state.worksheets=[];var recovered=0;
-  raw.forEach(function(item){var rec=NB.recoveryNormalize(item);if(rec.recovered)recovered++;state.worksheets.push(rec.document);});
+  state.worksheets=[];state.persistedRevisions.worksheets=new Map();var recovered=0;
+  raw.forEach(function(item){var rec=NB.recoveryNormalize(item);if(rec.recovered)recovered++;state.worksheets.push(rec.document);state.persistedRevisions.worksheets.set(rec.document.id,rec.document.revision||0);});
   if(!state.worksheets.length)newWorksheet();else{state.activeWorksheet=state.worksheets[0];renderWorksheetArea();}
   if(recovered)toast(recovered+" notebook"+(recovered===1?"":"s")+" opened in recovery mode");
 }
@@ -884,9 +898,16 @@ function scheduleWorksheetEval(){
   worksheetEvalTimer=setTimeout(function(){runWorksheet(false);},220);
 }
 async function saveWorksheet(ws,immediate){
-  ws.updatedAt=Date.now();
-  try{await dbPut("worksheets",JSON.parse(JSON.stringify(ws)));clearSessionRecovery(ws.id);if(immediate)toast("Notebook saved");}
-  catch(e){toast("Could not save notebook: "+errorMessage(e));}
+  ws.updatedAt=Date.now();var payload=JSON.parse(JSON.stringify(ws)),expected=state.persistedRevisions.worksheets.has(ws.id)?state.persistedRevisions.worksheets.get(ws.id):null;
+  try{
+    await dbPutVersioned(P.STORES.notebooks,payload,expected);state.persistedRevisions.worksheets.set(ws.id,ws.revision||0);clearSessionRecovery(ws.id);if(immediate)toast("Notebook saved");
+  }catch(e){
+    if(e&&e.code==="REVISION_CONFLICT"){
+      var remote=e.details&&e.details.current?NB.recoveryNormalize(e.details.current).document:null,copy=JSON.parse(JSON.stringify(ws));copy.id=uid();copy.title=(copy.title||"Notebook")+" (conflict copy)";copy.revision=(copy.revision||1)+1;copy.updatedAt=Date.now();
+      await persistenceDb.repository(P.STORES.notebooks).put(copy);state.persistedRevisions.worksheets.set(copy.id,copy.revision||0);
+      var idx=state.worksheets.findIndex(function(x){return x.id===ws.id;});if(remote&&idx>=0){state.worksheets[idx]=remote;state.persistedRevisions.worksheets.set(remote.id,remote.revision||0);}state.worksheets.unshift(copy);state.activeWorksheet=copy;clearSessionRecovery(ws.id);toast("A newer notebook revision exists; local edits were preserved as a conflict copy");
+    }else toast("Could not save notebook: "+errorMessage(e));
+  }
   renderWorksheetList();
 }
 function replaceActiveWorksheet(next){
@@ -1164,9 +1185,9 @@ async function handleCrossTabMessage(message){
           var copy=JSON.parse(JSON.stringify(state.activeWorksheet));copy.id=uid();copy.title=(copy.title||"Notebook")+" (local conflict copy)";copy.revision=(copy.revision||1)+1;copy.updatedAt=Date.now();
           await persistenceDb.repository(P.STORES.notebooks).put(copy);state.worksheets.unshift(copy);toast("Another tab changed this notebook; local edits were preserved as a conflict copy");
         }
-        var normalized=NB.recoveryNormalize(incoming).document;if(idx>=0)state.worksheets[idx]=normalized;state.activeWorksheet=normalized;renderWorksheetArea();
+        var normalized=NB.recoveryNormalize(incoming).document;state.persistedRevisions.worksheets.set(normalized.id,normalized.revision||0);if(idx>=0)state.worksheets[idx]=normalized;state.activeWorksheet=normalized;renderWorksheetArea();
       }else{
-        var normalized2=NB.recoveryNormalize(incoming).document;if(idx>=0)state.worksheets[idx]=normalized2;else state.worksheets.unshift(normalized2);renderWorksheetList();
+        var normalized2=NB.recoveryNormalize(incoming).document;state.persistedRevisions.worksheets.set(normalized2.id,normalized2.revision||0);if(idx>=0)state.worksheets[idx]=normalized2;else state.worksheets.unshift(normalized2);renderWorksheetList();
       }
       return;
     }
