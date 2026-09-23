@@ -66,7 +66,7 @@ assert(productionWorkflow.includes("calc-certified-sha")&&productionWorkflow.inc
 assert(productionWorkflow.includes("github.event.workflow_run.id"),"production release does not bind SHA handoff to the Pages run");
 assert(productionWorkflow.includes("git checkout --detach \"$CERTIFIED_SHA\""),"production release does not checkout the handed-off deployed SHA");
 assert(productionWorkflow.includes("tests/production-release-gate.js"),"production release does not rerun final gate");
-assert(productionWorkflow.includes("thiepn.github.io/calc/release.json"),"production release lacks live deployment verification");
+assert(productionWorkflow.includes('LIVE_BASE="https://thiepn.github.io/calc"')&&productionWorkflow.includes('$LIVE_BASE/release.json'),"production release lacks live deployment verification");
 assert(productionWorkflow.includes('gh release create "$RELEASE_TAG"'),"GitHub release creation is not wired");
 assert(productionWorkflow.includes("--target \"$CERTIFIED_SHA\""),"release tag is not pinned to deployed SHA");
 assert(productionWorkflow.includes("release-artifacts/calc-v1.0.0-checksums.txt"),"release checksum attachment missing");
