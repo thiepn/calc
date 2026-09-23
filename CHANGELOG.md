@@ -2,6 +2,27 @@
 
 All notable production changes to Calc are recorded here.
 
+## [2.0.0] — 2026-09-23
+
+### University Mathematics Workstation — Phase U1
+
+- Added the standalone `cas.js` advanced symbolic layer and routed it through both Calculate and Worksheet Math evaluation.
+- Added assumption-aware simplification with sign reasoning, proven-domain restriction removal, contradiction detection, and assumption-based finite-root filtering.
+- Added conditional parameterized linear/quadratic equation solving.
+- Added exact even-polynomial substitution and elementary exponential/logarithmic/trigonometric solution families.
+- Added limited nonlinear 2×2 substitution systems and explicit-unknown `psystem(...)` parameterized linear systems with symbolic determinant/Cramer branches.
+- Added certified higher-degree polynomial and rational inequality sign charts.
+- Added verified integration-by-parts families for polynomial × exp/sin/cos and low-degree rational integration.
+- Added `cashelp()` and CAS-focused command-palette templates.
+- Fixed symbolic printer precedence for denominator products and grouped subtraction.
+- Added `tests/cas.js`, CAS release-gate assertions, and CAS coverage in the deterministic release workflow.
+- Added `docs/math/ADVANCED_CAS_SEMANTICS.md` documenting syntax, guarantees, and explicit unsupported boundaries.
+
+### Compatibility
+
+- Existing core arithmetic, symbolic algebra, calculus, units, linear algebra, statistics, graphing, tools, notebooks, persistence, and backup semantics are retained.
+- Unsupported symbolic forms still fail explicitly instead of being misreported as impossible problems.
+
 ## [1.0.1] — 2026-09-23
 
 ### Bug fixes and hardening
