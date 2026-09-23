@@ -2,6 +2,8 @@
 
 A local-first universal calculator PWA and mathematical workstation.
 
+**Current stable release: v1.0.0** · IndexedDB schema v5 · production channel.
+
 ## Current implementation
 
 Calc currently includes:
@@ -343,6 +345,20 @@ The browser soak covers:
 
 GitHub Pages is triggered only after that workflow succeeds and checks out the exact certified commit SHA. A normal push can no longer deploy directly around the RC gate.
 
+## Production release
+
+Calc v1.0.0 is the production baseline. Release metadata is centralized in `VERSION` and `release.json`, while runtime/backup/PWA version sources are certification-locked to the same `1.0.0` value.
+
+After the release soak passes, GitHub Pages deploys the exact certified SHA. A separate production-release workflow then verifies the live Pages metadata, generates SHA-256 checksums for the shipped runtime files, and creates or verifies the `v1.0.0` GitHub Release against that exact deployed SHA.
+
+The final release gate also certifies:
+
+- clean-device startup and schema initialization;
+- healthy persistence/update preflight;
+- restoration of a valid pre-upgrade DB-v4 backup into DB v5;
+- valid v1.0.0 backup generation after upgrade/restore;
+- production service-worker version handshake and offline reload.
+
 ## Graph V2
 
 Graph supports:
@@ -392,7 +408,7 @@ eng(ohm, V=12 V, R=6 ohm)
 - `linear-algebra.js` — Phase 5 linear algebra.
 - `statistics.js` / `statistics-worker.js` — Phase 6 probability/statistics/data.
 - `graph.js` / `graph-worker.js` — Phase 7 graph models, geometry and analysis.
-- `tools.js` — Phase 8 Tool Registry, finance, dates, geometry, programmer and number theory.\n- `custom-tools.js` — Phase 9 safe custom formulas, relations, validation, lifecycle and import/export.\n- `notebook.js` — Phase 10 typed notebook blocks, dependencies, versioning, execution, import/export and recovery.\n- `persistence.js` — Phase 11–13 DB migrations, chunked notebook persistence, backup/restore, encryption, Trash/tombstones, multi-tab coordination, resilience diagnostics and sync boundary.
+- `tools.js` — Phase 8 Tool Registry, finance, dates, geometry, programmer and number theory.\n- `custom-tools.js` — Phase 9 safe custom formulas, relations, validation, lifecycle and import/export.\n- `notebook.js` — Phase 10 typed notebook blocks, dependencies, versioning, execution, import/export and recovery.\n- `persistence.js` — Phase 11–14 DB migrations, chunked notebook persistence, backup/restore, encryption, Trash/tombstones, multi-tab coordination, resilience diagnostics and stable production metadata.
 - `app.js` — application state, persistence, workspaces and UI routing.
 - `styles.css` — responsive design system.
 - `sw.js` + `manifest.webmanifest` — offline/installable PWA runtime.
@@ -415,7 +431,10 @@ GitHub Actions runs cumulative certification for:
 - Graphing V2;
 - Specialized Calculators V2;\n- Custom Formula Builder;\n- Worksheets & Notebooks V2;\n- Persistence / Backup / PWA architecture;
 - Phase 13 static RC certification;
-- cross-browser production soak before Pages deployment.
+- Phase 14 production version/release gate;
+- clean-device and pre-upgrade backup compatibility certification;
+- cross-browser production soak before Pages deployment;
+- live deployment verification before the GitHub release is created.
 
 The Phase 8 registry-wide test executes every enabled generic tool with its declared defaults in addition to deterministic boundary/reference cases.
 
