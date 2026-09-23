@@ -222,18 +222,18 @@ async function appendExternalizedPayload(notebookId,descriptor,text,idPrefix,chu
   externalized.push(Object.assign({},descriptor,{hash:await sha256Text(text),bytes:utf8Bytes(text).byteLength,chunks:refs}));
 }
 async function encodeNotebookForStorage(notebook,options){
-  options=options||{};const threshold=Math.max(4096,Number(options.externalizeBytes)||NOTEBOOK_EXTERNALIZE_BYTES),chunkBytes=Math.max(4096,Number(options.chunkBytes)||NOTEBOOK_CHUNK_BYTES),record=jsonClone(notebook),chunks=[],externalized=[];
+  options=options||{};const threshold=Math.max(4096,Number(options.externalizeBytes)||NOTEBOOK_EXTERNALIZE_BYTES),chunkBytes=Math.max(4096,Number(options.chunkBytes)||NOTEBOOK_CHUNK_BYTES),record=jsonClone(notebook),chunks=[],externalized=[],chunkNamespace=String(options.chunkNamespace||record.id);
   delete record.persistence;
   for(const block of record.blocks||[]){
     const source=String(block.source||""),bytes=utf8Bytes(source).byteLength;
     if(bytes>=threshold){
-      await appendExternalizedPayload(record.id,{scope:"block",blockId:String(block.id),field:"source",encoding:"text"},source,"nbchunk:"+String(record.id)+":"+String(block.id)+":source",chunkBytes,chunks,externalized,record.updatedAt);
+      await appendExternalizedPayload(record.id,{scope:"block",blockId:String(block.id),field:"source",encoding:"text"},source,"nbchunk:"+chunkNamespace+":"+String(block.id)+":source",chunkBytes,chunks,externalized,record.updatedAt);
       block.source="";
     }
     if(block.result&&block.result.serialized!==null&&block.result.serialized!==undefined){
       const serialized=JSON.stringify(block.result.serialized),serializedBytes=utf8Bytes(serialized).byteLength;
       if(serializedBytes>=threshold){
-        await appendExternalizedPayload(record.id,{scope:"block",blockId:String(block.id),field:"result.serialized",encoding:"json"},serialized,"nbchunk:"+String(record.id)+":"+String(block.id)+":result",chunkBytes,chunks,externalized,record.updatedAt);
+        await appendExternalizedPayload(record.id,{scope:"block",blockId:String(block.id),field:"result.serialized",encoding:"json"},serialized,"nbchunk:"+chunkNamespace+":"+String(block.id)+":result",chunkBytes,chunks,externalized,record.updatedAt);
         block.result.serialized=null;
       }
     }
@@ -243,7 +243,7 @@ async function encodeNotebookForStorage(notebook,options){
     const versionKey=versionStorageKey(version,vi);
     for(const block of snapshot.blocks){
       const source=String(block.source||""),bytes=utf8Bytes(source).byteLength;if(bytes<threshold)continue;
-      const prefix="nbchunk:"+String(record.id)+":version:"+versionKey+":"+String(block.id)+":source";
+      const prefix="nbchunk:"+chunkNamespace+":version:"+versionKey+":"+String(block.id)+":source";
       await appendExternalizedPayload(record.id,{scope:"version",versionKey:versionKey,versionIndex:vi,blockId:String(block.id),field:"source",encoding:"text"},source,prefix,chunkBytes,chunks,externalized,record.updatedAt);
       block.source="";
     }
@@ -455,19 +455,36 @@ async function applyRestore(db,plan){
     for(const s of selectedStores){const h=await hashValue(current[s]);if(h!==plan.currentHashes[s])changed.push(s);}
     if(changed.length)throw new RestoreStaleError("Local data changed after the restore preview. Rebuild the restore plan before applying.",{stores:changed});
   }
-  let encodedNotebooks=[];
+  const journalId=randomId("restore"),entry={id:journalId,type:"restore",status:"started",mode:plan.mode,createdAt:now(),summary:plan.summary},encodedNotebooks=[];
   if(selectedStores.includes(STORES.notebooks)){
-    for(const notebook of plan.data[STORES.notebooks]||[])encodedNotebooks.push(await encodeNotebookForStorage(notebook));
+    for(const notebook of plan.data[STORES.notebooks]||[])encodedNotebooks.push(await encodeNotebookForStorage(notebook,{chunkNamespace:String(notebook.id)+"@"+journalId}));
   }
-  const journalId=randomId("restore"),entry={id:journalId,type:"restore",status:"started",mode:plan.mode,createdAt:now(),summary:plan.summary};
   await db.repository(STORES.journal).put(entry);
   try{
-    const storesForTransaction=Array.from(new Set(selectedStores.concat([STORES.journal,STORES.meta],selectedStores.includes(STORES.notebooks)?[STORES.chunks]:[])));
+    const touchesNotebooks=selectedStores.includes(STORES.notebooks),touchesTombstones=selectedStores.includes(STORES.tombstones),touchesChunks=touchesNotebooks||touchesTombstones;
+    const storesForTransaction=Array.from(new Set(selectedStores.concat([STORES.journal,STORES.meta],touchesChunks?[STORES.chunks,STORES.tombstones]:[])));
     await db.transaction(storesForTransaction,"readwrite",async function(stores){
+      let currentNotebooks=[],currentTombstones=[],activeRefs=new Set(),trashRefs=new Set();
+      if(touchesChunks){
+        currentTombstones=await requestPromise(stores[STORES.tombstones].getAll());
+        currentTombstones.forEach(function(t){trashChunkRefs(t).forEach(function(id){trashRefs.add(id);});});
+        if(touchesNotebooks){
+          currentNotebooks=await requestPromise(stores[STORES.notebooks].getAll());
+          currentNotebooks.forEach(function(n){chunkRefsOf(n).forEach(function(id){activeRefs.add(id);});});
+        }else{
+          const existingNotebooks=await requestPromise(stores[STORES.notebooks].getAll());
+          existingNotebooks.forEach(function(n){chunkRefsOf(n).forEach(function(id){activeRefs.add(id);});});
+        }
+      }
       for(const s of selectedStores){
         if(s===STORES.notebooks){
-          await requestPromise(stores[STORES.notebooks].clear());await requestPromise(stores[STORES.chunks].clear());
+          await requestPromise(stores[STORES.notebooks].clear());
+          for(const id of activeRefs)if(touchesTombstones||!trashRefs.has(id))await requestPromise(stores[STORES.chunks].delete(id));
           for(const encoded of encodedNotebooks){for(const chunk of encoded.chunks)await requestPromise(stores[STORES.chunks].put(chunk));await requestPromise(stores[STORES.notebooks].put(encoded.record));}
+        }else if(s===STORES.tombstones){
+          await requestPromise(stores[STORES.tombstones].clear());
+          for(const id of trashRefs)if(touchesNotebooks||!activeRefs.has(id))await requestPromise(stores[STORES.chunks].delete(id));
+          for(const item of plan.data[s])await requestPromise(stores[s].put(item));
         }else{
           await requestPromise(stores[s].clear());
           for(const item of plan.data[s])await requestPromise(stores[s].put(item));
