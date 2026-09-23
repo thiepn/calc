@@ -925,7 +925,9 @@ function scheduleWorksheetEval(){
 }
 async function saveWorksheet(ws,immediate){
   if(ws&&ws.recovery&&ws.recovery.persistenceCorruption){if(immediate)toast("Storage recovery notebooks are read-only to protect the original corrupted record");return false;}
-  ws.updatedAt=Date.now();var payload=JSON.parse(JSON.stringify(ws)),expected=state.persistedRevisions.worksheets.has(ws.id)?state.persistedRevisions.worksheets.get(ws.id):null,saved=false;
+  ws.updatedAt=Date.now();var expected=state.persistedRevisions.worksheets.has(ws.id)?state.persistedRevisions.worksheets.get(ws.id):null,saved=false;
+  if(expected!==null&&expected!==undefined&&Number(ws.revision||0)<=Number(expected))ws.revision=Number(expected)+1;
+  var payload=JSON.parse(JSON.stringify(ws));
   try{
     await P.saveNotebookIncremental(persistenceDb,payload,expected);publishPersistenceChange(P.STORES.notebooks,payload,"put");state.persistedRevisions.worksheets.set(ws.id,ws.revision||0);clearSessionRecovery(ws.id);saved=true;if(immediate)toast("Notebook saved");
   }catch(e){
