@@ -280,7 +280,7 @@ kbd{border:1px solid var(--line-strong);background:var(--surface-2);border-radiu
   .matrix-cell{width:78px}
   .worksheet-toolbar{align-items:flex-start;flex-direction:column}
   #worksheetTitle{width:100%}
-  .worksheet-side{display:none}
+  .worksheet-side{display:block}
   .command-dialog{margin-top:12vh}
 }
 @media (max-width:380px){

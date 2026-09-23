@@ -14,6 +14,18 @@ async function goView(page,view){
   await expect(page.locator('[data-view-panel="'+view+'"]')).toHaveClass(/active/);
 }
 
+test("mobile worksheet keeps notebook management controls accessible",async({page},testInfo)=>{
+  test.skip(testInfo.project.name!=="mobile-chromium","mobile layout regression");
+  const errors=await openApp(page);
+  await goView(page,"worksheet");
+  await expect(page.locator(".worksheet-side")).toBeVisible();
+  await expect(page.locator("#worksheetList")).toBeVisible();
+  await expect(page.locator("#worksheetImportBtn")).toBeVisible();
+  await expect(page.locator("#worksheetExportBtn")).toBeVisible();
+  await expect(page.locator("#deleteWorksheetBtn")).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test("all primary workspaces navigate without runtime errors",async({page})=>{
   const errors=await openApp(page);
   for(const view of ["calculate","graph","matrix","data","tools","worksheet","history","settings"]){
