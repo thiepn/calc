@@ -289,10 +289,45 @@ test("notebook title input is recovery-safe before blur",async({page})=>{
   await title.click();
   await title.fill("Unsaved title probe");
   const recovery=await page.evaluate(()=>{
-    const raw=sessionStorage.getItem("calc.notebook.recovery");return raw?JSON.parse(raw):null;
+    const raw=sessionStorage.getItem("calc.notebook.recovery");if(!raw)return null;const parsed=JSON.parse(raw);return parsed.entries?Object.values(parsed.entries)[0]:parsed;
   });
   expect(recovery).toBeTruthy();
   expect(recovery.document.title).toBe("Unsaved title probe");
+});
+
+test("rapid edits in two notebooks persist independently after switching",async({page})=>{
+  const errors=await openApp(page);await goView(page,"worksheet");
+  await page.locator("#worksheetTitle").fill("Notebook A");
+  await expect.poll(async()=>page.evaluate(async()=>{const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();return (await P.loadNotebooks(db)).some(x=>x.title==="Notebook A");}),{timeout:3000}).toBeTruthy();
+  await page.locator("#newWorksheetBtn").click();
+  await expect(page.locator("#worksheetList button")).toHaveCount(2);
+  await page.locator("#worksheetTitle").fill("Notebook B");
+  await expect.poll(async()=>page.evaluate(async()=>{const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();return (await P.loadNotebooks(db)).some(x=>x.title==="Notebook B");}),{timeout:3000}).toBeTruthy();
+  await page.locator("#worksheetList button").filter({hasText:"Notebook A"}).click();
+  await page.locator(".ws-editor").first().fill("101+1");
+  await page.locator("#worksheetList button").filter({hasText:"Notebook B"}).click();
+  await page.locator(".ws-editor").first().fill("202+2");
+  const sourceFor=title=>page.evaluate(async title=>{const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();const doc=(await P.loadNotebooks(db)).find(x=>x.title===title);return doc&&doc.blocks[0]&&doc.blocks[0].source;},title);
+  await expect.poll(()=>sourceFor("Notebook A"),{timeout:4000}).toBe("101+1");
+  await expect.poll(()=>sourceFor("Notebook B"),{timeout:4000}).toBe("202+2");
+  expect(errors).toEqual([]);
+});
+
+test("session recovery retains unsaved snapshots for multiple notebooks",async({page})=>{
+  const errors=await openApp(page);await goView(page,"worksheet");
+  await page.locator("#worksheetTitle").fill("Recovery A");
+  await expect.poll(async()=>page.evaluate(async()=>{const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();return (await P.loadNotebooks(db)).some(x=>x.title==="Recovery A");}),{timeout:3000}).toBeTruthy();
+  await page.locator("#newWorksheetBtn").click();await expect(page.locator("#worksheetList button")).toHaveCount(2);
+  await page.locator("#worksheetTitle").fill("Recovery B");
+  await expect.poll(async()=>page.evaluate(async()=>{const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();return (await P.loadNotebooks(db)).some(x=>x.title==="Recovery B");}),{timeout:3000}).toBeTruthy();
+  await page.evaluate(()=>{window.CalcPersistence.saveNotebookIncremental=async()=>{throw new Error("forced recovery persistence failure");};});
+  await page.locator("#worksheetList button").filter({hasText:"Recovery A"}).click();await page.locator(".ws-editor").first().fill("A unsaved");
+  await page.locator("#worksheetList button").filter({hasText:"Recovery B"}).click();await page.locator(".ws-editor").first().fill("B unsaved");
+  await page.waitForTimeout(450);
+  const entries=await page.evaluate(()=>{const raw=sessionStorage.getItem("calc.notebook.recovery");if(!raw)return [];const parsed=JSON.parse(raw);return Object.values(parsed.entries||{}).map(x=>({title:x.document.title,source:x.document.blocks[0]&&x.document.blocks[0].source}));});
+  expect(entries.some(x=>x.title==="Recovery A"&&x.source==="A unsaved")).toBeTruthy();
+  expect(entries.some(x=>x.title==="Recovery B"&&x.source==="B unsaved")).toBeTruthy();
+  expect(errors).toEqual([]);
 });
 
 test("rapid notebook edits always advance persisted optimistic revision",async({page})=>{
@@ -335,7 +370,7 @@ test("remote notebook update preserves local dirty edits as a visible conflict c
   const editor=page.locator(".ws-editor").first();
   await editor.fill("123+456");
   const local=await page.evaluate(()=>{
-    const raw=sessionStorage.getItem("calc.notebook.recovery");return raw?JSON.parse(raw):null;
+    const raw=sessionStorage.getItem("calc.notebook.recovery");if(!raw)return null;const parsed=JSON.parse(raw);return parsed.entries?Object.values(parsed.entries)[0]:parsed;
   });
   expect(local).toBeTruthy();
   await page.evaluate(async id=>{

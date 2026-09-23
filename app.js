@@ -923,7 +923,7 @@ async function loadCustomTools(){
   if(report.failed.length){console.warn("Custom tools not installed",report.failed);toast(report.failed.length+" custom tool"+(report.failed.length===1?"":"s")+" need validation");}return true;
 }
 
-let worksheetSaveTimer=null,worksheetEvalTimer=null,worksheetCheckpointAt=0,worksheetTitleEditCheckpointed=false;
+let worksheetSaveTimers=new Map(),worksheetEvalTimer=null,worksheetCheckpointAt=0,worksheetTitleEditCheckpointed=false;
 function createNotebook(){
   return NB.normalizeNotebook({schema:NB.SCHEMA,id:uid(),title:"Untitled notebook",createdAt:Date.now(),updatedAt:Date.now(),revision:1,blocks:[NB.newBlock("math")],versions:[],settings:{autoRun:true}});
 }
@@ -942,16 +942,24 @@ async function loadWorksheets(){
   if(!state.worksheets.length)newWorksheet();else{state.activeWorksheet=state.worksheets[0];renderWorksheetArea();}
   if(recovered)toast(recovered+" notebook"+(recovered===1?"":"s")+" opened in recovery mode");return true;
 }
-function scheduleWorksheetSave(){
-  clearTimeout(worksheetSaveTimer);worksheetSaveTimer=setTimeout(function(){if(state.activeWorksheet)saveWorksheet(state.activeWorksheet,false);},300);
+function clearWorksheetSaveTimer(id){
+  var timer=worksheetSaveTimers.get(id);if(timer)clearTimeout(timer);worksheetSaveTimers.delete(id);
+}
+function scheduleWorksheetSave(target){
+  target=target||state.activeWorksheet;if(!target)return;var id=target.id;clearWorksheetSaveTimer(id);
+  worksheetSaveTimers.set(id,setTimeout(function(){
+    worksheetSaveTimers.delete(id);
+    var current=state.worksheets.find(function(w){return w.id===id;});
+    if(current)saveWorksheet(current,false);
+  },300));
 }
 function scheduleWorksheetEval(){
   clearTimeout(worksheetEvalTimer);if(!state.activeWorksheet||!state.activeWorksheet.settings.autoRun)return;
-  worksheetEvalTimer=setTimeout(function(){runWorksheet(false);},220);
+  var id=state.activeWorksheet.id;worksheetEvalTimer=setTimeout(function(){if(state.activeWorksheet&&state.activeWorksheet.id===id)runWorksheet(false);},220);
 }
 async function saveWorksheet(ws,immediate){
   if(ws&&ws.recovery&&ws.recovery.persistenceCorruption){if(immediate)toast("Storage recovery notebooks are read-only to protect the original corrupted record");return false;}
-  ws.updatedAt=Date.now();var expected=state.persistedRevisions.worksheets.has(ws.id)?state.persistedRevisions.worksheets.get(ws.id):null,saved=false;
+  var wasActive=!!(state.activeWorksheet&&state.activeWorksheet.id===ws.id);ws.updatedAt=Date.now();var expected=state.persistedRevisions.worksheets.has(ws.id)?state.persistedRevisions.worksheets.get(ws.id):null,saved=false;
   if(expected!==null&&expected!==undefined&&Number(ws.revision||0)<=Number(expected))ws.revision=Number(expected)+1;
   var payload=JSON.parse(JSON.stringify(ws));
   try{
@@ -961,7 +969,7 @@ async function saveWorksheet(ws,immediate){
       try{
         var remote=e.details&&e.details.current?NB.recoveryNormalize(e.details.current).document:null,copy=JSON.parse(JSON.stringify(ws));copy.id=uid();copy.title=(copy.title||"Notebook")+" (conflict copy)";copy.revision=(copy.revision||1)+1;copy.updatedAt=Date.now();
         await P.saveNotebookIncremental(persistenceDb,copy,null);publishPersistenceChange(P.STORES.notebooks,copy,"put");state.persistedRevisions.worksheets.set(copy.id,copy.revision||0);
-        var idx=state.worksheets.findIndex(function(x){return x.id===ws.id;});if(remote&&idx>=0){state.worksheets[idx]=remote;state.persistedRevisions.worksheets.set(remote.id,remote.revision||0);}state.worksheets.unshift(copy);state.activeWorksheet=copy;clearSessionRecovery(ws.id);toast("A newer notebook revision exists; local edits were preserved as a conflict copy");saved=true;
+        var idx=state.worksheets.findIndex(function(x){return x.id===ws.id;});if(remote&&idx>=0){state.worksheets[idx]=remote;state.persistedRevisions.worksheets.set(remote.id,remote.revision||0);}state.worksheets.unshift(copy);if(wasActive)state.activeWorksheet=copy;clearSessionRecovery(ws.id);toast("A newer notebook revision exists; local edits were preserved as a conflict copy");saved=true;
       }catch(conflictSaveError){toast("Could not preserve notebook conflict copy: "+errorMessage(conflictSaveError));saved=false;}
     }else{toast("Could not save notebook: "+errorMessage(e));saved=false;}
   }
@@ -1138,7 +1146,7 @@ function exportNotebookMarkdown(){
 }
 async function deleteActiveNotebook(){
   var ws=state.activeWorksheet;if(!ws)return;if(!confirm("Delete notebook '"+ws.title+"'?"))return;
-  clearTimeout(worksheetSaveTimer);clearTimeout(worksheetEvalTimer);
+  clearWorksheetSaveTimer(ws.id);clearTimeout(worksheetEvalTimer);
   try{
     var targetId=ws.id,saved=await saveWorksheet(ws,false);
     if(!saved){toast("Delete cancelled because the notebook could not be saved safely");return;}
@@ -1161,8 +1169,12 @@ function formatBytes(bytes){
 }
 function currentClientSettings(){return {theme:state.theme,angle:state.angle,precision:state.precision,deviceId:syncManager.deviceId};}
 async function flushPendingPersistence(){
-  clearTimeout(worksheetSaveTimer);clearTimeout(worksheetEvalTimer);
-  if(state.activeWorksheet){var saved=await saveWorksheet(state.activeWorksheet,false);if(!saved)throw new P.PersistenceError("FLUSH_FAILED","Current notebook could not be persisted; backup/update was cancelled to avoid stale data");}
+  clearTimeout(worksheetEvalTimer);var pendingIds=Array.from(worksheetSaveTimers.keys());worksheetSaveTimers.forEach(function(timer){clearTimeout(timer);});worksheetSaveTimers.clear();
+  if(state.activeWorksheet&&pendingIds.indexOf(state.activeWorksheet.id)<0)pendingIds.push(state.activeWorksheet.id);
+  for(const id of pendingIds){
+    var pending=state.worksheets.find(function(w){return w.id===id;});if(!pending)continue;
+    var saved=await saveWorksheet(pending,false);if(!saved)throw new P.PersistenceError("FLUSH_FAILED","Notebook '"+(pending.title||id)+"' could not be persisted; backup/update was cancelled to avoid stale data");
+  }
   if(!state.settingsReady)throw new P.PersistenceError("FLUSH_FAILED","Persisted settings could not be loaded safely; backup/update was cancelled to avoid overwriting unknown settings");
   await persistSettingStrict("theme",state.theme);await persistSettingStrict("angle",state.angle);await persistSettingStrict("precision",state.precision);await persistSettingStrict("deviceId",syncManager.deviceId);
 }
@@ -1307,19 +1319,38 @@ async function emptyTrashUi(){
 async function requestPersistentStorageUi(){
   try{var granted=await P.requestPersistentStorage();toast(granted?"Persistent storage granted":"Persistent storage was not granted");await refreshStorageStatus();}catch(e){toast(errorMessage(e));}
 }
-function writeSessionRecovery(){
-  if(!state.activeWorksheet)return;
-  try{sessionStorage.setItem("calc.notebook.recovery",JSON.stringify({savedAt:Date.now(),id:state.activeWorksheet.id,revision:state.activeWorksheet.revision,updatedAt:state.activeWorksheet.updatedAt,document:state.activeWorksheet}));}catch(e){}
+const SESSION_RECOVERY_SCHEMA="calc.notebook.recovery/v2";
+function readSessionRecoveryBundle(){
+  try{
+    var raw=sessionStorage.getItem("calc.notebook.recovery");if(!raw)return {schema:SESSION_RECOVERY_SCHEMA,entries:{}};
+    var parsed=JSON.parse(raw);
+    if(parsed&&parsed.schema===SESSION_RECOVERY_SCHEMA&&parsed.entries&&typeof parsed.entries==="object")return parsed;
+    if(parsed&&parsed.id&&parsed.document){var entries={};entries[parsed.id]=parsed;return {schema:SESSION_RECOVERY_SCHEMA,entries:entries};}
+  }catch(e){console.warn("Could not read notebook session recovery",e);}
+  return {schema:SESSION_RECOVERY_SCHEMA,entries:{}};
+}
+function writeSessionRecovery(target){
+  target=target||state.activeWorksheet;if(!target)return;
+  try{var bundle=readSessionRecoveryBundle();bundle.entries[target.id]={savedAt:Date.now(),id:target.id,revision:target.revision,updatedAt:target.updatedAt,document:target};sessionStorage.setItem("calc.notebook.recovery",JSON.stringify(bundle));}catch(e){}
 }
 function clearSessionRecovery(id){
-  try{var raw=sessionStorage.getItem("calc.notebook.recovery");if(!raw)return;var x=JSON.parse(raw);if(!id||x.id===id)sessionStorage.removeItem("calc.notebook.recovery");}catch(e){}
+  try{
+    if(!id){sessionStorage.removeItem("calc.notebook.recovery");return;}
+    var bundle=readSessionRecoveryBundle();delete bundle.entries[id];
+    if(Object.keys(bundle.entries).length)sessionStorage.setItem("calc.notebook.recovery",JSON.stringify(bundle));else sessionStorage.removeItem("calc.notebook.recovery");
+  }catch(e){}
 }
 async function recoverSessionNotebook(){
-  var raw;try{raw=sessionStorage.getItem("calc.notebook.recovery");if(!raw)return;var snap=JSON.parse(raw),stored=state.worksheets.find(function(w){return w.id===snap.id;});
-    if(stored&&Number(stored.updatedAt)>=Number(snap.updatedAt)){clearSessionRecovery(snap.id);return;}
-    var rec=NB.recoveryNormalize(snap.document).document;rec.id=uid();rec.title=(rec.title||"Notebook")+" (recovered unsaved)";rec.revision=(rec.revision||1)+1;rec.updatedAt=Date.now();rec.recovery={safeMode:false,sessionRecovered:true,sourceId:snap.id};
-    state.worksheets.unshift(rec);await P.saveNotebookIncremental(persistenceDb,rec,null);publishPersistenceChange(P.STORES.notebooks,rec,"put");clearSessionRecovery(snap.id);toast("Recovered unsaved notebook as a copy");
-  }catch(e){console.warn("Session recovery failed",e);}
+  var bundle=readSessionRecoveryBundle(),snaps=Object.values(bundle.entries||{}),recovered=0;
+  for(const snap of snaps){
+    try{
+      var stored=state.worksheets.find(function(w){return w.id===snap.id;});
+      if(stored&&Number(stored.updatedAt)>=Number(snap.updatedAt)){clearSessionRecovery(snap.id);continue;}
+      var rec=NB.recoveryNormalize(snap.document).document;rec.id=uid();rec.title=(rec.title||"Notebook")+" (recovered unsaved)";rec.revision=(rec.revision||1)+1;rec.updatedAt=Date.now();rec.recovery={safeMode:false,sessionRecovered:true,sourceId:snap.id};
+      state.worksheets.unshift(rec);await P.saveNotebookIncremental(persistenceDb,rec,null);publishPersistenceChange(P.STORES.notebooks,rec,"put");clearSessionRecovery(snap.id);recovered++;
+    }catch(e){console.warn("Session recovery failed for notebook "+(snap&&snap.id||"unknown"),e);}
+  }
+  if(recovered)toast("Recovered "+recovered+" unsaved notebook"+(recovered===1?"":"s")+" as "+(recovered===1?"a copy":"copies"));
 }
 async function handleCrossTabMessage(message){
   if(!message||!message.entityType)return;
