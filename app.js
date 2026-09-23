@@ -931,11 +931,12 @@ function newWorksheet(){
   var ws=createNotebook();state.worksheets.unshift(ws);state.activeWorksheet=ws;renderWorksheetArea();saveWorksheet(ws,true);
 }
 async function loadWorksheets(){
-  var raw=[];try{raw=(await P.loadNotebooks(persistenceDb,{tolerant:true})).sort(function(a,b){return b.updatedAt-a.updatedAt;});}catch(e){console.warn("Notebook load failed",e);}
+  var raw;try{raw=(await P.loadNotebooks(persistenceDb,{tolerant:true})).sort(function(a,b){return b.updatedAt-a.updatedAt;});}
+  catch(e){console.warn("Notebook load failed; persisted notebooks were left untouched",e);toast("Could not load notebooks: "+errorMessage(e));return false;}
   state.worksheets=[];state.persistedRevisions.worksheets=new Map();var recovered=0;
   raw.forEach(function(item){var rec=NB.recoveryNormalize(item);if(rec.recovered)recovered++;state.worksheets.push(rec.document);state.persistedRevisions.worksheets.set(rec.document.id,rec.document.revision||0);});
   if(!state.worksheets.length)newWorksheet();else{state.activeWorksheet=state.worksheets[0];renderWorksheetArea();}
-  if(recovered)toast(recovered+" notebook"+(recovered===1?"":"s")+" opened in recovery mode");
+  if(recovered)toast(recovered+" notebook"+(recovered===1?"":"s")+" opened in recovery mode");return true;
 }
 function scheduleWorksheetSave(){
   clearTimeout(worksheetSaveTimer);worksheetSaveTimer=setTimeout(function(){if(state.activeWorksheet)saveWorksheet(state.activeWorksheet,false);},300);
@@ -1531,7 +1532,7 @@ async function init(){
   await loadCustomTools();renderToolList();renderTool();
   $("#graphExpressions").value="sin(x)\nx^2 / 5";plotGraph();
   try{state.history=(await dbAll(P.STORES.history)).sort(function(a,b){return b.time-a.time;});}catch(e){}
-  await loadWorksheets();await recoverSessionNotebook();
+  var worksheetsLoaded=await loadWorksheets();if(worksheetsLoaded!==false)await recoverSessionNotebook();
   var initial=(location.hash||"").replace(/^#/,""),toolRoute=initial.match(/^tools\/(.+)$/);
   if(toolRoute){var decoded=safeDecodeURIComponent(toolRoute[1]);if(decoded&&T.REGISTRY.get(decoded))state.selectedTool=decoded;initial="tools";}
   switchView(VIEW_META[initial]?initial:"calculate");if(initial==="tools"){renderToolList();renderTool();history.replaceState(null,"","#tools/"+encodeURIComponent(state.selectedTool));}

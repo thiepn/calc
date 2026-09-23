@@ -18,6 +18,32 @@ test("all primary workspaces navigate without runtime errors",async({page})=>{
   expect(errors).toEqual([]);
 });
 
+test("notebook read failure does not create replacement or recovery duplicates",async({page})=>{
+  const errors=await openApp(page);
+  const seeded=await page.evaluate(async()=>{
+    const P=window.CalcPersistence,NB=window.CalcNotebook,db=new P.CalcDatabase();await db.open();
+    const doc=NB.normalizeNotebook({schema:NB.SCHEMA,id:"read-failure-seed",title:"Keep me",revision:7,updatedAt:Date.now(),blocks:[NB.newBlock("text",{source:"persisted"})],versions:[],settings:{autoRun:false}});
+    await P.saveNotebookIncremental(db,doc,null);return doc.id;
+  });
+  await page.addInitScript(()=>{
+    const original=IDBObjectStore.prototype.getAll;
+    IDBObjectStore.prototype.getAll=function(...args){if(this.name==="worksheets")throw new Error("forced notebook read failure");return original.apply(this,args);};
+  });
+  await page.reload({waitUntil:"domcontentloaded"});
+  await expect(page.locator("#app")).toBeVisible();
+  await page.waitForTimeout(700);
+  const raw=await page.evaluate(async id=>{
+    const P=window.CalcPersistence,db=await new Promise((resolve,reject)=>{const r=indexedDB.open(P.DB_NAME,P.DB_VERSION);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+    const tx=db.transaction(P.STORES.notebooks,"readonly"),store=tx.objectStore(P.STORES.notebooks);
+    const count=await new Promise((resolve,reject)=>{const r=store.count();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+    const item=await new Promise((resolve,reject)=>{const r=store.get(id);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});db.close();
+    return {count,exists:!!item};
+  },seeded);
+  expect(raw).toEqual({count:1,exists:true});
+  await expect(page.locator("#exactResult")).not.toHaveText("Calc could not initialize");
+  expect(errors).toEqual([]);
+});
+
 test("settings read failure is non-destructive and blocks unsafe backup",async({page})=>{
   const errors=await openApp(page);
   await page.evaluate(async()=>{
