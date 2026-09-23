@@ -4,6 +4,7 @@
 const M=global.CalcMath;
 const A=global.CalcAlgebra;
 const C=global.CalcCalculus;
+const CAS=global.CalcCAS;
 const U=global.CalcUnits;
 const LA=global.CalcLinearAlgebra;
 const S=global.CalcStatistics;
@@ -171,7 +172,8 @@ function resolveConfigRefs(value,blockMap){
 }
 
 function evaluateMath(raw,env,options){
-  options=options||{};let calculus=C.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(calculus)return calculus;
+  options=options||{};let advanced=CAS&&CAS.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(advanced)return advanced;
+  let calculus=C.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(calculus)return calculus;
   let symbolic=A.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(symbolic)return symbolic;
   const assignment=String(raw).match(/^\s*([A-Za-z_]\w*)\s*=\s*(?!=)(.+)$/s);
   if(assignment){const quantity=U.tryEvaluate(assignment[2],env,{angle:options.angle||"RAD",precision:options.precision||12,commit:false});if(quantity&&quantity.quantity){env[assignment[1]]=quantity.value;return Object.assign({},quantity,{display:assignment[1]+" = "+quantity.display,assignment:assignment[1]});}}
