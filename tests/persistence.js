@@ -199,6 +199,24 @@ class MemoryDb{
   eq(tombs[0].entityId,"dead","tombstone entity ID");
   eq(tombs[0].deviceId,"dev1","tombstone device ID");
 
+  // Selective notebook restore must not destroy chunk-backed Trash payloads.
+  const trashChunk="trash-owned-chunk";
+  const isolationDb=new MemoryDb({
+    [P.STORES.history]:[],
+    [P.STORES.notebooks]:[{id:"active",revision:1,title:"Active",blocks:[],versions:[]}],
+    [P.STORES.settings]:[],
+    [P.STORES.customTools]:[],
+    [P.STORES.tombstones]:[{
+      id:"worksheets:trashed",entityType:P.STORES.notebooks,entityId:"trashed",revision:2,deletedAt:2,recoverable:true,
+      payloadEncoding:P.NOTEBOOK_STORAGE_SCHEMA,
+      payload:{id:"trashed",revision:1,title:"Trashed",blocks:[{id:"tb",source:"",result:{serialized:null}}],versions:[],persistence:{schema:P.NOTEBOOK_STORAGE_SCHEMA,externalized:[{scope:"block",blockId:"tb",field:"source",encoding:"text",hash:"x",bytes:5,chunks:[{id:trashChunk,hash:"x",bytes:5}]}]}}
+    }],
+    [P.STORES.chunks]:[{id:trashChunk,data:"trash",hash:"x",bytes:5}]
+  });
+  await P.applyRestore(isolationDb,{mode:"replace",selectedStores:[P.STORES.notebooks],data:{[P.STORES.notebooks]:[{id:"restored",revision:1,title:"Restored",blocks:[],versions:[]}]},summary:{},verifiedHash:"isolation"});
+  assert(await isolationDb.repository(P.STORES.chunks).get(trashChunk),"notebook-only restore preserves Trash-owned chunks");
+  eq((await isolationDb.repository(P.STORES.tombstones).all()).length,1,"notebook-only restore preserves Trash metadata");
+
   const integrity=await P.integrityReport(db);
   assert(integrity.ok,"integrity report clean");
   eq(integrity.counts[P.STORES.history],1,"integrity count");
