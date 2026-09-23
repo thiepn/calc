@@ -5,15 +5,23 @@ Calc v1.0.1 is a bug-fix and resilience release on top of the v1.0.0 production 
 ## Fixed
 
 - Dynamic custom-tool metadata and CSV column names are rendered as text rather than executable HTML.
-- Malformed Tool deep links no longer crash application initialization.
-- Tool search remains focused through continuous typing.
-- Notebook title edits are recovery-safe before blur, and reference copying handles clipboard denial safely.
-- Calc no longer treats localStorage availability as a startup requirement.
-- Unsafe imported notebook block IDs are rejected before reaching DOM selector paths, and notebook import size is bounded.
-- A corrupt persisted Custom Tool is quarantined without preventing the rest of Calc from starting.
-- Custom-tool alias registration/unregistration no longer damages existing alias resolution.
-- The Tools list layout remains stable after search rendering was made focus-preserving.\n- Backup/update preflight now fails closed if the active notebook cannot be persisted, so unsaved edits cannot be silently omitted from a backup.\n- Rapid notebook edits now always advance the persisted optimistic revision, closing a multi-tab silent-overwrite window.
+- Malformed Tool deep links no longer crash initialization.
+- Tool search remains focused through continuous typing and keeps its layout.
+- Notebook title edits are recovery-safe before blur; reference copying handles unavailable clipboard APIs safely.
+- Unsafe imported notebook block IDs are rejected, and notebook import size is bounded.
+- Rapid notebook edits advance optimistic persistence revisions.
+- Notebook read failures do not fabricate replacement/recovery copies.
+- Remote notebook updates preserve local dirty edits as visible, persisted conflict copies.
+- Backup and controlled update flows abort rather than proceeding with unsaved notebook/settings state.
+- localStorage denial is non-fatal; Settings read/write degradation does not overwrite unknown persisted state.
+- Corrupt persisted Custom Tools are quarantined without breaking startup.
+- Custom-tool aliases remain correct through dynamic registration/removal.
+- Custom-tool lifecycle changes are persistence-first, failed writes leave runtime state intact, revision conflicts reconcile to the newer persisted original, and local edits become Draft conflict copies.
+- Cross-tab Custom Tool archive/update events rebuild the runtime from persisted truth, safely defer while the builder is open, refresh the editor on close, and retain last-known-good state if refresh fails.
+- History save/clear failures are reported truthfully and do not create a false deleted state.
 
 ## Certification
 
-The release is certified by the cumulative deterministic suites plus the cross-browser production soak and runtime bug sweep on Chromium, Firefox, WebKit, and mobile Chromium. GitHub Pages deploys only the exact certified SHA, and the production release workflow verifies the live version before creating the tag.
+v1.0.1 is certified by the complete deterministic mathematics/product suite plus the expanded runtime bug sweep and production soak on Chromium, Firefox, WebKit, and mobile Chromium. The browser suite includes degraded-storage startup, navigation, malformed routes, rendering safety, registry-wide tool execution, Data workflows, notebook and Custom Tool conflicts, backup safety, IndexedDB migration, large-data persistence, corruption recovery, and offline PWA operation.
+
+GitHub Pages deploys only the exact certified SHA. The production release workflow verifies the live version, generates SHA-256 release artifacts, and creates v1.0.1 only for that deployed commit.

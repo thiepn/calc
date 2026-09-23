@@ -62,7 +62,7 @@ jobs:
           node tests/persistence-integration.js
       - name: Release-candidate static gate
         run: node tests/release-gate.js
-      - name: Production v1.0.0 release gate
+      - name: Production release gate
         run: node tests/production-release-gate.js
 
   browser-soak:

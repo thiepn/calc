@@ -8,18 +8,26 @@ All notable production changes to Calc are recorded here.
 
 - Prevented stored HTML/script injection through custom-tool metadata, tool result titles, and CSV histogram column names.
 - Malformed encoded Tool deep links no longer crash Calc during startup or hash navigation.
-- Tool search now keeps focus while typing instead of recreating its own input after each keystroke.
-- Notebook title edits are recovery-safe immediately, reference copying handles clipboard denial, and unsafe imported block IDs are rejected.
-- Web Storage denial is non-fatal, and notebook imports now have a bounded file-size limit.
-- Malformed persisted custom tools are quarantined instead of aborting application startup.
+- Tool search keeps focus while typing and retains the intended grid layout.
+- Notebook title edits are recovery-safe before blur; reference copying handles unavailable/denied clipboard APIs without throwing.
+- Unsafe imported notebook block IDs are rejected before DOM selector paths, and notebook import size is bounded.
+- Rapid notebook edits always advance optimistic persistence revisions.
+- Notebook-store read failures no longer create replacement notebooks or consume session recovery as if persisted notebooks had vanished.
+- Remote notebook updates preserve local dirty edits as a separately persisted, visible conflict copy without corrupting the in-memory notebook list.
+- Backups and controlled PWA updates abort if the active notebook or settings cannot be flushed safely.
+- localStorage denial is non-fatal.
+- Persisted Settings read failures leave unknown records untouched; device-ID write failure degrades safely and fallback angle/theme changes do not overwrite unknown persisted values.
+- Malformed persisted Custom Tools are quarantined instead of aborting startup.
 - Dynamic custom-tool aliases no longer hijack or erase existing alias mappings.
-- Tool-search results retain their grid layout after the focus-preserving rendering change.\n- Backups and app updates now abort if the active notebook cannot be persisted, preventing stale exports after quota/write failures.\n- Every persisted notebook mutation now advances its optimistic revision, preventing rapid title/settings/content edits from silently overwriting another tab.
+- Custom-tool save, archive, restore, and delete operations are persistence-first, so failed writes leave working runtime tools intact.
+- Custom-tool revision conflicts install the newer persisted original and preserve local edits as a Draft conflict copy without masking the warning.
+- Cross-tab Custom Tool refresh rebuilds runtime state from persisted truth, removes stale Active definitions after archive, defers safely while the builder is open, refreshes the editor after close, and preserves last-known-good state if the read fails.
+- History write failures are reported, and failed Clear History operations no longer make persisted entries appear deleted.
 
 ### Verification
 
-- Added a browser bug-sweep suite for navigation, deep links, search, injection resistance, recovery, registry-wide tool UI execution, and core Data interactions.
-- The bug sweep runs with the production soak on Chromium, Firefox, WebKit, and mobile Chromium.
-
+- Added a browser bug-sweep suite covering workspace navigation, malformed deep links, dynamic-rendering safety, continuous tool search, blocked Web Storage, notebook import/recovery/persistence/conflicts, Custom Tool lifecycle/conflicts/cross-tab refresh, History failure handling, every registered tool UI, and core Data interactions.
+- The bug sweep runs alongside the existing migration, backup/restore, large-persistence, corruption, performance, and offline PWA soak on Chromium, Firefox, WebKit, and mobile Chromium.
 ## [1.0.0] — 2026-09-23
 
 ### Calculator platform
