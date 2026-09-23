@@ -9,13 +9,13 @@ const exists=p=>fs.existsSync(path.join(root,p));
 
 const required=[
   "index.html","styles.css","app.js","persistence.js","notebook.js","sw.js","manifest.webmanifest",
-  "package.json","playwright.config.js","tests/release-soak.spec.js",
+  "package.json","release.json","playwright.config.js","tests/release-soak.spec.js",
   ".github/workflows/release-soak.yml",".github/workflows/pages.yml","docs/release/IMPLEMENTATION_PHASE_13.md"
 ];
 required.forEach(p=>assert(exists(p),"Missing RC artifact: "+p));
 
 const index=read("index.html"),sw=read("sw.js"),persistence=read("persistence.js"),app=read("app.js");
-const pkg=JSON.parse(read("package.json")),manifest=JSON.parse(read("manifest.webmanifest"));
+const pkg=JSON.parse(read("package.json")),manifest=JSON.parse(read("manifest.webmanifest")),release=JSON.parse(read("release.json"));
 const releaseWorkflow=read(".github/workflows/release-soak.yml"),pagesWorkflow=read(".github/workflows/pages.yml");
 const soak=read("tests/release-soak.spec.js"),phase=read("docs/release/IMPLEMENTATION_PHASE_13.md");
 
@@ -28,7 +28,9 @@ assert(persistence.includes("restoreTombstone")&&persistence.includes("trashChun
 assert(app.includes("P.updatePreflight")&&app.includes("P.resilienceDiagnostics"),"Persistence preflight/diagnostics not wired");
 const badSelectorCollections=app.split("\n").filter(line=>(/(^|[^$])\$\([^;]*\)\.(?:forEach|map|filter|some|every|reduce|find|findIndex)\b/).test(line));
 assert(badSelectorCollections.length===0,"Single-element $() selector used with collection operation: "+badSelectorCollections.join(" | "));
-assert(sw.includes('const CACHE="calc-shell-v22-rc1";'),"RC service-worker shell version mismatch");
+assert(sw.includes('const APP_VERSION="'+release.version+'";'),"service-worker app version mismatch");
+assert(sw.includes('const CACHE="calc-shell-v"+APP_VERSION;'),"service-worker cache is not version-derived");
+assert(release.pwa&&release.pwa.cache==="calc-shell-v"+release.version,"release manifest PWA cache mismatch");
 
 const assetMatch=sw.match(/const ASSETS=\[(.*?)\];/s);
 assert(assetMatch,"Service worker asset manifest missing");
