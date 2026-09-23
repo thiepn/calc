@@ -41,7 +41,7 @@ const state={
   env:{},lastResult:null,theme:localGet("calc.theme")||"system",settingsReady:false,
   installPrompt:null,history:[],worksheets:[],activeWorksheet:null,
   graph:{session:null,drag:null,pinch:null,pointers:new Map(),geometries:[],worker:null},
-  selectedTool:"percentage-of",toolSearch:"",customLibrary:new CT.CustomToolLibrary(),customCurrent:null,customValidationTimer:null,customToolsRefreshPending:false,dataset:null,statisticsWorker:null,dataRevision:0,
+  selectedTool:"percentage-of",toolSearch:"",customLibrary:new CT.CustomToolLibrary(),customCurrent:null,customValidationTimer:null,customToolsRefreshPending:false,lastCustomPersistConflict:false,dataset:null,statisticsWorker:null,dataRevision:0,
   restoreRaw:null,restoreBackup:null,restorePlan:null,swRegistration:null,updateWaiting:null,reloadingForUpdate:false,persistedRevisions:{worksheets:new Map(),customTools:new Map()},remoteDeletedCustomIds:new Set()
 };
 
@@ -781,7 +781,7 @@ function renderCustomVersions(){
     var actualIndex=history.length-1-reverseIndex,row=document.createElement("div");row.className="custom-version-row";
     var meta=document.createElement("span");meta.textContent="r"+entry.revision+" · "+entry.status+" · "+new Date(entry.updatedAt).toLocaleString();
     var b=document.createElement("button");b.className="small-btn";b.textContent="Restore";b.onclick=async function(){
-      try{var current=state.customLibrary.get(m.id)||m,restored=CT.restoreRevision(current,actualIndex),saved=await persistCustom(restored);if(saved.id===current.id)CT.uninstall(current,T.REGISTRY);fillCustomBuilder(saved);renderToolList();toast("Revision restored as Draft");}catch(e){toast(errorMessage(e));}
+      try{var current=state.customLibrary.get(m.id)||m,restored=CT.restoreRevision(current,actualIndex),saved=await persistCustom(restored);if(saved.id===current.id)CT.uninstall(current,T.REGISTRY);fillCustomBuilder(saved);renderToolList();if(!state.lastCustomPersistConflict)toast("Revision restored as Draft");}catch(e){toast(errorMessage(e));}
     };
     row.append(meta,b);box.appendChild(row);
   });
@@ -849,6 +849,7 @@ function validateCustomBuilder(full){
 }
 function scheduleCustomValidation(){clearTimeout(state.customValidationTimer);state.customValidationTimer=setTimeout(function(){validateCustomBuilder(false);},180);}
 async function persistCustom(manifest){
+  state.lastCustomPersistConflict=false;
   if(state.remoteDeletedCustomIds.has(manifest.id)){
     var deletedOriginalId=manifest.id,resurrect=JSON.parse(JSON.stringify(manifest));resurrect.id=uid();resurrect.name=(resurrect.name||"Custom tool")+" (conflict copy)";resurrect.status="draft";resurrect.revision=(resurrect.revision||1)+1;resurrect.updatedAt=Date.now();resurrect.history=resurrect.history||[];manifest=resurrect;state.remoteDeletedCustomIds.delete(deletedOriginalId);
     toast("The original custom tool was deleted in another tab; local edits were moved to a Draft conflict copy");
@@ -858,6 +859,7 @@ async function persistCustom(manifest){
     await dbPutVersioned(P.STORES.customTools,manifest,expected);state.persistedRevisions.customTools.set(manifest.id,manifest.revision||0);state.customLibrary.put(manifest);renderCustomLibrary();renderToolList();return manifest;
   }catch(e){
     if(e&&e.code==="REVISION_CONFLICT"){
+      state.lastCustomPersistConflict=true;
       var remote=null,previous=state.customLibrary.get(manifest.id);
       try{if(e.details&&e.details.current)remote=CT.normalizeManifest(e.details.current);}catch(remoteError){console.warn("Could not normalize newer custom-tool revision",remoteError);}
       if(remote){
@@ -876,7 +878,7 @@ async function saveCustomDraft(showToast){
   if(current)draft=CT.revise(current,raw);else{raw.status="draft";draft=CT.normalizeManifest(raw);}
   draft=await persistCustom(draft);
   if(current&&draft.id===current.id)CT.uninstall(current,T.REGISTRY);
-  fillCustomBuilder(draft);renderToolList();if(showToast!==false)toast("Custom tool saved as Draft");return draft;
+  fillCustomBuilder(draft);renderToolList();if(showToast!==false&&!state.lastCustomPersistConflict)toast("Custom tool saved as Draft");return draft;
 }
 async function activateCustomTool(){
   try{var draft=await saveCustomDraft(false),activated=CT.activate(draft),m=await persistCustom(activated.manifest);if(m.status==="active")CT.installActive(m,T.REGISTRY);fillCustomBuilder(m);renderCustomValidation(activated.report);toast(m.status==="active"?"Custom tool activated":"Custom tool saved as conflict Draft");}

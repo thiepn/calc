@@ -176,6 +176,7 @@ test("custom-tool revision conflict installs newer remote original and preserves
     return {id:active.id,revision:active.revision};
   });
   await page.reload({waitUntil:"domcontentloaded"});
+  await expect.poll(()=>page.evaluate(id=>!!window.CalcTools.REGISTRY.get("custom."+id),seed.id),{timeout:5000}).toBeTruthy();
   await page.locator('[data-view="tools"]').first().click();
   await page.locator("#customToolBuilderBtn").click();
   await page.locator("#customToolLibrary button").filter({hasText:"Conflict Guard"}).click();
@@ -230,6 +231,7 @@ test("custom builder close applies deferred cross-tab refresh",async({page})=>{
     const db=new P.CalcDatabase();await db.open();await db.repository(P.STORES.customTools).put(active);return active.id;
   });
   await page.reload({waitUntil:"domcontentloaded"});
+  await expect.poll(()=>page.evaluate(id=>!!window.CalcTools.REGISTRY.get("custom."+id),id),{timeout:5000}).toBeTruthy();
   await page.locator('[data-view="tools"]').first().click();
   await page.locator("#customToolBuilderBtn").click();
   await expect(page.locator("#customToolDialog")).toHaveJSProperty("open",true);
@@ -256,7 +258,7 @@ test("cross-tab custom-tool archive removes stale active runtime",async({page})=
     const db=new P.CalcDatabase();await db.open();await db.repository(P.STORES.customTools).put(active);return active.id;
   });
   await page.reload({waitUntil:"domcontentloaded"});
-  expect(await page.evaluate(id=>!!window.CalcTools.REGISTRY.get("custom."+id),id)).toBeTruthy();
+  await expect.poll(()=>page.evaluate(id=>!!window.CalcTools.REGISTRY.get("custom."+id),id),{timeout:5000}).toBeTruthy();
   await page.evaluate(async id=>{
     const CT=window.CalcCustomTools,P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();
     const current=await db.repository(P.STORES.customTools).get(id),archived=CT.archive(current);
