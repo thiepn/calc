@@ -1316,7 +1316,7 @@ function bindEvents(){
   $$("#keypad [data-insert]").forEach(function(b){b.onclick=function(){insertExpression(b.dataset.insert);};});
   $$("[data-key-action]").forEach(function(b){b.onclick=function(){if(b.dataset.keyAction==="clear")clearExpression();else if(b.dataset.keyAction==="backspace")backspaceExpression();else evaluateCurrent();};});
   $$("[data-result-action]").forEach(function(b){b.onclick=function(){if(b.dataset.resultAction==="copy")copyText($("#exactResult").textContent+($("#approxResult").textContent?" "+$("#approxResult").textContent:""));else if(b.dataset.resultAction==="graph")graphCurrent();else if(state.lastResult){state.env.ans=state.lastResult.value;toast("Saved as ans");}};});
-  $("[data-quick]").forEach(function(b){b.onclick=function(){state.selectedTool=b.dataset.quick;renderToolList();renderTool();switchView("tools");history.replaceState(null,"","#tools/"+encodeURIComponent(state.selectedTool));};});
+  $$("[data-quick]").forEach(function(b){b.onclick=function(){state.selectedTool=b.dataset.quick;renderToolList();renderTool();switchView("tools");history.replaceState(null,"","#tools/"+encodeURIComponent(state.selectedTool));};});
 
   $("#graphPlotBtn").onclick=plotGraph;$("#graphReset").onclick=resetGraph;$("#graphExport").onclick=exportGraphPng;$("#graphPiTicks").onchange=drawGraph;
   $("#graphRoots").onclick=analyzeGraphRoots;$("#graphIntersections").onclick=analyzeGraphIntersections;$("#graphExtrema").onclick=analyzeGraphExtrema;$("#graphTangent").onclick=analyzeGraphTangent;$("#graphIntegral").onclick=analyzeGraphIntegral;
