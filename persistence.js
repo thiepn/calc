@@ -104,6 +104,12 @@ function applyUpgrade(db,tx,oldVersion,newVersion){
   }catch(e){throw new MigrationError("Database migration failed",{oldVersion:oldVersion,newVersion:newVersion,message:e.message});}
 }
 
+function assertVersionedWrite(current,incoming,expectedRevision,store,key){
+  const actual=current?revisionOf(current):null,incomingRevision=revisionOf(incoming);
+  if(expectedRevision!==undefined&&expectedRevision!==null&&actual!==null&&Number(actual)!==Number(expectedRevision))throw new PersistenceError("REVISION_CONFLICT","A newer version already exists",{store:store,key:key,expected:Number(expectedRevision),actual:Number(actual),current:current});
+  if((expectedRevision===null||expectedRevision===undefined)&&current&&Number(actual)>Number(incomingRevision))throw new PersistenceError("REVISION_CONFLICT","Refusing to replace a newer stored revision",{store:store,key:key,actual:Number(actual),incoming:Number(incomingRevision),current:current});
+  return true;
+}
 class Repository{
   constructor(dbPromise,store,keyField){this.dbPromise=dbPromise;this.store=store;this.keyField=keyField||"id";}
   async withStore(mode,fn){
@@ -116,9 +122,7 @@ class Repository{
   putVersioned(value,expectedRevision){
     const self=this,key=value&&value[this.keyField];if(key===undefined||key===null)throw new PersistenceError("MISSING_KEY","Versioned write requires a stable key");
     return this.withStore("readwrite",async function(os){
-      const current=await requestPromise(os.get(key)),actual=current?revisionOf(current):null;
-      if(expectedRevision!==undefined&&expectedRevision!==null&&actual!==null&&Number(actual)!==Number(expectedRevision))throw new PersistenceError("REVISION_CONFLICT","A newer version already exists",{store:self.store,key:key,expected:Number(expectedRevision),actual:Number(actual),current:current});
-      if((expectedRevision===null||expectedRevision===undefined)&&current&&Number(revisionOf(current))>Number(revisionOf(value)))throw new PersistenceError("REVISION_CONFLICT","Refusing to replace a newer stored revision",{store:self.store,key:key,actual:Number(revisionOf(current)),incoming:Number(revisionOf(value)),current:current});
+      const current=await requestPromise(os.get(key));assertVersionedWrite(current,value,expectedRevision,self.store,key);
       await requestPromise(os.put(value));return key;
     });
   }
@@ -331,7 +335,7 @@ global.CalcPersistence={
   VERSION:"1.0.0-persistence",DB_NAME:DB_NAME,DB_VERSION:DB_VERSION,BACKUP_SCHEMA:BACKUP_SCHEMA,ENCRYPTED_BACKUP_SCHEMA:ENCRYPTED_BACKUP_SCHEMA,SYNC_SCHEMA:SYNC_SCHEMA,STORES:STORES,DATA_STORES:DATA_STORES,
   PersistenceError:PersistenceError,BackupError:BackupError,RestoreError:RestoreError,IntegrityError:IntegrityError,MigrationError:MigrationError,
   stableStringify:stableStringify,sha256Text:sha256Text,hashValue:hashValue,migrationPlan:migrationPlan,applyUpgrade:applyUpgrade,
-  Repository:Repository,CalcDatabase:CalcDatabase,buildBackup:buildBackup,validateBackup:validateBackup,encryptBackup:encryptBackup,decryptBackup:decryptBackup,openBackup:openBackup,mergeStore:mergeStore,planRestore:planRestore,applyRestore:applyRestore,
+  Repository:Repository,CalcDatabase:CalcDatabase,assertVersionedWrite:assertVersionedWrite,buildBackup:buildBackup,validateBackup:validateBackup,encryptBackup:encryptBackup,decryptBackup:decryptBackup,openBackup:openBackup,mergeStore:mergeStore,planRestore:planRestore,applyRestore:applyRestore,
   integrityReport:integrityReport,storageEstimate:storageEstimate,requestPersistentStorage:requestPersistentStorage,cleanupJournal:cleanupJournal,recoveryReport:recoveryReport,
   CrossTabCoordinator:CrossTabCoordinator,SyncAdapter:SyncAdapter,DisabledSyncAdapter:DisabledSyncAdapter,SyncManager:SyncManager
 };
