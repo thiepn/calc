@@ -1347,7 +1347,7 @@ async function recoverSessionNotebook(){
       var stored=state.worksheets.find(function(w){return w.id===snap.id;});
       if(stored&&Number(stored.updatedAt)>=Number(snap.updatedAt)){clearSessionRecovery(snap.id);continue;}
       var rec=NB.recoveryNormalize(snap.document).document;rec.id=uid();rec.title=(rec.title||"Notebook")+" (recovered unsaved)";rec.revision=(rec.revision||1)+1;rec.updatedAt=Date.now();rec.recovery={safeMode:false,sessionRecovered:true,sourceId:snap.id};
-      state.worksheets.unshift(rec);await P.saveNotebookIncremental(persistenceDb,rec,null);publishPersistenceChange(P.STORES.notebooks,rec,"put");clearSessionRecovery(snap.id);recovered++;
+      state.worksheets.unshift(rec);await P.saveNotebookIncremental(persistenceDb,rec,null);publishPersistenceChange(P.STORES.notebooks,rec,"put");state.persistedRevisions.worksheets.set(rec.id,rec.revision||0);clearSessionRecovery(snap.id);recovered++;
     }catch(e){console.warn("Session recovery failed for notebook "+(snap&&snap.id||"unknown"),e);}
   }
   if(recovered)toast("Recovered "+recovered+" unsaved notebook"+(recovered===1?"":"s")+" as "+(recovered===1?"a copy":"copies"));
