@@ -215,4 +215,17 @@ const compiled=CT.compile(activated.manifest,{skipTests:true});
 assert(compiled.tool instanceof T.ToolDefinition,"compiler returns ToolDefinition");
 eq(compiled.manifest.expression,"x*2","declarative formula retained");
 
+
+
+// One corrupt persisted manifest must not brick the entire Custom Tool library.
+const isolationValid=CT.newFormulaDraft();
+const isolatedLibrary=new CT.CustomToolLibrary([
+  isolationValid,
+  {id:"corrupt",name:"Corrupt",mode:"definitely-not-supported",status:"active"}
+]);
+eq(isolatedLibrary.list().length,1,"valid custom tool survives corrupt neighbor");
+eq(isolatedLibrary.rejected.length,1,"corrupt custom tool quarantined");
+const isolationReport=isolatedLibrary.installAll(T.REGISTRY);
+assert(isolationReport.failed.some(x=>x.id==="corrupt"),"quarantined custom tool reported");
+
 console.log("Custom Formula Builder certification tests passed");
