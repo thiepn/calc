@@ -364,6 +364,52 @@ test("remote notebook update preserves local dirty edits as a visible conflict c
   expect(errors).toEqual([]);
 });
 
+test("custom-tool archive preserves unsaved visible editor changes",async({page})=>{
+  const errors=await openApp(page);
+  const id=await page.evaluate(async()=>{
+    const CT=window.CalcCustomTools,P=window.CalcPersistence;
+    let draft=CT.newFormulaDraft();draft.name="Archive Visible";const active=CT.activate(draft).manifest;
+    const db=new P.CalcDatabase();await db.open();await db.repository(P.STORES.customTools).put(active);return active.id;
+  });
+  await page.reload({waitUntil:"domcontentloaded"});
+  await expect.poll(()=>page.evaluate(id=>!!window.CalcTools.REGISTRY.get("custom."+id),id),{timeout:5000}).toBeTruthy();
+  await goView(page,"tools");await page.locator("#customToolBuilderBtn").click();
+  await page.locator("#customToolLibrary button").filter({hasText:"Archive Visible"}).click();
+  await page.locator("#customName").fill("Archive Edited");
+  await page.locator("#customDescription").fill("visible unsaved description");
+  await page.locator("#customExpression").fill("x*3");
+  await page.locator("#customArchiveBtn").click();
+  await expect(page.locator("#toast")).toContainText("Custom tool archived");
+  const stored=await page.evaluate(async id=>{const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();return db.repository(P.STORES.customTools).get(id);},id);
+  expect(stored.status).toBe("archived");
+  expect(stored.name).toBe("Archive Edited");
+  expect(stored.description).toBe("visible unsaved description");
+  expect(stored.expression).toBe("x*3");
+  expect(errors).toEqual([]);
+});
+
+test("custom-tool export serializes current unsaved editor state",async({page})=>{
+  const errors=await openApp(page);
+  await goView(page,"tools");await page.locator("#customToolBuilderBtn").click();
+  await page.locator("#customName").fill("Export Unsaved");
+  await page.locator("#customDescription").fill("current editor state");
+  await page.locator("#customExpression").fill("x*7");
+  await page.evaluate(()=>{
+    window.__exportedCustom=null;
+    URL.createObjectURL=function(blob){blob.text().then(t=>window.__exportedCustom=t);return "blob:calc-test";};
+    URL.revokeObjectURL=function(){};
+    HTMLAnchorElement.prototype.click=function(){};
+  });
+  await page.locator("#customExportBtn").click();
+  await expect.poll(()=>page.evaluate(()=>window.__exportedCustom),{timeout:3000}).not.toBeNull();
+  const exported=JSON.parse(await page.evaluate(()=>window.__exportedCustom));
+  expect(exported.tool.name).toBe("Export Unsaved");
+  expect(exported.tool.description).toBe("current editor state");
+  expect(exported.tool.expression).toBe("x*7");
+  expect(exported.tool.status).toBe("draft");
+  expect(errors).toEqual([]);
+});
+
 test("failed custom-tool draft save leaves active runtime tool intact",async({page})=>{
   const errors=await openApp(page);
   const seeded=await page.evaluate(async()=>{

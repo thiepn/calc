@@ -888,7 +888,11 @@ async function activateCustomTool(){
   catch(e){toast(errorMessage(e));validateCustomBuilder(true);}
 }
 async function archiveCustomTool(){
-  try{var current=state.customCurrent&&state.customLibrary.get(state.customCurrent.id);if(!current)throw new Error("Save the custom tool first");var m=await persistCustom(CT.archive(current));if(m.id===current.id&&m.status==="archived")CT.uninstall(current,T.REGISTRY);fillCustomBuilder(m);renderToolList();toast(m.status==="archived"?"Custom tool archived":"Local archive preserved as conflict Draft");}catch(e){toast(errorMessage(e));}
+  try{
+    var current=state.customCurrent&&state.customLibrary.get(state.customCurrent.id);if(!current)throw new Error("Save the custom tool first");
+    var draft=await saveCustomDraft(false);if(state.lastCustomPersistConflict)return;
+    var m=await persistCustom(CT.archive(draft));if(m.id===draft.id&&m.status==="archived")CT.uninstall(draft,T.REGISTRY);fillCustomBuilder(m);renderToolList();toast(m.status==="archived"?"Custom tool archived":"Local archive preserved as conflict Draft");
+  }catch(e){toast(errorMessage(e));}
 }
 async function deleteCustomTool(){
   var current=state.customCurrent&&state.customLibrary.get(state.customCurrent.id);if(!current)return;if(!confirm("Delete custom tool '"+current.name+"'?"))return;
@@ -899,7 +903,7 @@ async function deleteCustomTool(){
   }catch(e){toast("Could not delete custom tool: "+errorMessage(e));}
 }
 function exportCustomTool(){
-  try{var m=state.customCurrent&&state.customLibrary.get(state.customCurrent.id)||CT.normalizeManifest(builderManifest()),doc=CT.exportManifest(m),blob=new Blob([JSON.stringify(doc,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=m.name.replace(/[^A-Za-z0-9._-]+/g,"-").replace(/^-+|-+$/g,"")+".calctool.json";a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},1000);}catch(e){toast(errorMessage(e));}
+  try{var m=CT.normalizeManifest(builderManifest()),doc=CT.exportManifest(m),blob=new Blob([JSON.stringify(doc,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=m.name.replace(/[^A-Za-z0-9._-]+/g,"-").replace(/^-+|-+$/g,"")+".calctool.json";a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},1000);}catch(e){toast(errorMessage(e));}
 }
 async function importCustomFile(file){
   try{if(file.size>CT.MAX_JSON_BYTES)throw new CT.CustomToolImportError("Custom tool file exceeds "+CT.MAX_JSON_BYTES+" bytes");var text=await file.text(),m=await persistCustom(CT.importManifest(text));fillCustomBuilder(m);toast("Imported as Draft");}catch(e){toast(errorMessage(e));}
