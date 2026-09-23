@@ -47,6 +47,7 @@ jobs:
           node --check tests/custom-tools.js
           node --check tests/notebook.js
           node --check tests/persistence.js
+          node --check tests/persistence-integration.js
       - name: Core smoke tests
         run: node tests/smoke.js
       - name: Core kernel certification
@@ -73,3 +74,5 @@ jobs:
         run: node tests/notebook.js
       - name: Persistence backup and sync certification
         run: node tests/persistence.js
+      - name: Persistence browser integration certification
+        run: node tests/persistence-integration.js
