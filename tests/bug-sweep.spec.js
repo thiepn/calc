@@ -9,11 +9,15 @@ async function openApp(page,path="/index.html"){
   return errors;
 }
 
+async function goView(page,view){
+  await page.evaluate(v=>{location.hash="#"+v;},view);
+  await expect(page.locator('[data-view-panel="'+view+'"]')).toHaveClass(/active/);
+}
+
 test("all primary workspaces navigate without runtime errors",async({page})=>{
   const errors=await openApp(page);
   for(const view of ["calculate","graph","matrix","data","tools","worksheet","history","settings"]){
-    await page.locator('[data-view="'+view+'"]').first().click();
-    await expect(page.locator('[data-view-panel="'+view+'"]')).toHaveClass(/active/);
+    await goView(page,view);
   }
   expect(errors).toEqual([]);
 });
@@ -67,7 +71,7 @@ test("settings read failure is non-destructive and blocks unsafe backup",async({
   });
   expect(stored).toEqual({theme:"oled",precision:17,deviceId:"stable-device"});
   let downloads=0;page.on("download",()=>downloads++);
-  await page.locator('[data-view="settings"]').first().click();
+  await goView(page,"settings");
   await page.locator("#fullBackupBtn").click();
   await expect(page.locator("#toast")).toContainText("settings could not be loaded safely");
   expect(downloads).toBe(0);
@@ -97,7 +101,7 @@ test("malformed tool hash cannot crash startup or hash navigation",async({page})
 
 test("tool search keeps focus and accepts continuous typing",async({page})=>{
   await openApp(page);
-  await page.locator('[data-view="tools"]').first().click();
+  await goView(page,"tools");
   const search=page.locator("#toolList .tool-search");
   await search.click();
   await page.keyboard.type("loan");
@@ -117,7 +121,7 @@ test("active custom-tool metadata is rendered as text, never executable markup",
     await db.repository(P.STORES.customTools).put(active);await db.close();
   },malicious);
   await page.reload({waitUntil:"domcontentloaded"});
-  await page.locator('[data-view="tools"]').first().click();
+  await goView(page,"tools");
   const customButton=page.locator("#toolList button").filter({hasText:"Injected"}).first();
   await expect(customButton).toBeVisible();
   await customButton.click();
@@ -132,7 +136,7 @@ test("active custom-tool metadata is rendered as text, never executable markup",
 
 test("dataset column names cannot inject markup through histogram rendering",async({page})=>{
   await openApp(page);
-  await page.locator('[data-view="data"]').first().click();
+  await goView(page,"data");
   const header='<svg data-data-xss onload="window.__dataXss=(window.__dataXss||0)+1"></svg>';
   await page.locator("#dataInput").fill(header+",y\n1,2\n2,4\n3,6");
   await page.locator("#analyzeDataBtn").click();
@@ -160,7 +164,7 @@ test("failed Clear History keeps visible and persisted history intact",async({pa
   const errors=await openApp(page);
   await page.locator("#expressionInput").fill("8+9");
   await page.locator("#expressionInput").press("Enter");
-  await page.locator('[data-view="history"]').first().click();
+  await goView(page,"history");
   await expect(page.locator("#historyList")).toContainText("8+9");
   await page.evaluate(()=>{
     const P=window.CalcPersistence,original=P.Repository.prototype.clear;
@@ -181,7 +185,7 @@ test("notebook Ref copy does not throw when clipboard APIs are unavailable",asyn
     Document.prototype.execCommand=undefined;
   });
   const errors=await openApp(page);
-  await page.locator('[data-view="worksheet"]').first().click();
+  await goView(page,"worksheet");
   await page.locator('[data-ws-action="ref"]').first().click();
   await expect(page.locator("#toast")).toContainText("Copy unavailable");
   expect(errors).toEqual([]);
@@ -189,7 +193,7 @@ test("notebook Ref copy does not throw when clipboard APIs are unavailable",asyn
 
 test("notebook title input is recovery-safe before blur",async({page})=>{
   await openApp(page);
-  await page.locator('[data-view="worksheet"]').first().click();
+  await goView(page,"worksheet");
   const title=page.locator("#worksheetTitle");
   await title.click();
   await title.fill("Unsaved title probe");
@@ -202,7 +206,7 @@ test("notebook title input is recovery-safe before blur",async({page})=>{
 
 test("rapid notebook edits always advance persisted optimistic revision",async({page})=>{
   await openApp(page);
-  await page.locator('[data-view="worksheet"]').first().click();
+  await goView(page,"worksheet");
   const readMaxRevision=()=>page.evaluate(async()=>{
     const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();const docs=await P.loadNotebooks(db);return Math.max(...docs.map(d=>d.revision||0));
   });
@@ -217,13 +221,13 @@ test("rapid notebook edits always advance persisted optimistic revision",async({
 
 test("backup aborts instead of exporting stale notebook data after a save failure",async({page})=>{
   const errors=await openApp(page);
-  await page.locator('[data-view="worksheet"]').first().click();
+  await goView(page,"worksheet");
   await page.waitForTimeout(500);
   await page.evaluate(()=>{
     window.CalcPersistence.saveNotebookIncremental=async()=>{const e=new Error("Forced quota failure");e.name="QuotaExceededError";throw e;};
   });
   await page.locator("#worksheetTitle").fill("Must not be silently omitted");
-  await page.locator('[data-view="settings"]').first().click();
+  await goView(page,"settings");
   let downloads=0;page.on("download",()=>downloads++);
   await page.locator("#fullBackupBtn").click();
   await expect(page.locator("#toast")).toContainText("cancelled");
@@ -234,7 +238,7 @@ test("backup aborts instead of exporting stale notebook data after a save failur
 
 test("remote notebook update preserves local dirty edits as a visible conflict copy",async({page})=>{
   const errors=await openApp(page);
-  await page.locator('[data-view="worksheet"]').first().click();
+  await goView(page,"worksheet");
   const auto=page.locator("#worksheetAutoRun");if(await auto.isChecked())await auto.uncheck();
   await page.waitForTimeout(450);
   const editor=page.locator(".ws-editor").first();
@@ -277,7 +281,7 @@ test("failed custom-tool draft save leaves active runtime tool intact",async({pa
     const db=new P.CalcDatabase();await db.open();await db.repository(P.STORES.customTools).put(active);return active.id;
   });
   await page.reload({waitUntil:"domcontentloaded"});
-  await page.locator('[data-view="tools"]').first().click();
+  await goView(page,"tools");
   await expect(page.locator("#toolList button").filter({hasText:"Persistence Guard"})).toBeVisible();
   await page.locator("#customToolBuilderBtn").click();
   await page.locator("#customToolLibrary button").filter({hasText:"Persistence Guard"}).click();
@@ -302,7 +306,7 @@ test("custom-tool revision conflict installs newer remote original and preserves
   });
   await page.reload({waitUntil:"domcontentloaded"});
   await expect.poll(()=>page.evaluate(id=>!!window.CalcTools.REGISTRY.get("custom."+id),seed.id),{timeout:5000}).toBeTruthy();
-  await page.locator('[data-view="tools"]').first().click();
+  await goView(page,"tools");
   await page.locator("#customToolBuilderBtn").click();
   await page.locator("#customToolLibrary button").filter({hasText:"Conflict Guard"}).click();
   await page.evaluate(async id=>{
@@ -333,7 +337,7 @@ test("failed custom-tool delete leaves persisted and runtime tool intact",async(
     const db=new P.CalcDatabase();await db.open();await db.repository(P.STORES.customTools).put(active);return active.id;
   });
   await page.reload({waitUntil:"domcontentloaded"});
-  await page.locator('[data-view="tools"]').first().click();
+  await goView(page,"tools");
   await page.locator("#customToolBuilderBtn").click();
   await page.locator("#customToolLibrary button").filter({hasText:"Delete Guard"}).click();
   await page.evaluate(()=>{window.CalcPersistence.deleteWithTombstone=async()=>{throw new Error("forced custom delete failure");};});
@@ -378,7 +382,7 @@ test("custom builder close applies deferred cross-tab refresh",async({page})=>{
   });
   await page.reload({waitUntil:"domcontentloaded"});
   await expect.poll(()=>page.evaluate(id=>!!window.CalcTools.REGISTRY.get("custom."+id),id),{timeout:5000}).toBeTruthy();
-  await page.locator('[data-view="tools"]').first().click();
+  await goView(page,"tools");
   await page.locator("#customToolBuilderBtn").click();
   await expect(page.locator("#customToolDialog")).toHaveJSProperty("open",true);
   await page.evaluate(async id=>{
@@ -435,7 +439,7 @@ test("all registered tools render and execute their default UI without JS failur
 
 test("data workspace sample analytics and distributions remain operable",async({page})=>{
   const errors=await openApp(page);
-  await page.locator('[data-view="data"]').first().click();
+  await goView(page,"data");
   await page.locator("#sampleDataBtn").click();
   await expect(page.locator("#dataSummary")).toContainText("5 rows");
   for(const id of ["pearsonBtn","spearmanBtn","regressionBtn","histogramBtn","boxplotBtn","meanCiBtn","oneSampleTBtn","distributionEvalBtn","distributionQuantileBtn"]){
