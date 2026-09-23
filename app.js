@@ -1117,8 +1117,8 @@ async function recomputeRestorePlan(){
   if(!state.restoreBackup){$("#restorePreview").textContent="No backup selected.";$("#applyRestoreBtn").disabled=true;return;}
   try{
     var stores=selectedRestoreStores(),plan=await P.planRestore(persistenceDb,state.restoreBackup,{mode:$("#restoreMode").value,conflictPolicy:$("#restoreConflictPolicy").value,stores:stores});
-    plan.data[P.STORES.notebooks]=plan.data[P.STORES.notebooks].map(function(item){return NB.normalizeNotebook(item);});
-    plan.data[P.STORES.customTools]=plan.data[P.STORES.customTools].map(function(item){return CT.normalizeManifest(item);});
+    if(plan.selectedStores.includes(P.STORES.notebooks))plan.data[P.STORES.notebooks]=plan.data[P.STORES.notebooks].map(function(item){return NB.normalizeNotebook(item);});
+    if(plan.selectedStores.includes(P.STORES.customTools))plan.data[P.STORES.customTools]=plan.data[P.STORES.customTools].map(function(item){return CT.normalizeManifest(item);});
     state.restorePlan=plan;
     var lines=["Verified backup · "+plan.verifiedHash.slice(0,16)+"…","Mode: "+plan.mode,"Selected: "+plan.selectedStores.join(", "),"Domain schemas: notebooks/custom tools validated"];
     P.DATA_STORES.forEach(function(s){lines.push(s+(plan.selectedStores.includes(s)?"":" (unchanged)")+": "+plan.summary.current[s]+" local + "+plan.summary.incoming[s]+" backup → "+plan.summary.result[s]);});
