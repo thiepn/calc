@@ -146,7 +146,27 @@ function parseAssumption(source){
   }
   return {source:String(source).trim(),left:l,right:r,op:op,variable:variable,bound:bound};
 }
-function parseAssumptions(parts){return parts.map(parseAssumption);}
+function validateAssumptions(assumptions){
+  var ranges=new Map();
+  assumptions.forEach(function(a){
+    if(!a.variable||a.bound===null)return;
+    var value=M.toNumber(a.bound);if(!Number.isFinite(value))return;
+    var r=ranges.get(a.variable)||{lo:-Infinity,loClosed:false,hi:Infinity,hiClosed:false,excluded:new Set()};
+    if(a.op===">"){if(value>r.lo||value===r.lo&&r.loClosed){r.lo=value;r.loClosed=false;}}
+    else if(a.op===">="){if(value>r.lo){r.lo=value;r.loClosed=true;}}
+    else if(a.op==="<"){if(value<r.hi||value===r.hi&&r.hiClosed){r.hi=value;r.hiClosed=false;}}
+    else if(a.op==="<="){if(value<r.hi){r.hi=value;r.hiClosed=true;}}
+    else if(a.op==="="){r.lo=value;r.hi=value;r.loClosed=true;r.hiClosed=true;}
+    else if(a.op==="!=")r.excluded.add(value);
+    ranges.set(a.variable,r);
+  });
+  ranges.forEach(function(r,name){
+    var impossible=r.lo>r.hi||(r.lo===r.hi&&(!r.loClosed||!r.hiClosed||r.excluded.has(r.lo)));
+    if(impossible)throw new CASError("CONTRADICTORY_ASSUMPTIONS","Assumptions for "+name+" are contradictory");
+  });
+  return assumptions;
+}
+function parseAssumptions(parts){return validateAssumptions(parts.map(parseAssumption));}
 function zeroBound(assumption){
   return assumption.variable&&assumption.bound!==null&&compareZero(assumption.bound)===0;
 }
@@ -163,13 +183,13 @@ function directSignMask(name,assumptions){
     else if(a.op==="!=")m=5;
     mask&=m;
   });
-  return mask||7;
+  return mask;
 }
 function maskSigns(mask){
   var out=[];if(mask&1)out.push(-1);if(mask&2)out.push(0);if(mask&4)out.push(1);return out;
 }
 function signsMask(signs){
-  var m=0;signs.forEach(function(s){m|=s<0?1:s>0?4:2;});return m||7;
+  var m=0;signs.forEach(function(s){m|=s<0?1:s>0?4:2;});return m;
 }
 function multiplyMasks(a,b,division){
   var out=[];
@@ -243,10 +263,23 @@ function simplifyAssumedAst(ast,assumptions){
   }
   return cloneAst(ast);
 }
+function restrictionProven(restriction,assumptions){
+  if(compareZero(restriction.value)!==0)return false;
+  var mask=signMask(restriction.expression.ast,assumptions||[]);
+  if(restriction.relation==="!=")return (mask&2)===0;
+  if(restriction.relation===">")return mask===4;
+  if(restriction.relation===">=")return (mask&1)===0;
+  if(restriction.relation==="<")return mask===1;
+  if(restriction.relation==="<=")return (mask&4)===0;
+  if(restriction.relation==="=")return mask===2;
+  return false;
+}
 function simplifyWithAssumptions(source,variable,assumptions){
+  assumptions=assumptions||[];
   var original=source instanceof A.SymbolicExpression?source:new A.SymbolicExpression(source);
-  var ast=simplifyAssumedAst(original.ast,assumptions||[]);
-  var expr=new A.SymbolicExpression(ast,{restrictions:original.restrictions});
+  var ast=simplifyAssumedAst(original.ast,assumptions);
+  var restrictions=original.restrictions.filter(function(r){return !restrictionProven(r,assumptions);});
+  var expr=new A.SymbolicExpression(ast,{restrictions:restrictions});
   try{return expr.simplify(variable);}catch(e){return expr;}
 }
 function assumptionText(assumptions){return assumptions.map(function(a){return a.source;}).join(", ");}
@@ -428,15 +461,34 @@ function solveSimpleTranscendental(source,variable){
       return new A.SolutionSet(variable,"finite",[new A.SolutionValue(new A.SymbolicExpression(expr),null,true)],{});
     }
     var k=id("k"),pi=id("pi"),phase=null,twoPiK=bin("*",lit(rat(2)),bin("*",k,pi));
+    if(target&&(fnNode.name==="sin"||fnNode.name==="cos")){
+      var tv=target.toNumber();if(tv<-1||tv>1)return new A.SolutionSet(variable,"empty",[],{});
+    }
     if(fnNode.name==="sin"&&target){
       if(target.equals(rat(0)))phase=bin("*",k,pi);
       else if(target.equals(rat(1)))phase=bin("+",bin("/",pi,lit(rat(2))),twoPiK);
       else if(target.equals(rat(-1)))phase=bin("+",unary("-",bin("/",pi,lit(rat(2)))),twoPiK);
+      else{
+        var asin=call("asin",[cloneAst(rhs)]),p1=bin("+",cloneAst(asin),cloneAst(twoPiK)),
+          p2=bin("+",bin("-",cloneAst(pi),cloneAst(asin)),cloneAst(twoPiK)),
+          e1=new A.SymbolicExpression(A.simplifyAst(bin("/",bin("-",p1,cloneAst(b)),cloneAst(a)))),
+          e2=new A.SymbolicExpression(A.simplifyAst(bin("/",bin("-",p2,cloneAst(b)),cloneAst(a))));
+        return new ConditionalSolution(variable,[{condition:"k ∈ ℤ",result:variable+" = "+e1.toString()+" or "+variable+" = "+e2.toString()}],{family:true});
+      }
     }else if(fnNode.name==="cos"&&target){
       if(target.equals(rat(0)))phase=bin("+",bin("/",pi,lit(rat(2))),bin("*",k,pi));
       else if(target.equals(rat(1)))phase=twoPiK;
       else if(target.equals(rat(-1)))phase=bin("+",pi,twoPiK);
-    }else if(fnNode.name==="tan"&&target&&target.equals(rat(0)))phase=bin("*",k,pi);
+      else{
+        var acos=call("acos",[cloneAst(rhs)]),c1=bin("+",cloneAst(acos),cloneAst(twoPiK)),
+          c2=bin("+",unary("-",cloneAst(acos)),cloneAst(twoPiK)),
+          ce1=new A.SymbolicExpression(A.simplifyAst(bin("/",bin("-",c1,cloneAst(b)),cloneAst(a)))),
+          ce2=new A.SymbolicExpression(A.simplifyAst(bin("/",bin("-",c2,cloneAst(b)),cloneAst(a))));
+        return new ConditionalSolution(variable,[{condition:"k ∈ ℤ",result:variable+" = "+ce1.toString()+" or "+variable+" = "+ce2.toString()}],{family:true});
+      }
+    }else if(fnNode.name==="tan"&&target){
+      phase=bin("+",call("atan",[cloneAst(rhs)]),bin("*",k,pi));
+    }
     if(phase){
       expr=A.simplifyAst(bin("/",bin("-",phase,b),a));
       return new ParametricFamily(variable,new A.SymbolicExpression(expr),"k","ℤ");
@@ -597,7 +649,7 @@ function rootEntries(poly,variable,kind){
   var solved=A.solveEquation(poly.toString()+" = 0",variable),out=[];
   if(solved.type!=="finite")return out;
   solved.values.forEach(function(v){
-    var n=approximateSolutionValue(v);if(Number.isFinite(n)&&Math.abs((n===0?0:n)-n)<1e-8)out.push({expr:v.expression,approx:n,kinds:new Set([kind])});
+    var n=approximateSolutionValue(v);if(Number.isFinite(n))out.push({expr:v.expression,approx:n,kinds:new Set([kind])});
   });
   return out;
 }
