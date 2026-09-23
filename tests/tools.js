@@ -172,6 +172,16 @@ eq(T.divisors(12n).join(","),"1,2,3,4,6,12","divisors");
 assert(T.REGISTRY.get("unit-converter").specialized,"unit converter registered specialized");
 assert(T.REGISTRY.get("engineering-relations").specialized,"engineering registered specialized");
 
+// Dynamic custom aliases must not hijack or permanently erase existing aliases.
+const aliasRegistry=new T.ToolRegistry();
+aliasRegistry.register({id:"built",name:"Built",category:"Everyday",aliases:["shared"],inputs:[],run:()=>({display:"built"})});
+aliasRegistry.register({id:"custom.one",name:"Custom One",category:"Custom",aliases:["shared","custom-alias"],inputs:[],run:()=>({display:"custom"})});
+eq(aliasRegistry.get("shared").id,"built","existing alias not hijacked by custom tool");
+eq(aliasRegistry.get("custom-alias").id,"custom.one","unique custom alias indexed");
+aliasRegistry.unregister("custom.one");
+eq(aliasRegistry.get("shared").id,"built","built-in alias survives custom unregister");
+eq(aliasRegistry.get("custom-alias"),null,"removed custom alias cleared");
+
 // Structured ToolResult serialization retains non-JSON-native types.
 const richResult={
   toolResult:true,
