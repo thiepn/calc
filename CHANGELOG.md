@@ -29,7 +29,20 @@ All notable production changes to Calc are recorded here.
 ### Verification
 
 - Added a browser bug-sweep suite covering workspace navigation, malformed deep links, dynamic-rendering safety, continuous tool search, blocked Web Storage, notebook import/recovery/persistence/conflicts, Custom Tool lifecycle/conflicts/cross-tab refresh, History failure handling, every registered tool UI, and core Data interactions.
+- Failed notebook imports roll back their in-memory insertion and never report success for unsaved data.
+- Failed notebook version restores roll back the visible document instead of presenting an unsaved restored version.
+- Deleting the last notebook reports if its replacement blank notebook cannot be persisted.
+- Notebook deletion flushes the current edits before creating the Trash payload and cancels if that safety save fails.
+- Notebook and Custom Tool import size limits are enforced before file contents are read into memory.
+- Duplicate dataset headers are deterministically disambiguated and ambiguous Dataset objects are rejected.
+- Archive and Export in Custom Tools use the current visible editor state instead of silently dropping unsaved fields.
+- Notebook autosave timers are isolated per notebook, auto-run is target-aware, and rapid edits across notebook switches no longer cancel or save the wrong document.
+- Session recovery now retains multiple unsaved notebooks with backward compatibility for the old single-snapshot format.
+- Recovered notebook copies register their persisted revision immediately so later edits remain protected by optimistic concurrency.
+- Backup/update flush retries failed non-active notebook recovery entries so unsaved data from another notebook cannot be omitted.
+
 - The bug sweep runs alongside the existing migration, backup/restore, large-persistence, corruption, performance, and offline PWA soak on Chromium, Firefox, WebKit, and mobile Chromium.
+
 ## [1.0.0] — 2026-09-23
 
 ### Calculator platform

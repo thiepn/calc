@@ -4,6 +4,8 @@ A local-first universal calculator PWA and mathematical workstation.
 
 **Current stable release: v1.0.1** · IndexedDB schema v5 · production channel.
 
+v1.0.1 is the post-v1.0 bug-fix baseline, focused on persistence truthfulness, cross-tab conflict safety, mobile layout recovery, import/render hardening, and expanded cross-browser regression coverage.
+
 ## Current implementation
 
 Calc currently includes:

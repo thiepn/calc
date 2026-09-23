@@ -20,6 +20,12 @@ Calc v1.0.1 is a bug-fix and resilience release on top of the v1.0.0 production 
 - Cross-tab Custom Tool archive/update events rebuild the runtime from persisted truth, safely defer while the builder is open, refresh the editor on close, and retain last-known-good state if refresh fails.
 - History save/clear failures are reported truthfully and do not create a false deleted state.
 - Phone-sized Worksheet layouts retain notebook switching, import/export, delete, and version-management controls.
+- Responsive CSS escape corruption was removed so phone-sized graph/tools/data/worksheet rules parse correctly.
+- Notebook import, version restore, and delete paths are persistence-truthful and preserve the newest edits in Trash.
+- Duplicate Data headers receive deterministic unique names instead of ambiguous column lookup.
+- Custom Tool Archive/Export operate on current editor values, including unsaved visible changes.
+- Per-notebook autosave timers prevent edits in one notebook from cancelling or saving another after a fast switch.
+- Session recovery keeps multiple unsaved notebooks and backup/update retries failed non-active saves before proceeding.
 
 ## Certification
 
