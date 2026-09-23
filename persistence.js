@@ -113,6 +113,15 @@ class Repository{
   all(){return this.withStore("readonly",os=>requestPromise(os.getAll()));}
   get(key){return this.withStore("readonly",os=>requestPromise(os.get(key)));}
   put(value){return this.withStore("readwrite",os=>requestPromise(os.put(value)));}
+  putVersioned(value,expectedRevision){
+    const self=this,key=value&&value[this.keyField];if(key===undefined||key===null)throw new PersistenceError("MISSING_KEY","Versioned write requires a stable key");
+    return this.withStore("readwrite",async function(os){
+      const current=await requestPromise(os.get(key)),actual=current?revisionOf(current):null;
+      if(expectedRevision!==undefined&&expectedRevision!==null&&actual!==null&&Number(actual)!==Number(expectedRevision))throw new PersistenceError("REVISION_CONFLICT","A newer version already exists",{store:self.store,key:key,expected:Number(expectedRevision),actual:Number(actual),current:current});
+      if((expectedRevision===null||expectedRevision===undefined)&&current&&Number(revisionOf(current))>Number(revisionOf(value)))throw new PersistenceError("REVISION_CONFLICT","Refusing to replace a newer stored revision",{store:self.store,key:key,actual:Number(revisionOf(current)),incoming:Number(revisionOf(value)),current:current});
+      await requestPromise(os.put(value));return key;
+    });
+  }
   delete(key){return this.withStore("readwrite",os=>requestPromise(os.delete(key)));}
   clear(){return this.withStore("readwrite",os=>requestPromise(os.clear()));}
   count(){return this.withStore("readonly",os=>requestPromise(os.count()));}
