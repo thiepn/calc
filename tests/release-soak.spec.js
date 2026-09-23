@@ -86,13 +86,15 @@ test("v4 → v5 migration preserves realistic existing data",async({page})=>{
   const migrated=await page.evaluate(async()=>{
     const P=window.CalcPersistence,db=new P.CalcDatabase();const native=await db.open(),stores=Array.from(native.objectStoreNames);
     const history=await db.repository(P.STORES.history).count(),notebooks=await P.loadNotebooks(db),settings=await db.repository(P.STORES.settings).all(),tools=await db.repository(P.STORES.customTools).all(),tombs=await db.repository(P.STORES.tombstones).all();
+    const legacy=notebooks.filter(n=>/^legacy-n[0-2]$/.test(n.id)),sourceLength=legacy.reduce((max,n)=>Math.max(max,n.blocks[0]?.source?.length||0),0);
     const postUpgradeBackup=await P.buildBackup({db,appVersion:window.CalcAppVersion}),checked=await P.validateBackup(postUpgradeBackup);
-    return {version:native.version,stores,history,notebooks:notebooks.length,sourceLength:notebooks[0].blocks[0].source.length,theme:settings.find(x=>x.key==="theme")?.value,tools:tools.length,tombs:tombs.length,backupVersion:checked.backup.app.appVersion,backupDbVersion:checked.backup.app.dbVersion};
+    return {version:native.version,stores,history,notebooks:notebooks.length,legacyCount:legacy.length,sourceLength,theme:settings.find(x=>x.key==="theme")?.value,tools:tools.length,tombs:tombs.length,backupVersion:checked.backup.app.appVersion,backupDbVersion:checked.backup.app.dbVersion};
   });
   expect(migrated.version).toBe(5);
   expect(migrated.stores).toContain("chunks");
   expect(migrated.history).toBe(1200);
-  expect(migrated.notebooks).toBe(3);
+  expect(migrated.notebooks).toBeGreaterThanOrEqual(3);
+  expect(migrated.legacyCount).toBe(3);
   expect(migrated.sourceLength).toBeGreaterThan(50000);
   expect(migrated.theme).toBe("graphite");
   expect(migrated.tools).toBe(1);

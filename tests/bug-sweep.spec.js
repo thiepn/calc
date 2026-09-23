@@ -115,23 +115,16 @@ test("notebook title input is recovery-safe before blur",async({page})=>{
 test("rapid notebook edits always advance persisted optimistic revision",async({page})=>{
   await openApp(page);
   await page.locator('[data-view="worksheet"]').first().click();
-  await page.waitForTimeout(500);
-  const before=await page.evaluate(async()=>{
+  const readMaxRevision=()=>page.evaluate(async()=>{
     const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();const docs=await P.loadNotebooks(db);return Math.max(...docs.map(d=>d.revision||0));
   });
+  const before=await readMaxRevision();
   const editor=page.locator(".ws-editor").first();
   await editor.fill("1+1");
-  await page.waitForTimeout(400);
-  const afterBlock=await page.evaluate(async()=>{
-    const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();const docs=await P.loadNotebooks(db);return Math.max(...docs.map(d=>d.revision||0));
-  });
-  expect(afterBlock).toBeGreaterThan(before);
+  await expect.poll(readMaxRevision,{timeout:3000,intervals:[100,150,250,400]}).toBeGreaterThan(before);
+  const afterBlock=await readMaxRevision();
   await page.locator("#worksheetTitle").fill("Rapid revision probe");
-  await page.waitForTimeout(400);
-  const afterTitle=await page.evaluate(async()=>{
-    const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();const docs=await P.loadNotebooks(db);return Math.max(...docs.map(d=>d.revision||0));
-  });
-  expect(afterTitle).toBeGreaterThan(afterBlock);
+  await expect.poll(readMaxRevision,{timeout:3000,intervals:[100,150,250,400]}).toBeGreaterThan(afterBlock);
 });
 
 test("backup aborts instead of exporting stale notebook data after a save failure",async({page})=>{
