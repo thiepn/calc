@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: calc-release-soak-${{ github.ref }}
+  group: calc-release-soak-v14-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
