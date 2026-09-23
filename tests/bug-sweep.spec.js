@@ -203,6 +203,38 @@ test("notebook Ref copy does not throw when clipboard APIs are unavailable",asyn
   expect(errors).toEqual([]);
 });
 
+test("notebook delete flushes current unsaved edits into Trash",async({page})=>{
+  const errors=await openApp(page);
+  await goView(page,"worksheet");
+  const title=page.locator("#worksheetTitle");
+  await title.fill("Delete Flush Probe");
+  page.once("dialog",dialog=>dialog.accept());
+  await page.locator("#deleteWorksheetBtn").click();
+  await expect(page.locator("#toast")).toContainText("Notebook deleted");
+  const trashTitle=await page.evaluate(async()=>{
+    const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();
+    const items=await P.listTrash(db),item=items.find(x=>x.entityType===P.STORES.notebooks);
+    return item&&item.payload&&item.payload.title;
+  });
+  expect(trashTitle).toBe("Delete Flush Probe");
+  expect(errors).toEqual([]);
+});
+
+test("notebook delete aborts when current edits cannot be flushed",async({page})=>{
+  const errors=await openApp(page);
+  await goView(page,"worksheet");
+  const title=page.locator("#worksheetTitle");await title.fill("Do Not Delete");
+  const before=await page.locator("#worksheetList button").count();
+  await page.evaluate(()=>{window.CalcPersistence.saveNotebookIncremental=async()=>{throw new Error("forced delete preflight save failure");};});
+  page.once("dialog",dialog=>dialog.accept());
+  await page.locator("#deleteWorksheetBtn").click();
+  await expect(page.locator("#toast")).toContainText("Delete cancelled");
+  await expect(page.locator("#worksheetList button")).toHaveCount(before);
+  const trash=await page.evaluate(async()=>{const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();return (await P.listTrash(db)).filter(x=>x.entityType===P.STORES.notebooks).length;});
+  expect(trash).toBe(0);
+  expect(errors).toEqual([]);
+});
+
 test("delete-last-notebook reports unsaved replacement when replacement persistence fails",async({page})=>{
   const errors=await openApp(page);
   await goView(page,"worksheet");

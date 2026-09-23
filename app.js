@@ -1136,6 +1136,10 @@ async function deleteActiveNotebook(){
   var ws=state.activeWorksheet;if(!ws)return;if(!confirm("Delete notebook '"+ws.title+"'?"))return;
   clearTimeout(worksheetSaveTimer);clearTimeout(worksheetEvalTimer);
   try{
+    var targetId=ws.id,saved=await saveWorksheet(ws,false);
+    if(!saved){toast("Delete cancelled because the notebook could not be saved safely");return;}
+    if(!state.activeWorksheet||state.activeWorksheet.id!==targetId){toast("Delete cancelled because a newer notebook revision was reconciled; review the conflict copy first");return;}
+    ws=state.activeWorksheet;
     var info=await P.deleteNotebookWithTombstone(persistenceDb,ws.id,{revision:(ws.revision||0)+1,deviceId:syncManager.deviceId});
     persistenceCoordinator.publish({entityType:P.STORES.notebooks,entityId:String(ws.id),revision:info.revision,action:"delete"});persistenceCoordinator.publish({entityType:P.STORES.tombstones,entityId:P.STORES.notebooks+":"+String(ws.id),revision:info.revision,action:"put"});
     state.persistedRevisions.worksheets.delete(ws.id);clearSessionRecovery(ws.id);
