@@ -143,7 +143,8 @@ class MemoryDb{
     [P.STORES.settings]:[],
     [P.STORES.customTools]:[]
   });
-  const applied=await P.applyRestore(restoreDb,replacePlan);
+  const restorePlan=await P.planRestore(restoreDb,incoming,{mode:"replace"});
+  const applied=await P.applyRestore(restoreDb,restorePlan);
   eq(applied.status,"committed","restore journal committed");
   const restoredData=await restoreDb.allData();
   assert(restoredData[P.STORES.notebooks].some(x=>x.id==="n2"),"restore imported notebook");
@@ -157,8 +158,9 @@ class MemoryDb{
     [P.STORES.settings]:[],
     [P.STORES.customTools]:[]
   });
+  const failingPlan=await P.planRestore(failingDb,incoming,{mode:"replace"});
   failingDb.failTransactions=true;
-  await throwsCode(()=>P.applyRestore(failingDb,replacePlan),"RESTORE_ERROR","restore failure surfaced");
+  await throwsCode(()=>P.applyRestore(failingDb,failingPlan),"RESTORE_ERROR","restore failure surfaced");
   const afterFail=await failingDb.allData();
   eq(afterFail[P.STORES.history][0].id,"keep","failed atomic restore preserves original history");
   const recoveryBad=await P.recoveryReport(failingDb);
