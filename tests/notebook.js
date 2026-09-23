@@ -238,4 +238,10 @@ eq(global.CalcUnits.formatQuantity(N.deserializeValue(N.serializeValue(q))),"5 k
 const tooMany={schema:N.SCHEMA,id:"many",title:"Many",blocks:Array.from({length:N.MAX_BLOCKS+1},(_,i)=>block("b"+i,"text","x"))};
 throwsCode(()=>N.normalizeNotebook(tooMany),"NOTEBOOK_SCHEMA_ERROR","block budget enforced");
 
+// Imported block IDs become DOM-selector keys in the UI; reject unsafe syntax.
+throwsCode(()=>N.normalizeBlock({id:'bad"]#selector',type:"math",source:"1+1"},0),"NOTEBOOK_SCHEMA_ERROR","unsafe block ID rejected");
+const safeImported=N.importNotebook(JSON.stringify({schema:N.SCHEMA,notebook:{schema:N.SCHEMA,id:"source",title:"Safe import",blocks:[{id:"block-safe_1:ok",type:"math",source:"1+1"}]}}));
+eq(safeImported.blocks[0].id,"block-safe_1:ok","safe imported block ID preserved");
+assert(N.MAX_IMPORT_BYTES>=1024*1024,"notebook import limit exported");
+
 console.log("Worksheets and Notebooks V2 certification tests passed");
