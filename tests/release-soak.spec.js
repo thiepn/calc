@@ -76,7 +76,7 @@ test("v4 → v5 migration preserves realistic existing data",async({page})=>{
     settings.put({key:"theme",value:"graphite",updatedAt:1});settings.put({key:"precision",value:14,updatedAt:1});
     tools.put({id:"custom.legacy",revision:1,name:"Legacy tool",status:"archived",updatedAt:1});
     meta.put({key:"schema",dbVersion:4,migratedFrom:3,steps:["create-tombstones"],updatedAt:1});
-    tombs.put({id:"worksheets:gone",entityType:"worksheets",entityId:"gone",revision:2,deletedAt:1,deviceId:"old",recoverable:false,payload:null});
+    tombs.put({id:"worksheets:gone",entityType:"worksheets",entityId:"gone",revision:2,deletedAt:Date.now(),deviceId:"old",recoverable:false,payload:null});
     await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});
     db.close();return {history:1200,notebooks:3};
   });
