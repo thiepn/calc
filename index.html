@@ -324,12 +324,17 @@
           <div class="settings-grid">
             <section class="panel settings-panel">
               <div class="section-heading"><div><h2>Backup & Restore</h2><p>Portable, integrity-checked local backup.</p></div></div>
+              <div class="settings-form">
+                <div class="field full"><label for="backupPassword">Backup password <span class="muted">(optional; encrypts backup)</span></label><input id="backupPassword" type="password" autocomplete="new-password" placeholder="Leave blank for plaintext JSON"></div>
+              </div>
               <div class="action-row">
                 <button id="fullBackupBtn" class="primary-btn">Download full backup</button>
+                <button id="shareBackupBtn">Share backup</button>
                 <button id="restoreBackupBtn">Choose backup</button>
                 <input id="restoreBackupFile" type="file" accept=".json,.calcbackup.json,application/json" hidden>
               </div>
               <div class="settings-form">
+                <div class="field full"><label for="restorePassword">Restore password <span class="muted">(for encrypted backups)</span></label><input id="restorePassword" type="password" autocomplete="current-password" placeholder="Only needed for encrypted backup"></div>
                 <div class="field"><label for="restoreMode">Restore mode</label><select id="restoreMode"><option value="merge">Merge</option><option value="replace">Replace all local data</option></select></div>
                 <div class="field"><label for="restoreConflictPolicy">Merge conflicts</label><select id="restoreConflictPolicy"><option value="newer">Keep newer revision</option><option value="conflict-copy">Create conflict copy</option><option value="incoming">Prefer backup</option></select></div>
               </div>
