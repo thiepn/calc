@@ -21,6 +21,7 @@ class MemoryRepo{
   async put(value){const key=this.store===P.STORES.settings||this.store===P.STORES.meta?value.key:value.id;this.db.data[this.store].set(key,JSON.parse(JSON.stringify(value)));return key;}
   async delete(key){this.db.data[this.store].delete(key);}
   async clear(){this.db.data[this.store].clear();}
+  async count(){return this.db.data[this.store].size;}
 }
 class MemoryDb{
   constructor(seed){
