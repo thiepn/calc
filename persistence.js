@@ -357,10 +357,10 @@ async function buildBackup(options){
   const data=await db.allData();data[STORES.settings]=normalizeSettings(data[STORES.settings],options.clientSettings||{});
   for(const s of DATA_STORES)validateStoreItems(s,data[s]);
   const storeHashes={};for(const s of DATA_STORES)storeHashes[s]=await hashValue(data[s]);
-  const payloadHash=await hashValue({stores:data,storeHashes:storeHashes});
+  const counts=Object.fromEntries(DATA_STORES.map(s=>[s,data[s].length])),totalItems=countBackupItems(data),payloadHash=await hashValue({storeHashes:storeHashes,counts:counts,totalItems:totalItems});
   return {
     schema:BACKUP_SCHEMA,createdAt:new Date().toISOString(),app:{name:"Calc",dbVersion:DB_VERSION,appVersion:options.appVersion||"dev"},
-    manifest:{stores:DATA_STORES.slice(),counts:Object.fromEntries(DATA_STORES.map(s=>[s,data[s].length])),storeHashes:storeHashes,payloadHash:payloadHash,totalItems:countBackupItems(data)},
+    manifest:{stores:DATA_STORES.slice(),counts:counts,storeHashes:storeHashes,payloadHash:payloadHash,hashMode:"store-manifest/v2",totalItems:totalItems},
     data:data
   };
 }
@@ -377,7 +377,8 @@ async function validateBackup(input){
   for(const s of DATA_STORES){if(!Array.isArray(backup.data[s]))backup.data[s]=[];validateStoreItems(s,backup.data[s]);}
   if(countBackupItems(backup.data)>MAX_BACKUP_ITEMS)throw new BackupError("Backup exceeds total item limit");
   const hashes={};for(const s of DATA_STORES){hashes[s]=await hashValue(backup.data[s]);if(backup.manifest.storeHashes&&backup.manifest.storeHashes[s]&&hashes[s]!==backup.manifest.storeHashes[s])throw new IntegrityError("Integrity check failed for "+s,{expected:backup.manifest.storeHashes[s],actual:hashes[s]});}
-  const payloadHash=await hashValue({stores:backup.data,storeHashes:hashes});
+  const counts=Object.fromEntries(DATA_STORES.map(s=>[s,backup.data[s].length])),totalItems=countBackupItems(backup.data);
+  const payloadHash=backup.manifest.hashMode==="store-manifest/v2"?await hashValue({storeHashes:hashes,counts:counts,totalItems:totalItems}):await hashValue({stores:backup.data,storeHashes:hashes});
   if(backup.manifest.payloadHash&&payloadHash!==backup.manifest.payloadHash)throw new IntegrityError("Backup payload hash mismatch",{expected:backup.manifest.payloadHash,actual:payloadHash});
   return {backup:backup,storeHashes:hashes,payloadHash:payloadHash};
 }
@@ -579,6 +580,29 @@ async function recoveryReport(db){
 function appendChunkedText(parts,text,size){
   text=String(text);size=Math.max(16384,Number(size)||BACKUP_PART_CHARS);for(let i=0;i<text.length;i+=size)parts.push(text.slice(i,i+size));
 }
+async function buildBackupBlobFromDb(options){
+  options=options||{};const db=options.db;if(!db)throw new BackupError("Database is required");
+  const partChars=Math.max(16384,Number(options.partChars)||BACKUP_PART_CHARS),createdAt=new Date().toISOString(),app={name:"Calc",dbVersion:DB_VERSION,appVersion:options.appVersion||"dev"},parts=[],storeHashes={},counts={};let totalItems=0,totalBytes=0;
+  parts.push('{"schema":'+JSON.stringify(BACKUP_SCHEMA)+',"createdAt":'+JSON.stringify(createdAt)+',"app":'+JSON.stringify(app)+',"data":{');
+  for(let si=0;si<DATA_STORES.length;si++){
+    const store=DATA_STORES[si];let items;
+    if(store===STORES.notebooks)items=await loadNotebooks(db);
+    else if(store===STORES.tombstones)items=await loadTombstones(db);
+    else items=await db.repository(store).all();
+    if(store===STORES.settings)items=normalizeSettings(items,options.clientSettings||{});
+    validateStoreItems(store,items);counts[store]=items.length;totalItems+=items.length;storeHashes[store]=await hashValue(items);
+    if(si)parts.push(",");parts.push(JSON.stringify(store)+":[");
+    for(let ii=0;ii<items.length;ii++){
+      if(ii)parts.push(",");const json=JSON.stringify(items[ii]);totalBytes+=utf8Bytes(json).byteLength;appendChunkedText(parts,json,partChars);
+      if(totalBytes>MAX_BACKUP_BYTES)throw new BackupError("Backup exceeds "+MAX_BACKUP_BYTES+" bytes");
+    }
+    parts.push("]");items=null;
+  }
+  if(totalItems>MAX_BACKUP_ITEMS)throw new BackupError("Backup exceeds total item limit");
+  const payloadHash=await hashValue({storeHashes:storeHashes,counts:counts,totalItems:totalItems}),manifest={stores:DATA_STORES.slice(),counts:counts,storeHashes:storeHashes,payloadHash:payloadHash,hashMode:"store-manifest/v2",totalItems:totalItems};
+  parts.push('},"manifest":');appendChunkedText(parts,JSON.stringify(manifest),partChars);parts.push("}");
+  return {blob:new Blob(parts,{type:"application/json"}),schema:BACKUP_SCHEMA,createdAt:createdAt,app:app,manifest:manifest};
+}
 function buildBackupBlob(payload,options){
   options=options||{};const partChars=Math.max(16384,Number(options.partChars)||BACKUP_PART_CHARS),parts=[];
   if(payload&&payload.schema===BACKUP_SCHEMA&&payload.data){
@@ -640,6 +664,38 @@ async function multiTabStressTest(){
     return {status:"pass",message:"50 ordered revisions delivered; stale revision rejected",received:seen.length};
   }finally{a.stop();b.stop();}
 }
+async function chunkPersistenceSelfTest(){
+  if(!global.indexedDB)return {status:"skipped",message:"IndexedDB unavailable"};
+  const name=DB_NAME+"-chunk-selftest-"+randomId("run"),testDb=new CalcDatabase({name:name,version:DB_VERSION,indexedDB:global.indexedDB}),largeA="a".repeat(150000),largeB="b".repeat(150000),largeC="c".repeat(150000);
+  try{
+    await testDb.open();
+    const notebook={id:"nb-large",title:"Large notebook",revision:1,updatedAt:1,blocks:[{id:"b1",source:largeA,result:{serialized:{blob:largeB}}}],versions:[{reason:"baseline",snapshot:{revision:1,updatedAt:1,blocks:[{id:"b1",source:largeC}]}}]};
+    const first=await saveNotebookIncremental(testDb,notebook,null,{externalizeBytes:4096,chunkBytes:32768});if(first.chunkWrites<6)throw new IntegrityError("Large notebook was not split into enough chunks",{stats:first});
+    const raw=await testDb.repository(STORES.notebooks).get(notebook.id);if(!raw.persistence||raw.blocks[0].source!=="")throw new IntegrityError("Large notebook payload remained monolithic");
+    const hydrated=await loadNotebook(testDb,notebook.id);if(hydrated.blocks[0].source!==largeA||hydrated.blocks[0].result.serialized.blob!==largeB||hydrated.versions[0].snapshot.blocks[0].source!==largeC)throw new IntegrityError("Chunk hydration did not reproduce notebook content");
+    const second=jsonClone(hydrated);second.revision=2;second.updatedAt=2;const stats=await saveNotebookIncremental(testDb,second,1,{externalizeBytes:4096,chunkBytes:32768});
+    if(stats.chunkWrites!==0)throw new IntegrityError("Unchanged large payload chunks were rewritten",{chunkWrites:stats.chunkWrites});
+    return {status:"pass",message:"Large sources, results, and revision snapshots round-trip; unchanged chunks are not rewritten",chunks:first.chunkRecords};
+  }finally{await testDb.close().catch(function(){});try{await deleteDatabasePromise(global.indexedDB,name);}catch(_e){}}
+}
+async function quotaPressureTest(){
+  if(!global.indexedDB)return {status:"skipped",message:"IndexedDB unavailable"};
+  const name=DB_NAME+"-quota-test-"+randomId("run"),testDb=new CalcDatabase({name:name,version:DB_VERSION,indexedDB:global.indexedDB});
+  try{
+    await testDb.open();await testDb.repository(STORES.chunks).put({id:"stable",data:"ok",bytes:2,updatedAt:1});
+    let rejected=false;
+    try{
+      await testDb.transaction([STORES.chunks],"readwrite",async function(stores){
+        await requestPromise(stores[STORES.chunks].put({id:"partial",data:"x".repeat(65536),bytes:65536,updatedAt:2}));
+        const err=typeof DOMException!=="undefined"?new DOMException("Simulated storage quota exhaustion","QuotaExceededError"):Object.assign(new Error("Simulated storage quota exhaustion"),{name:"QuotaExceededError"});
+        throw err;
+      });
+    }catch(e){rejected=e&&e.name==="QuotaExceededError";}
+    const stable=await testDb.repository(STORES.chunks).get("stable"),partial=await testDb.repository(STORES.chunks).get("partial");
+    if(!rejected||!stable||partial)throw new IntegrityError("Quota fault did not abort the write transaction cleanly",{rejected:rejected,stable:!!stable,partial:!!partial});
+    return {status:"pass",message:"Simulated quota exhaustion aborted atomically without partial data"};
+  }finally{await testDb.close().catch(function(){});try{await deleteDatabasePromise(global.indexedDB,name);}catch(_e){}}
+}
 async function adversarialPersistenceTest(){
   if(!global.indexedDB)return {status:"skipped",message:"IndexedDB unavailable"};
   const name=DB_NAME+"-adversarial-"+randomId("run"),testDb=new CalcDatabase({name:name,version:DB_VERSION,indexedDB:global.indexedDB});
@@ -649,7 +705,13 @@ async function adversarialPersistenceTest(){
     let corruptionRejected=false;try{await validateBackup(corrupt);}catch(e){corruptionRejected=e instanceof IntegrityError||e.code==="INTEGRITY_ERROR";}if(!corruptionRejected)throw new IntegrityError("Corrupted backup was accepted");
     const plan=await planRestore(testDb,backup,{mode:"merge"});await testDb.repository(STORES.history).put({id:"h2",expression:"2+2",result:"4",time:2,revision:1});
     let staleRejected=false;try{await applyRestore(testDb,plan);}catch(e){staleRejected=e instanceof RestoreStaleError||e.code==="RESTORE_STALE_PLAN";}if(!staleRejected)throw new RestoreError("Stale restore plan was accepted");
-    return {status:"pass",message:"Corruption and stale-restore fault injection were rejected"};
+    await testDb.repository(STORES.history).delete("h2");
+    const failingPlan={mode:"replace",selectedStores:[STORES.history],data:{history:[{id:"new",expression:"3+3",result:"6",time:3,revision:1},{}]},summary:{},verifiedHash:"fault-injection"};
+    let rollbackRejected=false;try{await applyRestore(testDb,failingPlan);}catch(e){rollbackRejected=e instanceof RestoreError||e.code==="RESTORE_ERROR";}
+    const original=await testDb.repository(STORES.history).get("h1"),partial=await testDb.repository(STORES.history).get("new");if(!rollbackRejected||!original||partial)throw new IntegrityError("Restore transaction did not roll back after injected write failure",{rollbackRejected:rollbackRejected,original:!!original,partial:!!partial});
+    await testDb.repository(STORES.journal).put({id:"incomplete",type:"restore",status:"started",createdAt:now()});const blocked=await updatePreflight(testDb);if(blocked.ok)throw new IntegrityError("Update preflight accepted an incomplete persistence transaction");await testDb.repository(STORES.journal).delete("incomplete");
+    await testDb.repository(STORES.journal).put({id:"failed-history",type:"restore",status:"failed",createdAt:now(),failedAt:now()});const allowed=await updatePreflight(testDb);if(!allowed.ok)throw new IntegrityError("Historical failed journal entry incorrectly blocks a safe update");
+    return {status:"pass",message:"Corruption, stale restore, rollback fault, and update preflight adversarial cases behaved correctly"};
   }finally{await testDb.close().catch(function(){});try{await deleteDatabasePromise(global.indexedDB,name);}catch(_e){}}
 }
 async function updatePreflight(db){
@@ -660,9 +722,11 @@ async function resilienceDiagnostics(db,options){
   options=options||{};const started=clockNow(),results=[];
   async function run(name,fn){try{const r=await fn();results.push(Object.assign({name:name,status:"pass"},r||{}));}catch(e){results.push({name:name,status:"fail",message:e.message,code:e.code||e.name||"ERROR"});}}
   await run("Migration soak",migrationSoakTest);
-  await run("Corruption + restore adversarial",adversarialPersistenceTest);
+  await run("Chunk persistence",chunkPersistenceSelfTest);
+  await run("Quota fault injection",quotaPressureTest);
+  await run("Corruption + restore/update adversarial",adversarialPersistenceTest);
   await run("Multi-tab stress",multiTabStressTest);
-  await run("Quota pressure + storage performance",async function(){
+  await run("Storage performance",async function(){
     const estimate=await storageEstimate(),headroom=estimate.quota?Math.max(0,estimate.quota-estimate.usage):null,target=headroom===null?512*1024:Math.max(64*1024,Math.min(1024*1024,Math.floor(headroom*0.02)));
     if(headroom!==null&&headroom<128*1024)return {status:"skipped",message:"Insufficient safe quota headroom for a bounded write test",estimate:estimate};
     const perf=await storagePerformance(db,{totalBytes:target});return {status:"pass",message:"Bounded write/read/delete cycle completed",estimate:estimate,performance:perf};
@@ -705,10 +769,10 @@ global.CalcPersistence={
   VERSION:"1.1.0-persistence-phase12",DB_NAME:DB_NAME,DB_VERSION:DB_VERSION,BACKUP_SCHEMA:BACKUP_SCHEMA,ENCRYPTED_BACKUP_SCHEMA:ENCRYPTED_BACKUP_SCHEMA,SYNC_SCHEMA:SYNC_SCHEMA,NOTEBOOK_STORAGE_SCHEMA:NOTEBOOK_STORAGE_SCHEMA,STORES:STORES,DATA_STORES:DATA_STORES,INTERNAL_STORES:INTERNAL_STORES,MAX_BACKUP_BYTES:MAX_BACKUP_BYTES,MAX_BACKUP_ITEMS:MAX_BACKUP_ITEMS,NOTEBOOK_CHUNK_BYTES:NOTEBOOK_CHUNK_BYTES,TRASH_RETENTION_MS:TRASH_RETENTION_MS,
   PersistenceError:PersistenceError,BackupError:BackupError,RestoreError:RestoreError,RestoreStaleError:RestoreStaleError,IntegrityError:IntegrityError,MigrationError:MigrationError,
   stableStringify:stableStringify,sha256Text:sha256Text,hashValue:hashValue,migrationPlan:migrationPlan,applyUpgrade:applyUpgrade,
-  Repository:Repository,CalcDatabase:CalcDatabase,assertVersionedWrite:assertVersionedWrite,buildBackup:buildBackup,buildBackupBlob:buildBackupBlob,validateBackup:validateBackup,encryptBackup:encryptBackup,decryptBackup:decryptBackup,openBackup:openBackup,mergeStore:mergeStore,planRestore:planRestore,applyRestore:applyRestore,
+  Repository:Repository,CalcDatabase:CalcDatabase,assertVersionedWrite:assertVersionedWrite,buildBackup:buildBackup,buildBackupBlob:buildBackupBlob,buildBackupBlobFromDb:buildBackupBlobFromDb,validateBackup:validateBackup,encryptBackup:encryptBackup,decryptBackup:decryptBackup,openBackup:openBackup,mergeStore:mergeStore,planRestore:planRestore,applyRestore:applyRestore,
   encodeNotebookForStorage:encodeNotebookForStorage,hydrateNotebookRecord:hydrateNotebookRecord,loadNotebook:loadNotebook,loadNotebooks:loadNotebooks,loadTombstones:loadTombstones,saveNotebookIncremental:saveNotebookIncremental,deleteNotebookWithTombstone:deleteNotebookWithTombstone,
   integrityReport:integrityReport,storageEstimate:storageEstimate,storagePerformance:storagePerformance,requestPersistentStorage:requestPersistentStorage,cleanupJournal:cleanupJournal,recordTombstone:recordTombstone,deleteWithTombstone:deleteWithTombstone,listTrash:listTrash,restoreTombstone:restoreTombstone,purgeTombstone:purgeTombstone,emptyTrash:emptyTrash,cleanupTrash:cleanupTrash,recoveryReport:recoveryReport,
-  migrationSoakTest:migrationSoakTest,multiTabStressTest:multiTabStressTest,adversarialPersistenceTest:adversarialPersistenceTest,updatePreflight:updatePreflight,resilienceDiagnostics:resilienceDiagnostics,
+  migrationSoakTest:migrationSoakTest,chunkPersistenceSelfTest:chunkPersistenceSelfTest,quotaPressureTest:quotaPressureTest,multiTabStressTest:multiTabStressTest,adversarialPersistenceTest:adversarialPersistenceTest,updatePreflight:updatePreflight,resilienceDiagnostics:resilienceDiagnostics,
   CrossTabCoordinator:CrossTabCoordinator,SyncAdapter:SyncAdapter,DisabledSyncAdapter:DisabledSyncAdapter,SyncManager:SyncManager
 };
 })(window);
