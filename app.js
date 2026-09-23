@@ -42,7 +42,7 @@ function toast(msg){
   var el=$("#toast");el.textContent=msg;el.classList.add("show");
   clearTimeout(toast._t);toast._t=setTimeout(function(){el.classList.remove("show");},1800);
 }
-function errorMessage(e){return e&&e.message?e.message:String(e);}
+function errorMessage(e){if(e&&(e.name==="QuotaExceededError"||e.code==="QuotaExceededError"||e.code===22))return "Local storage quota is full. Download a backup, remove unneeded local data, or request persistent storage.";return e&&e.message?e.message:String(e);}
 function setTheme(theme){
   state.theme=theme;localStorage.setItem("calc.theme",theme);if(state.settingsReady)persistSetting("theme",theme);
   var root=document.documentElement;
@@ -1251,6 +1251,7 @@ const commands=[
   {id:"view.tools",title:"Open Tools",keywords:"finance geometry units",run:function(){switchView("tools");}},
   {id:"view.worksheet",title:"Open Worksheet",keywords:"notebook document",run:function(){switchView("worksheet");}},
   {id:"view.history",title:"Open History",keywords:"recent calculations",run:function(){switchView("history");}},
+  {id:"view.settings",title:"Open Data & Backup",keywords:"settings backup restore storage sync update persistence",run:function(){switchView("settings");}},
   {id:"data.regression",title:"Regression analysis",keywords:"statistics regression data least squares",run:function(){switchView("data");setTimeout(function(){var el=$("#regressionBtn");if(el)el.focus();},0);}},
   {id:"data.inference",title:"Statistical inference",keywords:"statistics t test confidence interval hypothesis",run:function(){switchView("data");setTimeout(function(){var el=$("#testColumnSelect");if(el)el.focus();},0);}},
   {id:"data.distribution",title:"Probability distribution",keywords:"probability normal binomial poisson distribution cdf quantile",run:function(){switchView("data");setTimeout(function(){var el=$("#distributionType");if(el)el.focus();},0);}},
