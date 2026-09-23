@@ -60,6 +60,10 @@ class MemoryDb{
   eq(h1,h2,"stable hash ignores object key order");
   assert(typeof h1==="string"&&h1.length>8,"hash produced");
 
+  assert(P.assertVersionedWrite({id:"n",revision:2},{id:"n",revision:3},2,"worksheets","n"),"matching expected revision accepted");
+  await throwsCode(()=>Promise.resolve().then(()=>P.assertVersionedWrite({id:"n",revision:3},{id:"n",revision:4},2,"worksheets","n")),"REVISION_CONFLICT","stale expected revision rejected");
+  await throwsCode(()=>Promise.resolve().then(()=>P.assertVersionedWrite({id:"n",revision:5},{id:"n",revision:4},null,"worksheets","n")),"REVISION_CONFLICT","newer stored revision protected");
+
   eq(JSON.stringify(P.migrationPlan(0,3)),JSON.stringify(["create-core-stores","create-custom-tools","create-meta-journal"]),"full migration plan");
   eq(JSON.stringify(P.migrationPlan(2,3)),JSON.stringify(["create-meta-journal"]),"v2 to v3 migration plan");
   eq(JSON.stringify(P.migrationPlan(3,3)),JSON.stringify([]),"no-op migration");
@@ -81,6 +85,14 @@ class MemoryDb{
 
   const checked=await P.validateBackup(JSON.stringify(backup));
   eq(checked.payloadHash,backup.manifest.payloadHash,"backup verifies");
+
+  if(!global.crypto&&require("crypto").webcrypto)global.crypto=require("crypto").webcrypto;
+  const encrypted=await P.encryptBackup(backup,"correct horse battery staple",{iterations:1000});
+  eq(encrypted.schema,P.ENCRYPTED_BACKUP_SCHEMA,"encrypted backup schema");
+  assert(encrypted.ciphertext&&encrypted.ciphertext.length>20,"encrypted ciphertext present");
+  const openedEncrypted=await P.openBackup(JSON.stringify(encrypted),"correct horse battery staple");
+  eq(openedEncrypted.backup.manifest.payloadHash,backup.manifest.payloadHash,"encrypted backup round trip");
+  await throwsCode(()=>P.openBackup(JSON.stringify(encrypted),"wrong password"),"BACKUP_ERROR","wrong backup password rejected");
 
   const tampered=JSON.parse(JSON.stringify(backup));
   tampered.data[P.STORES.notebooks][0].title="Tampered";
