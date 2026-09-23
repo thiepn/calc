@@ -24,6 +24,7 @@ All notable production changes to Calc are recorded here.
 - Cross-tab Custom Tool refresh rebuilds runtime state from persisted truth, removes stale Active definitions after archive, defers safely while the builder is open, refreshes the editor after close, and preserves last-known-good state if the read fails.
 - History write failures are reported, and failed Clear History operations no longer make persisted entries appear deleted.
 - Mobile Worksheet layout no longer hides notebook switching, import/export, delete, and version controls.
+- Removed literal escaped-newline corruption from the responsive stylesheet, restoring mobile graph/tools/data/worksheet rules.
 
 ### Verification
 

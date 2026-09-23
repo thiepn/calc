@@ -257,11 +257,16 @@ kbd{border:1px solid var(--line-strong);background:var(--surface-2);border-radiu
   .search-button span{display:none}
   .search-button kbd{border:0;background:transparent;padding:0;font-size:0}
   .search-button kbd:after{content:"⌕";font-size:19px;color:var(--text)}
-  .graph-layout,.matrix-layout,.data-layout,.tools-layout,.worksheet-layout{grid-template-columns:1fr;height:auto}\n  .graph-controls{order:2}.graph-stage{order:1;height:58vh;min-height:360px}\n  .data-wide-panel{grid-column:auto}
+  .graph-layout,.matrix-layout,.data-layout,.tools-layout,.worksheet-layout{grid-template-columns:1fr;height:auto}
+  .graph-controls{order:2}.graph-stage{order:1;height:58vh;min-height:360px}
+  .data-wide-panel{grid-column:auto}
   .graph-controls{order:2}
   .graph-stage{height:58vh;min-height:380px;order:1}
   .worksheet-side{order:-1}
-  .tool-form{grid-template-columns:1fr}\n  .graph-analysis-grid{grid-template-columns:1fr}\n  .data-control-grid,.distribution-params{grid-template-columns:1fr}\n  .histogram-row{grid-template-columns:92px minmax(0,1fr) 42px}
+  .tool-form{grid-template-columns:1fr}
+  .graph-analysis-grid{grid-template-columns:1fr}
+  .data-control-grid,.distribution-params{grid-template-columns:1fr}
+  .histogram-row{grid-template-columns:92px minmax(0,1fr) 42px}
   .field.full{grid-column:auto}
 }
 @media (max-width:620px){

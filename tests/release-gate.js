@@ -14,7 +14,7 @@ const required=[
 ];
 required.forEach(p=>assert(exists(p),"Missing RC artifact: "+p));
 
-const index=read("index.html"),sw=read("sw.js"),persistence=read("persistence.js"),app=read("app.js");
+const index=read("index.html"),styles=read("styles.css"),sw=read("sw.js"),persistence=read("persistence.js"),app=read("app.js");
 const pkg=JSON.parse(read("package.json")),manifest=JSON.parse(read("manifest.webmanifest")),release=JSON.parse(read("release.json"));
 const releaseWorkflow=read(".github/workflows/release-soak.yml"),pagesWorkflow=read(".github/workflows/pages.yml");
 const soak=read("tests/release-soak.spec.js"),phase=read("docs/release/IMPLEMENTATION_PHASE_13.md");
@@ -39,6 +39,7 @@ assets.forEach(asset=>assert(exists(asset),"Service worker references missing as
 
 assert(!/<script[^>]+src=["']https?:\/\//i.test(index),"External runtime scripts are forbidden in RC shell");
 assert(!/<link[^>]+href=["']https?:\/\//i.test(index),"External runtime styles/resources are forbidden in RC shell");
+assert(!styles.includes("\\n"),"Literal escaped newline found in production stylesheet");
 assert(manifest.start_url==="./"&&manifest.scope==="./","PWA start_url/scope must remain repository-relative");
 assert(manifest.display==="standalone","PWA must remain standalone");
 assert(index.includes("maximum-scale=1")&&index.includes("user-scalable=no"),"Installed PWA zoom lock regressed");
