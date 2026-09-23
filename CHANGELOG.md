@@ -23,6 +23,7 @@ All notable production changes to Calc are recorded here.
 - Custom-tool revision conflicts install the newer persisted original and preserve local edits as a Draft conflict copy without masking the warning.
 - Cross-tab Custom Tool refresh rebuilds runtime state from persisted truth, removes stale Active definitions after archive, defers safely while the builder is open, refreshes the editor after close, and preserves last-known-good state if the read fails.
 - History write failures are reported, and failed Clear History operations no longer make persisted entries appear deleted.
+- Mobile Worksheet layout no longer hides notebook switching, import/export, delete, and version controls.
 
 ### Verification
 

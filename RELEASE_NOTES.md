@@ -19,6 +19,7 @@ Calc v1.0.1 is a bug-fix and resilience release on top of the v1.0.0 production 
 - Custom-tool lifecycle changes are persistence-first, failed writes leave runtime state intact, revision conflicts reconcile to the newer persisted original, and local edits become Draft conflict copies.
 - Cross-tab Custom Tool archive/update events rebuild the runtime from persisted truth, safely defer while the builder is open, refresh the editor on close, and retain last-known-good state if refresh fails.
 - History save/clear failures are reported truthfully and do not create a false deleted state.
+- Phone-sized Worksheet layouts retain notebook switching, import/export, delete, and version-management controls.
 
 ## Certification
 
