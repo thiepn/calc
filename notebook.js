@@ -15,6 +15,8 @@ const SCHEMA="calc.notebook/v2";
 const MAX_BLOCKS=500;
 const MAX_VERSIONS=30;
 const MAX_SOURCE=200000;
+const MAX_IMPORT_BYTES=16*1024*1024;
+const SAFE_BLOCK_ID=/^[A-Za-z0-9._:-]{1,160}$/;
 const BLOCK_TYPES=new Set(["math","text","tool","matrix","data","graph"]);
 const REF_RE=/\{\{block:([A-Za-z0-9._:-]+)\}\}/g;
 
@@ -37,8 +39,9 @@ function blankResult(){return {status:"idle",kind:"none",display:"",approx:"",er
 
 function normalizeBlock(raw,index){
   raw=raw||{};const type=String(raw.type||"math");if(!BLOCK_TYPES.has(type))throw new NotebookSchemaError("Unsupported block type '"+type+"'",{index:index});
+  const id=String(raw.id||makeId("block"));if(!SAFE_BLOCK_ID.test(id))throw new NotebookSchemaError("Invalid block ID '"+id+"'",{index:index});
   return {
-    id:String(raw.id||makeId("block")),type:type,title:boundedString(raw.title||"",200),
+    id:id,type:type,title:boundedString(raw.title||"",200),
     source:boundedString(raw.source||"",MAX_SOURCE),
     config:raw.config&&typeof raw.config==="object"&&!Array.isArray(raw.config)?clone(raw.config):{},
     collapsed:!!raw.collapsed,
@@ -256,7 +259,8 @@ function exportNotebook(raw){
   const doc=normalizeNotebook(raw),out=clone(doc);out.versions=[];out.blocks.forEach(b=>{b.status="dirty";b.result=blankResult();});return {schema:SCHEMA,exportedAt:new Date().toISOString(),notebook:out};
 }
 function importNotebook(text){
-  let root;try{root=JSON.parse(String(text));}catch(e){throw new NotebookImportError("Invalid notebook JSON: "+e.message);}
+  text=String(text||"");const bytes=typeof TextEncoder!=="undefined"?new TextEncoder().encode(text).length:text.length;if(bytes>MAX_IMPORT_BYTES)throw new NotebookImportError("Notebook file exceeds "+MAX_IMPORT_BYTES+" bytes");
+  let root;try{root=JSON.parse(text);}catch(e){throw new NotebookImportError("Invalid notebook JSON: "+e.message);}
   if(!root||root.schema!==SCHEMA||!root.notebook)throw new NotebookImportError("Unsupported notebook file");
   const n=normalizeNotebook(root.notebook);n.id=makeId("notebook");n.title=n.title+" (imported)";n.createdAt=n.updatedAt=now();n.revision=1;n.versions=[];n.blocks.forEach(b=>{b.status="dirty";b.result=blankResult();});return n;
 }
@@ -274,7 +278,7 @@ function recoveryNormalize(raw){
 }
 
 global.CalcNotebook={
-  VERSION:"2.0.0-notebook",SCHEMA:SCHEMA,MAX_BLOCKS:MAX_BLOCKS,
+  VERSION:"2.0.1-notebook",SCHEMA:SCHEMA,MAX_BLOCKS:MAX_BLOCKS,MAX_IMPORT_BYTES:MAX_IMPORT_BYTES,
   NotebookError:NotebookError,NotebookSchemaError:NotebookSchemaError,NotebookReferenceError:NotebookReferenceError,NotebookBlockedError:NotebookBlockedError,NotebookImportError:NotebookImportError,
   newBlock:newBlock,normalizeBlock:normalizeBlock,normalizeNotebook:normalizeNotebook,migrateLegacy:migrateLegacy,notebookSnapshot:notebookSnapshot,commitRevision:commitRevision,restoreVersion:restoreVersion,
   explicitRefs:explicitRefs,assignmentInfo:assignmentInfo,usedIdentifiers:usedIdentifiers,buildDependencies:buildDependencies,markDirty:markDirty,
