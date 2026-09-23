@@ -195,7 +195,7 @@ async function evaluateCurrent(){
 async function addHistory(expression,res,source,extra){
   var item=Object.assign({id:uid(),time:Date.now(),expression:expression,result:res.display,approx:res.approx||"",source:source||"calculate"},extra||{});
   state.history.unshift(item);if(state.history.length>500)state.history.length=500;
-  try{await dbPut("history",item);}catch(e){}
+  try{await dbPut("history",item);}catch(e){toast("Calculation completed, but history could not be saved: "+errorMessage(e));}
 }
 function copyText(text){
   if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(function(){toast("Copied");}).catch(function(){fallbackCopy(text);});
@@ -1375,8 +1375,8 @@ async function applyAppUpdate(){
 
 async function renderHistory(){
   var list=$("#historyList");if(!list)return;
-  if(!state.history.length){try{state.history=(await dbAll("history")).sort(function(a,b){return b.time-a.time;});}catch(e){}}
-  list.innerHTML="";
+  if(!state.history.length){try{state.history=(await dbAll("history")).sort(function(a,b){return b.time-a.time;});}catch(e){list.textContent="Could not load calculation history: "+errorMessage(e);list.className="history-list ws-error";return;}}
+  list.className="history-list";list.innerHTML="";
   if(!state.history.length){list.innerHTML='<div class="muted" style="padding:26px 0">No calculations yet.</div>';return;}
   state.history.forEach(function(h){
     var row=document.createElement("div");row.className="history-entry";row.tabIndex=0;
@@ -1522,7 +1522,7 @@ function bindEvents(){
   $("#integrityCheckBtn").onclick=runIntegrityCheck;$("#persistentStorageBtn").onclick=requestPersistentStorageUi;
   $("#storageBenchmarkBtn").onclick=runStorageBenchmarkUi;$("#resilienceTestBtn").onclick=runResilienceSuite;$("#refreshTrashBtn").onclick=refreshTrash;$("#emptyTrashBtn").onclick=emptyTrashUi;
   $("#checkUpdateBtn").onclick=checkForUpdate;$("#applyUpdateBtn").onclick=applyAppUpdate;$("#updateBtn").onclick=applyAppUpdate;
-  $("#clearHistoryBtn").onclick=async function(){if(!confirm("Clear calculation history?"))return;state.history=[];try{await dbClear("history");}catch(e){}renderHistory();};
+  $("#clearHistoryBtn").onclick=async function(){if(!confirm("Clear calculation history?"))return;try{await dbClear("history");state.history=[];await renderHistory();toast("History cleared");}catch(e){toast("Could not clear history: "+errorMessage(e));await renderHistory();}};
   window.addEventListener("resize",function(){if(state.view==="graph")drawGraph();});window.addEventListener("pagehide",writeSessionRecovery);
 }
 

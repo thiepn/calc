@@ -142,6 +142,38 @@ test("dataset column names cannot inject markup through histogram rendering",asy
   expect(await page.evaluate(()=>window.__dataXss||0)).toBe(0);
 });
 
+test("failed history write is reported without breaking calculation",async({page})=>{
+  const errors=await openApp(page);
+  await page.evaluate(()=>{
+    const P=window.CalcPersistence,original=P.Repository.prototype.put;
+    P.Repository.prototype.put=function(value){if(this.store===P.STORES.history)return Promise.reject(new Error("forced history write failure"));return original.call(this,value);};
+  });
+  await page.locator("#expressionInput").fill("3+4");
+  await page.locator("#expressionInput").press("Enter");
+  await expect(page.locator("#exactResult")).toHaveText("7");
+  await expect(page.locator("#toast")).toContainText("history could not be saved");
+  expect(errors).toEqual([]);
+});
+
+test("failed Clear History keeps visible and persisted history intact",async({page})=>{
+  const errors=await openApp(page);
+  await page.locator("#expressionInput").fill("8+9");
+  await page.locator("#expressionInput").press("Enter");
+  await page.locator('[data-view="history"]').first().click();
+  await expect(page.locator("#historyList")).toContainText("8+9");
+  await page.evaluate(()=>{
+    const P=window.CalcPersistence,original=P.Repository.prototype.clear;
+    P.Repository.prototype.clear=function(){if(this.store===P.STORES.history)return Promise.reject(new Error("forced history clear failure"));return original.call(this);};
+  });
+  page.once("dialog",dialog=>dialog.accept());
+  await page.locator("#clearHistoryBtn").click();
+  await expect(page.locator("#toast")).toContainText("Could not clear history");
+  await expect(page.locator("#historyList")).toContainText("8+9");
+  const count=await page.evaluate(async()=>{const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();return db.repository(P.STORES.history).count();});
+  expect(count).toBeGreaterThan(0);
+  expect(errors).toEqual([]);
+});
+
 test("notebook Ref copy does not throw when clipboard APIs are unavailable",async({page})=>{
   await page.addInitScript(()=>{
     Object.defineProperty(navigator,"clipboard",{configurable:true,value:undefined});
