@@ -1259,12 +1259,12 @@ function bindEvents(){
   $$("[data-view]").forEach(function(b){b.addEventListener("click",function(){switchView(b.dataset.view);});});
   $("#mobileNavBtn").onclick=openMobileNav;$("#mobileNavBackdrop").onclick=closeMobileNav;
   $("#themeBtn").onclick=cycleTheme;
-  $("#angleBtn").textContent=state.angle;$("#angleBtn").onclick=function(){var arr=["RAD","DEG","GRAD"],i=arr.indexOf(state.angle);state.angle=arr[(i+1)%3];localStorage.setItem("calc.angle",state.angle);$("#angleBtn").textContent=state.angle;previewExpression();if(state.view==="graph")plotGraph();};
+  $("#angleBtn").textContent=state.angle;$("#angleBtn").onclick=function(){var arr=["RAD","DEG","GRAD"],i=arr.indexOf(state.angle);state.angle=arr[(i+1)%3];localStorage.setItem("calc.angle",state.angle);persistSetting("angle",state.angle);$("#angleBtn").textContent=state.angle;previewExpression();if(state.view==="graph")plotGraph();};
   $("#commandBtn").onclick=openCommands;
   document.addEventListener("keydown",function(e){
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();openCommands();return;}
     if(e.key==="Escape"&&$("#commandDialog").open){closeCommands();return;}
-    if((e.ctrlKey||e.metaKey)&&/^[1-7]$/.test(e.key)&&!$("#commandDialog").open){e.preventDefault();var vs=["calculate","graph","matrix","data","tools","worksheet","history"];switchView(vs[Number(e.key)-1]);}
+    if((e.ctrlKey||e.metaKey)&&/^[1-8]$/.test(e.key)&&!$("#commandDialog").open){e.preventDefault();var vs=["calculate","graph","matrix","data","tools","worksheet","history","settings"];switchView(vs[Number(e.key)-1]);}
   });
   $("#commandInput").addEventListener("input",function(e){commandIndex=0;renderCommands(e.target.value);});
   $("#commandInput").addEventListener("keydown",function(e){if(e.key==="ArrowDown"){e.preventDefault();commandIndex=Math.min(commandIndex+1,commandMatches.length-1);renderCommands(e.target.value);}else if(e.key==="ArrowUp"){e.preventDefault();commandIndex=Math.max(0,commandIndex-1);renderCommands(e.target.value);}else if(e.key==="Enter"){e.preventDefault();runCommandIndex();}});
@@ -1325,24 +1325,31 @@ function bindEvents(){
   $("#customDuplicateBtn").onclick=duplicateBuiltInCustom;$("#customImportBtn").onclick=function(){$("#customImportFile").click();};$("#customImportFile").onchange=function(){if(this.files&&this.files[0])importCustomFile(this.files[0]);this.value="";};
   $("#customMode").onchange=updateCustomModeUi;$("#customOutputType").onchange=scheduleCustomValidation;$("#customOutputUnit").oninput=scheduleCustomValidation;$("#customName").oninput=scheduleCustomValidation;$("#customDescription").oninput=scheduleCustomValidation;$("#customExpression").oninput=scheduleCustomValidation;
   $("[data-add-ws-block]").forEach(function(b){b.onclick=function(){addBlock(b.dataset.addWsBlock);};});$("#newWorksheetBtn").onclick=newWorksheet;$("#runWorksheetBtn").onclick=function(){runWorksheet(true);};
-  $("#worksheetAutoRun").onchange=function(){if(!state.activeWorksheet)return;checkpointWorksheet("auto-run setting");state.activeWorksheet.settings.autoRun=this.checked;scheduleWorksheetSave();if(this.checked)runWorksheet(false);};
+  $("#worksheetAutoRun").onchange=function(){if(!state.activeWorksheet)return;checkpointWorksheet("auto-run setting");state.activeWorksheet.settings.autoRun=this.checked;writeSessionRecovery();scheduleWorksheetSave();if(this.checked)runWorksheet(false);};
   $("#worksheetImportBtn").onclick=function(){$("#worksheetImportFile").click();};$("#worksheetImportFile").onchange=function(){if(this.files&&this.files[0])importNotebookFile(this.files[0]);this.value="";};$("#worksheetExportBtn").onclick=exportNotebookJson;$("#worksheetMarkdownBtn").onclick=exportNotebookMarkdown;
-  $("#worksheetTitle").addEventListener("change",function(){if(state.activeWorksheet){checkpointWorksheet("rename notebook");state.activeWorksheet.title=this.value||"Untitled notebook";state.activeWorksheet.updatedAt=Date.now();scheduleWorksheetSave();renderWorksheetList();renderWorksheetVersions();}});
+  $("#worksheetTitle").addEventListener("change",function(){if(state.activeWorksheet){checkpointWorksheet("rename notebook");state.activeWorksheet.title=this.value||"Untitled notebook";state.activeWorksheet.updatedAt=Date.now();writeSessionRecovery();scheduleWorksheetSave();renderWorksheetList();renderWorksheetVersions();}});
+  $("#fullBackupBtn").onclick=downloadFullBackup;$("#restoreBackupBtn").onclick=function(){$("#restoreBackupFile").click();};
+  $("#restoreBackupFile").onchange=function(){if(this.files&&this.files[0])chooseRestoreFile(this.files[0]);this.value="";};
+  $("#restoreMode").onchange=recomputeRestorePlan;$("#restoreConflictPolicy").onchange=recomputeRestorePlan;$("#applyRestoreBtn").onclick=applyRestorePlan;
+  $("#integrityCheckBtn").onclick=runIntegrityCheck;$("#persistentStorageBtn").onclick=requestPersistentStorageUi;
+  $("#checkUpdateBtn").onclick=checkForUpdate;$("#applyUpdateBtn").onclick=applyAppUpdate;$("#updateBtn").onclick=applyAppUpdate;
   $("#clearHistoryBtn").onclick=async function(){if(!confirm("Clear calculation history?"))return;state.history=[];try{await dbClear("history");}catch(e){}renderHistory();};
-  window.addEventListener("resize",function(){if(state.view==="graph")drawGraph();});
+  window.addEventListener("resize",function(){if(state.view==="graph")drawGraph();});window.addEventListener("pagehide",writeSessionRecovery);
 }
 
 async function init(){
-  setTheme(state.theme);state.graph.session=new G.GraphSession({viewport:new G.Viewport(-10,10,-10,10),env:state.env});bindEvents();renderMatrixGrid(false);renderDistributionParams();populateDataControls();
+  await persistenceDb.open();await loadAppSettings();setTheme(state.theme);
+  state.graph.session=new G.GraphSession({viewport:new G.Viewport(-10,10,-10,10),env:state.env});bindEvents();setupCrossTab();renderMatrixGrid(false);renderDistributionParams();populateDataControls();
   await loadCustomTools();renderToolList();renderTool();
   $("#graphExpressions").value="sin(x)\nx^2 / 5";plotGraph();
-  try{state.history=(await dbAll("history")).sort(function(a,b){return b.time-a.time;});}catch(e){}
-  await loadWorksheets();
+  try{state.history=(await dbAll(P.STORES.history)).sort(function(a,b){return b.time-a.time;});}catch(e){}
+  await loadWorksheets();await recoverSessionNotebook();
   var initial=(location.hash||"").replace(/^#/,""),toolRoute=initial.match(/^tools\/(.+)$/);
   if(toolRoute){var decoded=decodeURIComponent(toolRoute[1]);if(T.REGISTRY.get(decoded))state.selectedTool=decoded;initial="tools";}
   switchView(VIEW_META[initial]?initial:"calculate");if(initial==="tools"){renderToolList();renderTool();history.replaceState(null,"","#tools/"+encodeURIComponent(state.selectedTool));}
   window.addEventListener("hashchange",function(){var raw=(location.hash||"").replace(/^#/,""),m=raw.match(/^tools\/(.+)$/),v=raw;if(m){var id=decodeURIComponent(m[1]);if(T.REGISTRY.get(id)){state.selectedTool=id;renderToolList();renderTool();}v="tools";}if(VIEW_META[v]&&v!==state.view)switchView(v);});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(function(){});
+  await refreshPersistenceSettings();await P.cleanupJournal(persistenceDb).catch(function(){});
+  await registerServiceWorker();
 }
 window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();state.installPrompt=e;$("#installBtn").classList.remove("hidden");});
 $("#installBtn").onclick=async function(){if(!state.installPrompt)return;state.installPrompt.prompt();await state.installPrompt.userChoice;state.installPrompt=null;$("#installBtn").classList.add("hidden");};
