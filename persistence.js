@@ -285,9 +285,18 @@ async function hydrateNotebookRecord(db,raw){
   delete record.persistence;return record;
 }
 async function loadNotebook(db,id){return hydrateNotebookRecord(db,await db.repository(STORES.notebooks).get(id));}
-async function loadNotebooks(db){
-  const raw=await db.repository(STORES.notebooks).all(),out=[];
-  for(const item of raw)out.push(await hydrateNotebookRecord(db,item));
+async function loadNotebooks(db,options){
+  options=options||{};const raw=await db.repository(STORES.notebooks).all(),out=[];
+  for(const item of raw){
+    try{out.push(await hydrateNotebookRecord(db,item));}
+    catch(e){
+      if(!options.tolerant)throw e;
+      const fallback=jsonClone(item);delete fallback.persistence;
+      fallback.recovery={safeMode:true,persistenceCorruption:true,sourceId:item&&item.id||null,issues:["Storage payload could not be hydrated: "+e.message]};
+      (fallback.blocks||[]).forEach(function(block){block.status="error";block.result={status:"error",kind:"error",display:"",approx:"",error:"Stored payload is unavailable or corrupted. Original IndexedDB data has been left untouched.",value:null,serialized:null,metadata:{code:e.code||"INTEGRITY_ERROR"}};});
+      out.push(fallback);
+    }
+  }
   return out;
 }
 async function loadTombstones(db){
