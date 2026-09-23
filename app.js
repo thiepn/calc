@@ -837,7 +837,7 @@ function validateCustomBuilder(full){
 function scheduleCustomValidation(){clearTimeout(state.customValidationTimer);state.customValidationTimer=setTimeout(function(){validateCustomBuilder(false);},180);}
 async function persistCustom(manifest){
   if(state.remoteDeletedCustomIds.has(manifest.id)){
-    var resurrect=JSON.parse(JSON.stringify(manifest));resurrect.id=uid();resurrect.name=(resurrect.name||"Custom tool")+" (conflict copy)";resurrect.status="draft";resurrect.revision=(resurrect.revision||1)+1;resurrect.updatedAt=Date.now();resurrect.history=resurrect.history||[];manifest=resurrect;state.remoteDeletedCustomIds.delete(resurrect.id);
+    var deletedOriginalId=manifest.id,resurrect=JSON.parse(JSON.stringify(manifest));resurrect.id=uid();resurrect.name=(resurrect.name||"Custom tool")+" (conflict copy)";resurrect.status="draft";resurrect.revision=(resurrect.revision||1)+1;resurrect.updatedAt=Date.now();resurrect.history=resurrect.history||[];manifest=resurrect;state.remoteDeletedCustomIds.delete(deletedOriginalId);
     toast("The original custom tool was deleted in another tab; local edits were moved to a Draft conflict copy");
   }
   var expected=state.persistedRevisions.customTools.has(manifest.id)?state.persistedRevisions.customTools.get(manifest.id):null;
