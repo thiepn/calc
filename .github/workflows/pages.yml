@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_sha == github.sha
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -26,6 +26,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - name: Reject stale certified SHA
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          CURRENT_MAIN="$(git rev-parse origin/main)"
+          CERTIFIED_SHA="${{ github.event.workflow_run.head_sha }}"
+          if [ "$CERTIFIED_SHA" != "$CURRENT_MAIN" ]; then
+            echo "Certified SHA $CERTIFIED_SHA is stale; current main is $CURRENT_MAIN"
+            exit 1
+          fi
       - name: Record exact certified SHA
         run: |
           mkdir -p "${RUNNER_TEMP}/calc-certified-sha"
