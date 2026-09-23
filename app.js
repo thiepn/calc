@@ -35,7 +35,7 @@ const state={
   installPrompt:null,history:[],worksheets:[],activeWorksheet:null,
   graph:{session:null,drag:null,pinch:null,pointers:new Map(),geometries:[],worker:null},
   selectedTool:"percentage-of",toolSearch:"",customLibrary:new CT.CustomToolLibrary(),customCurrent:null,customValidationTimer:null,dataset:null,statisticsWorker:null,dataRevision:0,
-  restoreBackup:null,restorePlan:null,swRegistration:null,updateWaiting:null,reloadingForUpdate:false
+  restoreRaw:null,restoreBackup:null,restorePlan:null,swRegistration:null,updateWaiting:null,reloadingForUpdate:false
 };
 
 function toast(msg){
@@ -1048,13 +1048,24 @@ async function flushPendingPersistence(){
   if(state.activeWorksheet)await saveWorksheet(state.activeWorksheet,false);
   await persistSetting("theme",state.theme);await persistSetting("angle",state.angle);await persistSetting("precision",state.precision);await persistSetting("deviceId",syncManager.deviceId);
 }
+async function createBackupArtifact(){
+  await flushPendingPersistence();
+  var backup=await P.buildBackup({db:persistenceDb,appVersion:"phase-11",clientSettings:currentClientSettings()}),password=$("#backupPassword")?$("#backupPassword").value:"",payload=backup,suffix=".calcbackup.json";
+  if(password){payload=await P.encryptBackup(backup,password);suffix=".calcbackup.enc.json";}
+  var stamp=new Date().toISOString().replace(/[:.]/g,"-"),name="calc-"+stamp+suffix,textValue=JSON.stringify(payload,null,2);
+  return {backup:backup,payload:payload,name:name,text:textValue,mime:"application/json",encrypted:!!password};
+}
 async function downloadFullBackup(){
+  try{var artifact=await createBackupArtifact();downloadText(artifact.name,artifact.text,artifact.mime);toast(artifact.encrypted?"Encrypted backup downloaded":"Full backup downloaded");}catch(e){toast(errorMessage(e));}
+}
+async function shareFullBackup(){
   try{
-    await flushPendingPersistence();
-    var backup=await P.buildBackup({db:persistenceDb,appVersion:"phase-11",clientSettings:currentClientSettings()});
-    var stamp=new Date().toISOString().replace(/[:.]/g,"-"),name="calc-"+stamp+".calcbackup.json";
-    downloadText(name,JSON.stringify(backup,null,2),"application/json");toast("Full backup downloaded");
-  }catch(e){toast(errorMessage(e));}
+    var artifact=await createBackupArtifact();
+    if(!(navigator.share&&typeof File!=="undefined")){toast("File sharing is not supported by this browser");return;}
+    var file=new File([artifact.text],artifact.name,{type:artifact.mime}),data={files:[file],title:"Calc backup",text:"Calc local-first backup"};
+    if(navigator.canShare&&!navigator.canShare({files:[file]})){toast("This browser cannot share backup files");return;}
+    await navigator.share(data);
+  }catch(e){if(e&&e.name!=="AbortError")toast(errorMessage(e));}
 }
 async function recomputeRestorePlan(){
   if(!state.restoreBackup){$("#restorePreview").textContent="No backup selected.";$("#applyRestoreBtn").disabled=true;return;}
@@ -1066,10 +1077,15 @@ async function recomputeRestorePlan(){
     $("#restorePreview").textContent=lines.join("\n");$("#restorePreview").classList.remove("ws-error");$("#applyRestoreBtn").disabled=false;
   }catch(e){state.restorePlan=null;$("#restorePreview").textContent=errorMessage(e);$("#restorePreview").classList.add("ws-error");$("#applyRestoreBtn").disabled=true;}
 }
-async function chooseRestoreFile(file){
+async function openRestoreRaw(){
+  if(!state.restoreRaw)return;
   try{
-    var textValue=await file.text(),checked=await P.validateBackup(textValue);state.restoreBackup=checked.backup;await recomputeRestorePlan();toast("Backup verified");
+    var password=$("#restorePassword")?$("#restorePassword").value:"",checked=await P.openBackup(state.restoreRaw,password);state.restoreBackup=checked.backup;await recomputeRestorePlan();toast("Backup verified");
   }catch(e){state.restoreBackup=null;state.restorePlan=null;$("#restorePreview").textContent=errorMessage(e);$("#restorePreview").classList.add("ws-error");$("#applyRestoreBtn").disabled=true;}
+}
+async function chooseRestoreFile(file){
+  try{state.restoreRaw=await file.text();await openRestoreRaw();}
+  catch(e){state.restoreRaw=null;state.restoreBackup=null;state.restorePlan=null;$("#restorePreview").textContent=errorMessage(e);$("#restorePreview").classList.add("ws-error");$("#applyRestoreBtn").disabled=true;}
 }
 async function applyRestorePlan(){
   if(!state.restorePlan)return;
@@ -1328,9 +1344,9 @@ function bindEvents(){
   $("#worksheetAutoRun").onchange=function(){if(!state.activeWorksheet)return;checkpointWorksheet("auto-run setting");state.activeWorksheet.settings.autoRun=this.checked;writeSessionRecovery();scheduleWorksheetSave();if(this.checked)runWorksheet(false);};
   $("#worksheetImportBtn").onclick=function(){$("#worksheetImportFile").click();};$("#worksheetImportFile").onchange=function(){if(this.files&&this.files[0])importNotebookFile(this.files[0]);this.value="";};$("#worksheetExportBtn").onclick=exportNotebookJson;$("#worksheetMarkdownBtn").onclick=exportNotebookMarkdown;
   $("#worksheetTitle").addEventListener("change",function(){if(state.activeWorksheet){checkpointWorksheet("rename notebook");state.activeWorksheet.title=this.value||"Untitled notebook";state.activeWorksheet.updatedAt=Date.now();writeSessionRecovery();scheduleWorksheetSave();renderWorksheetList();renderWorksheetVersions();}});
-  $("#fullBackupBtn").onclick=downloadFullBackup;$("#restoreBackupBtn").onclick=function(){$("#restoreBackupFile").click();};
+  $("#fullBackupBtn").onclick=downloadFullBackup;$("#shareBackupBtn").onclick=shareFullBackup;$("#restoreBackupBtn").onclick=function(){$("#restoreBackupFile").click();};
   $("#restoreBackupFile").onchange=function(){if(this.files&&this.files[0])chooseRestoreFile(this.files[0]);this.value="";};
-  $("#restoreMode").onchange=recomputeRestorePlan;$("#restoreConflictPolicy").onchange=recomputeRestorePlan;$("#applyRestoreBtn").onclick=applyRestorePlan;
+  $("#restorePassword").onchange=openRestoreRaw;$("#restoreMode").onchange=recomputeRestorePlan;$("#restoreConflictPolicy").onchange=recomputeRestorePlan;$("#applyRestoreBtn").onclick=applyRestorePlan;
   $("#integrityCheckBtn").onclick=runIntegrityCheck;$("#persistentStorageBtn").onclick=requestPersistentStorageUi;
   $("#checkUpdateBtn").onclick=checkForUpdate;$("#applyUpdateBtn").onclick=applyAppUpdate;$("#updateBtn").onclick=applyAppUpdate;
   $("#clearHistoryBtn").onclick=async function(){if(!confirm("Clear calculation history?"))return;state.history=[];try{await dbClear("history");}catch(e){}renderHistory();};
