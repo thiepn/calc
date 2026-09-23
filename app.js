@@ -897,7 +897,7 @@ function newWorksheet(){
   var ws=createNotebook();state.worksheets.unshift(ws);state.activeWorksheet=ws;renderWorksheetArea();saveWorksheet(ws,true);
 }
 async function loadWorksheets(){
-  var raw=[];try{raw=(await dbAll("worksheets")).sort(function(a,b){return b.updatedAt-a.updatedAt;});}catch(e){}
+  var raw=[];try{raw=(await P.loadNotebooks(persistenceDb)).sort(function(a,b){return b.updatedAt-a.updatedAt;});}catch(e){console.warn("Notebook load failed",e);}
   state.worksheets=[];state.persistedRevisions.worksheets=new Map();var recovered=0;
   raw.forEach(function(item){var rec=NB.recoveryNormalize(item);if(rec.recovered)recovered++;state.worksheets.push(rec.document);state.persistedRevisions.worksheets.set(rec.document.id,rec.document.revision||0);});
   if(!state.worksheets.length)newWorksheet();else{state.activeWorksheet=state.worksheets[0];renderWorksheetArea();}
@@ -913,11 +913,11 @@ function scheduleWorksheetEval(){
 async function saveWorksheet(ws,immediate){
   ws.updatedAt=Date.now();var payload=JSON.parse(JSON.stringify(ws)),expected=state.persistedRevisions.worksheets.has(ws.id)?state.persistedRevisions.worksheets.get(ws.id):null;
   try{
-    await dbPutVersioned(P.STORES.notebooks,payload,expected);state.persistedRevisions.worksheets.set(ws.id,ws.revision||0);clearSessionRecovery(ws.id);if(immediate)toast("Notebook saved");
+    await P.saveNotebookIncremental(persistenceDb,payload,expected);publishPersistenceChange(P.STORES.notebooks,payload,"put");state.persistedRevisions.worksheets.set(ws.id,ws.revision||0);clearSessionRecovery(ws.id);if(immediate)toast("Notebook saved");
   }catch(e){
     if(e&&e.code==="REVISION_CONFLICT"){
       var remote=e.details&&e.details.current?NB.recoveryNormalize(e.details.current).document:null,copy=JSON.parse(JSON.stringify(ws));copy.id=uid();copy.title=(copy.title||"Notebook")+" (conflict copy)";copy.revision=(copy.revision||1)+1;copy.updatedAt=Date.now();
-      await dbPut(P.STORES.notebooks,copy);state.persistedRevisions.worksheets.set(copy.id,copy.revision||0);
+      await P.saveNotebookIncremental(persistenceDb,copy,null);publishPersistenceChange(P.STORES.notebooks,copy,"put");state.persistedRevisions.worksheets.set(copy.id,copy.revision||0);
       var idx=state.worksheets.findIndex(function(x){return x.id===ws.id;});if(remote&&idx>=0){state.worksheets[idx]=remote;state.persistedRevisions.worksheets.set(remote.id,remote.revision||0);}state.worksheets.unshift(copy);state.activeWorksheet=copy;clearSessionRecovery(ws.id);toast("A newer notebook revision exists; local edits were preserved as a conflict copy");
     }else toast("Could not save notebook: "+errorMessage(e));
   }
@@ -1062,9 +1062,10 @@ function addBlock(type){
 async function importNotebookFile(file){
   try{var text=await file.text(),nb=NB.importNotebook(text);state.worksheets.unshift(nb);state.activeWorksheet=nb;await saveWorksheet(nb,false);renderWorksheetArea();toast("Notebook imported");}catch(e){toast(errorMessage(e));}
 }
-function downloadText(name,textValue,type){
-  var blob=new Blob([textValue],{type:type||"text/plain"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
+function downloadBlob(name,blob){
+  var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
 }
+function downloadText(name,textValue,type){downloadBlob(name,new Blob([textValue],{type:type||"text/plain"}));}
 function exportNotebookJson(){
   try{var doc=NB.exportNotebook(state.activeWorksheet),name=(state.activeWorksheet.title||"notebook").replace(/[^A-Za-z0-9._-]+/g,"-")+".calcnb.json";downloadText(name,JSON.stringify(doc,null,2),"application/json");}catch(e){toast(errorMessage(e));}
 }
@@ -1075,7 +1076,9 @@ async function deleteActiveNotebook(){
   var ws=state.activeWorksheet;if(!ws)return;if(!confirm("Delete notebook '"+ws.title+"'?"))return;
   clearTimeout(worksheetSaveTimer);clearTimeout(worksheetEvalTimer);
   try{
-    await deletePersistentEntity(P.STORES.notebooks,ws.id,(ws.revision||0)+1);state.persistedRevisions.worksheets.delete(ws.id);clearSessionRecovery(ws.id);
+    var info=await P.deleteNotebookWithTombstone(persistenceDb,ws.id,{revision:(ws.revision||0)+1,deviceId:syncManager.deviceId});
+    persistenceCoordinator.publish({entityType:P.STORES.notebooks,entityId:String(ws.id),revision:info.revision,action:"delete"});persistenceCoordinator.publish({entityType:P.STORES.tombstones,entityId:P.STORES.notebooks+":"+String(ws.id),revision:info.revision,action:"put"});
+    state.persistedRevisions.worksheets.delete(ws.id);clearSessionRecovery(ws.id);
     state.worksheets=state.worksheets.filter(function(x){return x.id!==ws.id;});
     if(!state.worksheets.length){var next=createNotebook();state.worksheets=[next];state.activeWorksheet=next;await saveWorksheet(next,false);}
     else state.activeWorksheet=state.worksheets[0];
@@ -1095,19 +1098,19 @@ async function flushPendingPersistence(){
 }
 async function createBackupArtifact(){
   await flushPendingPersistence();
-  var backup=await P.buildBackup({db:persistenceDb,appVersion:"phase-11",clientSettings:currentClientSettings()}),password=$("#backupPassword")?$("#backupPassword").value:"",payload=backup,suffix=".calcbackup.json";
+  var backup=await P.buildBackup({db:persistenceDb,appVersion:"phase-12",clientSettings:currentClientSettings()}),password=$("#backupPassword")?$("#backupPassword").value:"",payload=backup,suffix=".calcbackup.json";
   if(password){payload=await P.encryptBackup(backup,password);suffix=".calcbackup.enc.json";}
-  var stamp=new Date().toISOString().replace(/[:.]/g,"-"),name="calc-"+stamp+suffix,textValue=JSON.stringify(payload,null,2);
-  return {backup:backup,payload:payload,name:name,text:textValue,mime:"application/json",encrypted:!!password};
+  var stamp=new Date().toISOString().replace(/[:.]/g,"-"),name="calc-"+stamp+suffix,blob=P.buildBackupBlob(payload);
+  return {backup:backup,payload:payload,name:name,blob:blob,mime:"application/json",encrypted:!!password};
 }
 async function downloadFullBackup(){
-  try{var artifact=await createBackupArtifact();downloadText(artifact.name,artifact.text,artifact.mime);toast(artifact.encrypted?"Encrypted backup downloaded":"Full backup downloaded");}catch(e){toast(errorMessage(e));}
+  try{var artifact=await createBackupArtifact();downloadBlob(artifact.name,artifact.blob);toast(artifact.encrypted?"Encrypted backup downloaded":"Full backup downloaded");}catch(e){toast(errorMessage(e));}
 }
 async function shareFullBackup(){
   try{
     var artifact=await createBackupArtifact();
     if(!(navigator.share&&typeof File!=="undefined")){toast("File sharing is not supported by this browser");return;}
-    var file=new File([artifact.text],artifact.name,{type:artifact.mime}),data={files:[file],title:"Calc backup",text:"Calc local-first backup"};
+    var file=new File([artifact.blob],artifact.name,{type:artifact.mime}),data={files:[file],title:"Calc backup",text:"Calc local-first backup"};
     if(navigator.canShare&&!navigator.canShare({files:[file]})){toast("This browser cannot share backup files");return;}
     await navigator.share(data);
   }catch(e){if(e&&e.name!=="AbortError")toast(errorMessage(e));}
@@ -1133,8 +1136,10 @@ async function openRestoreRaw(){
   }catch(e){state.restoreBackup=null;state.restorePlan=null;$("#restorePreview").textContent=errorMessage(e);$("#restorePreview").classList.add("ws-error");$("#applyRestoreBtn").disabled=true;}
 }
 async function chooseRestoreFile(file){
-  try{state.restoreRaw=await file.text();await openRestoreRaw();}
-  catch(e){state.restoreRaw=null;state.restoreBackup=null;state.restorePlan=null;$("#restorePreview").textContent=errorMessage(e);$("#restorePreview").classList.add("ws-error");$("#applyRestoreBtn").disabled=true;}
+  try{
+    if(file.size>P.MAX_BACKUP_BYTES*2)throw new P.BackupError("Backup file is too large for safe restore");
+    state.restoreRaw=await file.text();await openRestoreRaw();
+  }catch(e){state.restoreRaw=null;state.restoreBackup=null;state.restorePlan=null;$("#restorePreview").textContent=errorMessage(e);$("#restorePreview").classList.add("ws-error");$("#applyRestoreBtn").disabled=true;}
 }
 async function applyRestorePlan(){
   if(!state.restorePlan)return;
@@ -1157,7 +1162,9 @@ async function runIntegrityCheck(){
   var box=$("#integrityStatus");box.textContent="Checking…";box.classList.remove("ws-error");
   try{
     var r=await P.integrityReport(persistenceDb),lines=["DB schema v"+r.dbVersion,"Status: "+(r.ok?"OK":"issues found")];
-    P.DATA_STORES.forEach(function(s){lines.push(s+": "+r.counts[s]+" records · "+(r.hashes[s]||"no hash").slice(0,14)+"…");});
+    P.DATA_STORES.forEach(function(s){lines.push(s+": "+(r.counts[s]||0)+" records · "+(r.hashes[s]||"no hash").slice(0,14)+"…");});
+    if(r.chunkStats)lines.push("payload chunks: "+r.chunkStats.records+" · referenced "+r.chunkStats.referenced+" · orphaned "+r.chunkStats.orphaned);
+    if(r.warnings&&r.warnings.length)r.warnings.forEach(function(i){lines.push("warning: "+i.message);});
     if(r.issues.length)r.issues.forEach(function(i){lines.push(i.store+": "+i.message);});
     box.textContent=lines.join("\n");box.classList.toggle("ws-error",!r.ok);
   }catch(e){box.textContent=errorMessage(e);box.classList.add("ws-error");}
@@ -1166,8 +1173,8 @@ async function refreshRecoveryStatus(){
   var box=$("#recoveryStatus");if(!box)return;
   try{
     var r=await P.recoveryReport(persistenceDb);
-    if(!r.needsAttention)box.textContent="Recovery journal: clean.";
-    else box.textContent="Recovery journal needs attention · incomplete "+r.incomplete.length+" · failed "+r.failed.length+". Your data transaction was not silently accepted.";
+    if(!r.needsAttention)box.textContent="Recovery journal: clean · trash "+r.trashCount+".";
+    else box.textContent="Recovery journal needs attention · incomplete "+r.incomplete.length+" · failed "+r.failed.length+" · trash "+r.trashCount+". Your data transaction was not silently accepted.";
   }catch(e){box.textContent=errorMessage(e);}
 }
 function refreshSyncStatus(){
@@ -1175,7 +1182,53 @@ function refreshSyncStatus(){
   box.textContent="Sync: "+(s.enabled?"enabled":"disabled")+" · adapter: "+s.adapter+" · device "+s.deviceId;
 }
 async function refreshPersistenceSettings(){
-  await Promise.all([refreshStorageStatus(),refreshRecoveryStatus()]);refreshSyncStatus();updateUpdateUi();
+  await Promise.all([refreshStorageStatus(),refreshRecoveryStatus(),refreshTrash()]);refreshSyncStatus();updateUpdateUi();
+}
+async function runStorageBenchmarkUi(){
+  var box=$("#diagnosticsStatus");if(!box)return;box.textContent="Running storage benchmark…";box.classList.remove("ws-error");
+  try{
+    var r=await P.storagePerformance(persistenceDb,{totalBytes:1024*1024}),lines=["1 MiB bounded storage cycle","write "+M.formatNumber(r.writeMs,6)+" ms · "+M.formatNumber(r.writeMBps,5)+" MiB/s","read "+M.formatNumber(r.readMs,6)+" ms · "+M.formatNumber(r.readMBps,5)+" MiB/s","cleanup "+M.formatNumber(r.deleteMs,6)+" ms"];
+    box.textContent=lines.join("\n");
+  }catch(e){box.textContent=errorMessage(e);box.classList.add("ws-error");}
+}
+async function runResilienceSuite(){
+  var box=$("#diagnosticsStatus");if(!box)return;box.textContent="Running migration, corruption, restore, quota, multi-tab and update tests…";box.classList.remove("ws-error");
+  try{
+    await flushPendingPersistence();var r=await P.resilienceDiagnostics(persistenceDb),lines=["Phase 12 resilience suite: "+(r.ok?"PASS":"FAIL")+" · "+M.formatNumber(r.durationMs,6)+" ms"];
+    r.results.forEach(function(t){lines.push((t.status==="pass"?"PASS":t.status==="skipped"?"SKIP":"FAIL")+" · "+t.name+" · "+(t.message||""));if(t.performance)lines.push("  write "+M.formatNumber(t.performance.writeMBps,5)+" MiB/s · read "+M.formatNumber(t.performance.readMBps,5)+" MiB/s");});
+    box.textContent=lines.join("\n");box.classList.toggle("ws-error",!r.ok);
+  }catch(e){box.textContent=errorMessage(e);box.classList.add("ws-error");}
+}
+async function refreshTrash(){
+  var box=$("#trashList");if(!box)return;box.innerHTML="";
+  try{
+    var items=await P.listTrash(persistenceDb);
+    if(!items.length){box.className="trash-list muted";box.textContent="Trash is empty.";return;}
+    box.className="trash-list";
+    items.forEach(function(item){
+      var row=document.createElement("div");row.className="trash-row";
+      var meta=document.createElement("div"),name=document.createElement("strong"),sub=document.createElement("small"),actions=document.createElement("div"),restore=document.createElement("button"),purge=document.createElement("button");
+      var payload=item.payload||{},label=payload.title||payload.name||payload.expression||item.entityId;
+      name.textContent=label;sub.textContent=item.entityType+" · deleted "+new Date(item.deletedAt).toLocaleString()+(item.recoverable?"":" · metadata only");meta.append(name,sub);
+      restore.textContent="Restore";restore.disabled=!item.recoverable;restore.onclick=function(){restoreTrashItem(item.id);};
+      purge.textContent="Delete forever";purge.className="danger-ghost";purge.onclick=function(){purgeTrashItem(item.id);};actions.className="trash-actions";actions.append(restore,purge);row.append(meta,actions);box.appendChild(row);
+    });
+  }catch(e){box.className="trash-list ws-error";box.textContent=errorMessage(e);}
+}
+async function restoreTrashItem(id){
+  try{
+    var restored=await P.restoreTombstone(persistenceDb,id);persistenceCoordinator.publish({entityType:restored.store,entityId:String(restored.key),revision:Date.now(),action:"put"});persistenceCoordinator.publish({entityType:P.STORES.tombstones,entityId:id,revision:Date.now(),action:"delete"});
+    if(restored.store===P.STORES.notebooks)await loadWorksheets();else if(restored.store===P.STORES.customTools)await loadCustomTools();else if(restored.store===P.STORES.history)state.history=[];
+    await refreshTrash();await refreshRecoveryStatus();toast("Restored from Trash");
+  }catch(e){toast(errorMessage(e));}
+}
+async function purgeTrashItem(id){
+  if(!confirm("Delete this Trash item permanently?"))return;
+  try{await P.purgeTombstone(persistenceDb,id);persistenceCoordinator.publish({entityType:P.STORES.tombstones,entityId:id,revision:Date.now(),action:"delete"});await refreshTrash();await refreshRecoveryStatus();}catch(e){toast(errorMessage(e));}
+}
+async function emptyTrashUi(){
+  if(!confirm("Permanently delete all Trash items?"))return;
+  try{await P.emptyTrash(persistenceDb);persistenceCoordinator.publish({entityType:P.STORES.tombstones,entityId:"*",revision:Date.now(),action:"clear"});await refreshTrash();await refreshRecoveryStatus();toast("Trash emptied");}catch(e){toast(errorMessage(e));}
 }
 async function requestPersistentStorageUi(){
   try{var granted=await P.requestPersistentStorage();toast(granted?"Persistent storage granted":"Persistent storage was not granted");await refreshStorageStatus();}catch(e){toast(errorMessage(e));}
@@ -1191,7 +1244,7 @@ async function recoverSessionNotebook(){
   var raw;try{raw=sessionStorage.getItem("calc.notebook.recovery");if(!raw)return;var snap=JSON.parse(raw),stored=state.worksheets.find(function(w){return w.id===snap.id;});
     if(stored&&Number(stored.updatedAt)>=Number(snap.updatedAt)){clearSessionRecovery(snap.id);return;}
     var rec=NB.recoveryNormalize(snap.document).document;rec.id=uid();rec.title=(rec.title||"Notebook")+" (recovered unsaved)";rec.revision=(rec.revision||1)+1;rec.updatedAt=Date.now();rec.recovery={safeMode:false,sessionRecovered:true,sourceId:snap.id};
-    state.worksheets.unshift(rec);await persistenceDb.repository(P.STORES.notebooks).put(rec);clearSessionRecovery(snap.id);toast("Recovered unsaved notebook as a copy");
+    state.worksheets.unshift(rec);await P.saveNotebookIncremental(persistenceDb,rec,null);publishPersistenceChange(P.STORES.notebooks,rec,"put");clearSessionRecovery(snap.id);toast("Recovered unsaved notebook as a copy");
   }catch(e){console.warn("Session recovery failed",e);}
 }
 async function handleCrossTabMessage(message){
@@ -1209,20 +1262,20 @@ async function handleCrossTabMessage(message){
         var deletedId=message.entityId,local=state.worksheets.find(function(w){return w.id===deletedId;}),isActive=state.activeWorksheet&&state.activeWorksheet.id===deletedId;
         if(local&&isActive&&local.blocks.some(function(b){return b.status==="dirty"||b.status==="stale";})){
           var conflict=JSON.parse(JSON.stringify(local));conflict.id=uid();conflict.title=(conflict.title||"Notebook")+" (local conflict copy)";conflict.revision=(conflict.revision||1)+1;conflict.updatedAt=Date.now();
-          await dbPut(P.STORES.notebooks,conflict);state.persistedRevisions.worksheets.set(conflict.id,conflict.revision||0);state.worksheets.unshift(conflict);state.activeWorksheet=conflict;toast("Notebook was deleted in another tab; unsaved local edits were preserved as a conflict copy");
+          await P.saveNotebookIncremental(persistenceDb,conflict,null);publishPersistenceChange(P.STORES.notebooks,conflict,"put");state.persistedRevisions.worksheets.set(conflict.id,conflict.revision||0);state.worksheets.unshift(conflict);state.activeWorksheet=conflict;toast("Notebook was deleted in another tab; unsaved local edits were preserved as a conflict copy");
         }
         state.worksheets=state.worksheets.filter(function(w){return w.id!==deletedId;});state.persistedRevisions.worksheets.delete(deletedId);
         if(isActive&&!state.activeWorksheet||isActive&&state.activeWorksheet.id===deletedId){state.activeWorksheet=state.worksheets[0]||null;}
         if(!state.activeWorksheet){var replacement=createNotebook();state.worksheets.unshift(replacement);state.activeWorksheet=replacement;await saveWorksheet(replacement,false);}
         renderWorksheetArea();return;
       }
-      var incoming=await persistenceDb.repository(P.STORES.notebooks).get(message.entityId);if(!incoming)return;
+      var incoming=await P.loadNotebook(persistenceDb,message.entityId);if(!incoming)return;
       var idx=state.worksheets.findIndex(function(w){return w.id===incoming.id;}),active=state.activeWorksheet&&state.activeWorksheet.id===incoming.id;
       if(active){
         var hasLocal=state.activeWorksheet.blocks.some(function(b){return b.status==="dirty"||b.status==="stale";});
         if(hasLocal){
           var copy=JSON.parse(JSON.stringify(state.activeWorksheet));copy.id=uid();copy.title=(copy.title||"Notebook")+" (local conflict copy)";copy.revision=(copy.revision||1)+1;copy.updatedAt=Date.now();
-          await persistenceDb.repository(P.STORES.notebooks).put(copy);state.worksheets.unshift(copy);toast("Another tab changed this notebook; local edits were preserved as a conflict copy");
+          await P.saveNotebookIncremental(persistenceDb,copy,null);publishPersistenceChange(P.STORES.notebooks,copy,"put");state.worksheets.unshift(copy);toast("Another tab changed this notebook; local edits were preserved as a conflict copy");
         }
         var normalized=NB.recoveryNormalize(incoming).document;state.persistedRevisions.worksheets.set(normalized.id,normalized.revision||0);if(idx>=0)state.worksheets[idx]=normalized;state.activeWorksheet=normalized;renderWorksheetArea();
       }else{
@@ -1267,7 +1320,10 @@ async function checkForUpdate(){
 }
 async function applyAppUpdate(){
   var worker=state.updateWaiting||state.swRegistration&&state.swRegistration.waiting;if(!worker){toast("No waiting update");return;}
-  try{await flushPendingPersistence();state.reloadingForUpdate=true;worker.postMessage({type:"SKIP_WAITING"});setTimeout(function(){if(state.reloadingForUpdate)location.reload();},1500);}catch(e){state.reloadingForUpdate=false;toast(errorMessage(e));}
+  try{
+    await flushPendingPersistence();var preflight=await P.updatePreflight(persistenceDb);if(!preflight.ok)throw new P.IntegrityError("Update blocked because persistence preflight found unresolved data issues");
+    state.reloadingForUpdate=true;worker.postMessage({type:"SKIP_WAITING"});setTimeout(function(){if(state.reloadingForUpdate)location.reload();},1500);
+  }catch(e){state.reloadingForUpdate=false;toast(errorMessage(e));}
 }
 
 async function renderHistory(){
@@ -1414,6 +1470,7 @@ function bindEvents(){
   $("#restoreBackupFile").onchange=function(){if(this.files&&this.files[0])chooseRestoreFile(this.files[0]);this.value="";};
   $("#restorePassword").onchange=openRestoreRaw;$("#restoreMode").onchange=recomputeRestorePlan;$("#restoreConflictPolicy").onchange=recomputeRestorePlan;$("[data-restore-store]").forEach(function(el){el.onchange=recomputeRestorePlan;});$("#applyRestoreBtn").onclick=applyRestorePlan;
   $("#integrityCheckBtn").onclick=runIntegrityCheck;$("#persistentStorageBtn").onclick=requestPersistentStorageUi;
+  $("#storageBenchmarkBtn").onclick=runStorageBenchmarkUi;$("#resilienceTestBtn").onclick=runResilienceSuite;$("#refreshTrashBtn").onclick=refreshTrash;$("#emptyTrashBtn").onclick=emptyTrashUi;
   $("#checkUpdateBtn").onclick=checkForUpdate;$("#applyUpdateBtn").onclick=applyAppUpdate;$("#updateBtn").onclick=applyAppUpdate;
   $("#clearHistoryBtn").onclick=async function(){if(!confirm("Clear calculation history?"))return;state.history=[];try{await dbClear("history");}catch(e){}renderHistory();};
   window.addEventListener("resize",function(){if(state.view==="graph")drawGraph();});window.addEventListener("pagehide",writeSessionRecovery);
@@ -1430,7 +1487,7 @@ async function init(){
   if(toolRoute){var decoded=decodeURIComponent(toolRoute[1]);if(T.REGISTRY.get(decoded))state.selectedTool=decoded;initial="tools";}
   switchView(VIEW_META[initial]?initial:"calculate");if(initial==="tools"){renderToolList();renderTool();history.replaceState(null,"","#tools/"+encodeURIComponent(state.selectedTool));}
   window.addEventListener("hashchange",function(){var raw=(location.hash||"").replace(/^#/,""),m=raw.match(/^tools\/(.+)$/),v=raw;if(m){var id=decodeURIComponent(m[1]);if(T.REGISTRY.get(id)){state.selectedTool=id;renderToolList();renderTool();}v="tools";}if(VIEW_META[v]&&v!==state.view)switchView(v);});
-  await refreshPersistenceSettings();await P.cleanupJournal(persistenceDb).catch(function(){});
+  await refreshPersistenceSettings();await P.cleanupJournal(persistenceDb).catch(function(){});await P.cleanupTrash(persistenceDb).catch(function(){});
   await registerServiceWorker();
 }
 window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();state.installPrompt=e;$("#installBtn").classList.remove("hidden");});
