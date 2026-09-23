@@ -66,6 +66,7 @@ assert(pagesWorkflow.includes("Reject stale certified SHA")&&pagesWorkflow.inclu
 assert(productionWorkflow.includes('workflows: ["Deploy Calc to GitHub Pages"]'),"production release is not gated by Pages");
 assert(productionWorkflow.includes("permissions:")&&productionWorkflow.includes("contents: write"),"production release lacks tag/release permission");
 assert(productionWorkflow.includes("calc-certified-sha")&&productionWorkflow.includes("certified-sha.txt"),"production release lacks explicit deployed-SHA handoff");
+assert(productionWorkflow.indexOf("Checkout repository")<productionWorkflow.indexOf("Download deployed SHA handoff"),"checkout must precede SHA artifact download or checkout will erase the handoff");
 assert(productionWorkflow.includes("github.event.workflow_run.id"),"production release does not bind SHA handoff to the Pages run");
 assert(productionWorkflow.includes("git checkout --detach \"$CERTIFIED_SHA\""),"production release does not checkout the handed-off deployed SHA");
 assert(productionWorkflow.includes("tests/production-release-gate.js"),"production release does not rerun final gate");
