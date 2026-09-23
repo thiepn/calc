@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_sha == github.sha
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
