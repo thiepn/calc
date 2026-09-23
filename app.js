@@ -781,7 +781,7 @@ function renderCustomVersions(){
     var actualIndex=history.length-1-reverseIndex,row=document.createElement("div");row.className="custom-version-row";
     var meta=document.createElement("span");meta.textContent="r"+entry.revision+" · "+entry.status+" · "+new Date(entry.updatedAt).toLocaleString();
     var b=document.createElement("button");b.className="small-btn";b.textContent="Restore";b.onclick=async function(){
-      try{var current=state.customLibrary.get(m.id)||m;CT.uninstall(current,T.REGISTRY);var restored=CT.restoreRevision(current,actualIndex);await persistCustom(restored);fillCustomBuilder(restored);toast("Revision restored as Draft");}catch(e){toast(errorMessage(e));}
+      try{var current=state.customLibrary.get(m.id)||m,restored=CT.restoreRevision(current,actualIndex),saved=await persistCustom(restored);if(saved.id===current.id)CT.uninstall(current,T.REGISTRY);fillCustomBuilder(saved);renderToolList();toast("Revision restored as Draft");}catch(e){toast(errorMessage(e));}
     };
     row.append(meta,b);box.appendChild(row);
   });
@@ -866,20 +866,25 @@ async function persistCustom(manifest){
 }
 async function saveCustomDraft(showToast){
   var raw=builderManifest(),current=state.customLibrary.get(raw.id),draft;
-  if(current){CT.uninstall(current,T.REGISTRY);draft=CT.revise(current,raw);}else{raw.status="draft";draft=CT.normalizeManifest(raw);}
-  draft=await persistCustom(draft);fillCustomBuilder(draft);if(showToast!==false)toast("Custom tool saved as Draft");return draft;
+  if(current)draft=CT.revise(current,raw);else{raw.status="draft";draft=CT.normalizeManifest(raw);}
+  draft=await persistCustom(draft);
+  if(current&&draft.id===current.id)CT.uninstall(current,T.REGISTRY);
+  fillCustomBuilder(draft);renderToolList();if(showToast!==false)toast("Custom tool saved as Draft");return draft;
 }
 async function activateCustomTool(){
   try{var draft=await saveCustomDraft(false),activated=CT.activate(draft),m=await persistCustom(activated.manifest);if(m.status==="active")CT.installActive(m,T.REGISTRY);fillCustomBuilder(m);renderCustomValidation(activated.report);toast(m.status==="active"?"Custom tool activated":"Custom tool saved as conflict Draft");}
   catch(e){toast(errorMessage(e));validateCustomBuilder(true);}
 }
 async function archiveCustomTool(){
-  try{var current=state.customCurrent&&state.customLibrary.get(state.customCurrent.id);if(!current)throw new Error("Save the custom tool first");CT.uninstall(current,T.REGISTRY);var m=await persistCustom(CT.archive(current));fillCustomBuilder(m);toast(m.status==="archived"?"Custom tool archived":"Local archive preserved as conflict Draft");}catch(e){toast(errorMessage(e));}
+  try{var current=state.customCurrent&&state.customLibrary.get(state.customCurrent.id);if(!current)throw new Error("Save the custom tool first");var m=await persistCustom(CT.archive(current));if(m.id===current.id&&m.status==="archived")CT.uninstall(current,T.REGISTRY);fillCustomBuilder(m);renderToolList();toast(m.status==="archived"?"Custom tool archived":"Local archive preserved as conflict Draft");}catch(e){toast(errorMessage(e));}
 }
 async function deleteCustomTool(){
   var current=state.customCurrent&&state.customLibrary.get(state.customCurrent.id);if(!current)return;if(!confirm("Delete custom tool '"+current.name+"'?"))return;
-  CT.uninstall(current,T.REGISTRY);state.customLibrary.remove(current.id);state.persistedRevisions.customTools.delete(current.id);
-  await deletePersistentEntity(P.STORES.customTools,current.id,(current.revision||0)+1);renderCustomLibrary();renderToolList();newCustomTool();toast("Custom tool deleted");
+  try{
+    await deletePersistentEntity(P.STORES.customTools,current.id,(current.revision||0)+1);
+    CT.uninstall(current,T.REGISTRY);state.customLibrary.remove(current.id);state.persistedRevisions.customTools.delete(current.id);
+    renderCustomLibrary();renderToolList();newCustomTool();toast("Custom tool deleted");
+  }catch(e){toast("Could not delete custom tool: "+errorMessage(e));}
 }
 function exportCustomTool(){
   try{var m=state.customCurrent&&state.customLibrary.get(state.customCurrent.id)||CT.normalizeManifest(builderManifest()),doc=CT.exportManifest(m),blob=new Blob([JSON.stringify(doc,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=m.name.replace(/[^A-Za-z0-9._-]+/g,"-").replace(/^-+|-+$/g,"")+".calctool.json";a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},1000);}catch(e){toast(errorMessage(e));}
@@ -1481,7 +1486,7 @@ function bindEvents(){
   $("#distributionType").onchange=renderDistributionParams;$("#distributionEvalBtn").onclick=function(){renderDistribution("eval");};$("#distributionQuantileBtn").onclick=function(){renderDistribution("quantile");};
   $("#customToolBuilderBtn").onclick=openCustomBuilder;$("#customCloseBtn").onclick=function(){$("#customToolDialog").close();};
   $("#customNewBtn").onclick=newCustomTool;$("#customAddVariableBtn").onclick=function(){addCustomVariableRow();scheduleCustomValidation();};$("#customAddTestBtn").onclick=function(){addCustomTestRow();scheduleCustomValidation();};
-  $("#customValidateBtn").onclick=function(){validateCustomBuilder(true);};$("#customSaveDraftBtn").onclick=function(){saveCustomDraft(true);};$("#customActivateBtn").onclick=activateCustomTool;$("#customArchiveBtn").onclick=archiveCustomTool;$("#customExportBtn").onclick=exportCustomTool;$("#customDeleteBtn").onclick=deleteCustomTool;
+  $("#customValidateBtn").onclick=function(){validateCustomBuilder(true);};$("#customSaveDraftBtn").onclick=function(){saveCustomDraft(true).catch(function(e){toast(errorMessage(e));});};$("#customActivateBtn").onclick=activateCustomTool;$("#customArchiveBtn").onclick=archiveCustomTool;$("#customExportBtn").onclick=exportCustomTool;$("#customDeleteBtn").onclick=deleteCustomTool;
   $("#customDuplicateBtn").onclick=duplicateBuiltInCustom;$("#customImportBtn").onclick=function(){$("#customImportFile").click();};$("#customImportFile").onchange=function(){if(this.files&&this.files[0])importCustomFile(this.files[0]);this.value="";};
   $("#customMode").onchange=updateCustomModeUi;$("#customOutputType").onchange=scheduleCustomValidation;$("#customOutputUnit").oninput=scheduleCustomValidation;$("#customName").oninput=scheduleCustomValidation;$("#customDescription").oninput=scheduleCustomValidation;$("#customExpression").oninput=scheduleCustomValidation;
   $$("[data-add-ws-block]").forEach(function(b){b.onclick=function(){addBlock(b.dataset.addWsBlock);};});$("#newWorksheetBtn").onclick=newWorksheet;$("#runWorksheetBtn").onclick=function(){runWorksheet(true);};

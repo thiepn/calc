@@ -144,6 +144,52 @@ test("backup aborts instead of exporting stale notebook data after a save failur
   expect(errors).toEqual([]);
 });
 
+test("failed custom-tool draft save leaves active runtime tool intact",async({page})=>{
+  const errors=await openApp(page);
+  const seeded=await page.evaluate(async()=>{
+    const CT=window.CalcCustomTools,P=window.CalcPersistence;
+    let draft=CT.newFormulaDraft();draft.name="Persistence Guard";draft.description="active tool";const active=CT.activate(draft).manifest;
+    const db=new P.CalcDatabase();await db.open();await db.repository(P.STORES.customTools).put(active);return active.id;
+  });
+  await page.reload({waitUntil:"domcontentloaded"});
+  await page.locator('[data-view="tools"]').first().click();
+  await expect(page.locator("#toolList button").filter({hasText:"Persistence Guard"})).toBeVisible();
+  await page.locator("#customToolBuilderBtn").click();
+  await page.locator("#customToolLibrary button").filter({hasText:"Persistence Guard"}).click();
+  await page.evaluate(()=>{
+    const P=window.CalcPersistence,original=P.Repository.prototype.putVersioned;
+    P.Repository.prototype.putVersioned=function(value,expected){if(this.store===P.STORES.customTools)return Promise.reject(new Error("forced custom write failure"));return original.call(this,value,expected);};
+  });
+  await page.locator("#customName").fill("Persistence Guard Edited");
+  await page.locator("#customSaveDraftBtn").click();
+  await expect(page.locator("#toast")).toContainText("forced custom write failure");
+  expect(await page.evaluate(id=>!!window.CalcTools.REGISTRY.get("custom."+id),seeded)).toBeTruthy();
+  expect(errors).toEqual([]);
+});
+
+test("failed custom-tool delete leaves persisted and runtime tool intact",async({page})=>{
+  const errors=await openApp(page);
+  const seeded=await page.evaluate(async()=>{
+    const CT=window.CalcCustomTools,P=window.CalcPersistence;
+    let draft=CT.newFormulaDraft();draft.name="Delete Guard";const active=CT.activate(draft).manifest;
+    const db=new P.CalcDatabase();await db.open();await db.repository(P.STORES.customTools).put(active);return active.id;
+  });
+  await page.reload({waitUntil:"domcontentloaded"});
+  await page.locator('[data-view="tools"]').first().click();
+  await page.locator("#customToolBuilderBtn").click();
+  await page.locator("#customToolLibrary button").filter({hasText:"Delete Guard"}).click();
+  await page.evaluate(()=>{window.CalcPersistence.deleteWithTombstone=async()=>{throw new Error("forced custom delete failure");};});
+  page.once("dialog",dialog=>dialog.accept());
+  await page.locator("#customDeleteBtn").click();
+  await expect(page.locator("#toast")).toContainText("Could not delete custom tool");
+  const state=await page.evaluate(async id=>{
+    const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();
+    return {runtime:!!window.CalcTools.REGISTRY.get("custom."+id),stored:!!await db.repository(P.STORES.customTools).get(id)};
+  },seeded);
+  expect(state.runtime).toBeTruthy();expect(state.stored).toBeTruthy();
+  expect(errors).toEqual([]);
+});
+
 test("all registered tools render and execute their default UI without JS failure",async({page})=>{
   const errors=await openApp(page);
   const ids=await page.evaluate(()=>window.CalcTools.REGISTRY.list().map(t=>t.id));
