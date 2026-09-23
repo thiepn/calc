@@ -215,7 +215,7 @@ integrate(1/(x^2+1), x)
 integrate((2*x+3)/(x^2+x+1), x)
 ```
 
-Every U1 antiderivative is passed through `CalcCalculus.verifyAntiderivative` before it is exposed. A candidate that cannot be symbolically or numerically certified is rejected.
+Every U1 antiderivative is **verified before exposure** through `CalcCalculus.verifyAntiderivative`. A candidate that cannot be symbolically or numerically certified is rejected.
 
 Non-elementary integrals such as
 
