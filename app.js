@@ -3,6 +3,7 @@
 const M=window.CalcMath;
 const A=window.CalcAlgebra;
 const C=window.CalcCalculus;
+const CAS=window.CalcCAS;
 const U=window.CalcUnits;
 const LA=window.CalcLinearAlgebra;
 const S=window.CalcStatistics;
@@ -143,6 +144,8 @@ function backspaceExpression(){
 }
 function calcOptions(commit){return {angle:state.angle,precision:state.precision,complex:true,commit:commit};}
 function evaluateInput(raw,env,commit){
+  var advanced=CAS&&CAS.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
+  if(advanced)return advanced;
   var calculus=C&&C.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
   if(calculus)return calculus;
   var symbolic=A&&A.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
@@ -1480,6 +1483,10 @@ const commands=[
   {id:"algebra.factor",title:"Factor polynomial",keywords:"algebra polynomial factor",run:function(){switchView("calculate");$("#expressionInput").value="factor(x^2 - 5*x + 6)";previewExpression();$("#expressionInput").focus();}},
   {id:"algebra.system",title:"Solve linear system",keywords:"algebra simultaneous equations system",run:function(){switchView("calculate");$("#expressionInput").value="system(x + y = 3; x - y = 1)";previewExpression();$("#expressionInput").focus();}},
   {id:"algebra.inequality",title:"Solve inequality",keywords:"algebra inequality interval",run:function(){switchView("calculate");$("#expressionInput").value="inequality(x^2 - 1 <= 0, x)";previewExpression();$("#expressionInput").focus();}},
+  {id:"cas.assumptions",title:"CAS: Simplify with assumptions",keywords:"cas symbolic assumptions domain positive negative",run:function(){switchView("calculate");$("#expressionInput").value="assume(x>0; simplify(sqrt(x^2)))";previewExpression();$("#expressionInput").focus();}},
+  {id:"cas.parameterEquation",title:"CAS: Solve parameter equation",keywords:"cas symbolic parameter conditional equation",run:function(){switchView("calculate");$("#expressionInput").value="solve(a*x+b=0, x)";previewExpression();$("#expressionInput").focus();}},
+  {id:"cas.parameterSystem",title:"CAS: Parameterized linear system",keywords:"cas symbolic parameter system cramer determinant",run:function(){switchView("calculate");$("#expressionInput").value="psystem(x,y; a*x+y=1; x+a*y=2)";previewExpression();$("#expressionInput").focus();}},
+  {id:"cas.advancedIntegral",title:"CAS: Advanced symbolic integral",keywords:"cas symbolic integration by parts rational",run:function(){switchView("calculate");$("#expressionInput").value="integrate(x*exp(x), x)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.diff",title:"Differentiate expression",keywords:"calculus derivative diff",run:function(){switchView("calculate");$("#expressionInput").value="diff(x^3 + sin(x), x)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.gradient",title:"Gradient",keywords:"calculus multivariable gradient partial",run:function(){switchView("calculate");$("#expressionInput").value="gradient(x^2+y^2, x, y)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.jacobian",title:"Jacobian",keywords:"calculus multivariable jacobian derivatives",run:function(){switchView("calculate");$("#expressionInput").value="jacobian(x^2+y; x*y, x, y)";previewExpression();$("#expressionInput").focus();}},
