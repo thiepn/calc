@@ -836,7 +836,7 @@ async function persistCustom(manifest){
   }catch(e){
     if(e&&e.code==="REVISION_CONFLICT"){
       var conflict=JSON.parse(JSON.stringify(manifest));conflict.id=uid();conflict.name=(conflict.name||"Custom tool")+" (conflict copy)";conflict.status="draft";conflict.revision=(conflict.revision||1)+1;conflict.updatedAt=Date.now();conflict.history=conflict.history||[];
-      await persistenceDb.repository(P.STORES.customTools).put(conflict);state.persistedRevisions.customTools.set(conflict.id,conflict.revision);state.customLibrary.put(conflict);state.customCurrent=conflict;renderCustomLibrary();renderToolList();toast("A newer custom-tool revision exists; local changes were saved as a Draft conflict copy");return conflict;
+      await dbPut(P.STORES.customTools,conflict);state.persistedRevisions.customTools.set(conflict.id,conflict.revision);state.customLibrary.put(conflict);state.customCurrent=conflict;renderCustomLibrary();renderToolList();toast("A newer custom-tool revision exists; local changes were saved as a Draft conflict copy");return conflict;
     }
     throw e;
   }
@@ -867,7 +867,8 @@ async function duplicateBuiltInCustom(){
 }
 function openCustomBuilder(){populateCustomDuplicateSelect();renderCustomLibrary();if(!state.customCurrent)newCustomTool();var d=$("#customToolDialog");if(!d.open)d.showModal();}
 async function loadCustomTools(){
-  var items=[];try{items=await dbAll("customTools");}catch(e){}
+  var oldIds=state.customLibrary.list().map(function(x){return x.id;}),items=[];try{items=await dbAll(P.STORES.customTools);}catch(e){}
+  var incomingIds=new Set(items.map(function(x){return x.id;}));oldIds.forEach(function(id){if(!incomingIds.has(id)){var old=state.customLibrary.get(id);if(old)CT.uninstall(old,T.REGISTRY);}});
   state.customLibrary=new CT.CustomToolLibrary(items);state.persistedRevisions.customTools=new Map(items.map(function(x){return [x.id,x.revision||0];}));var report=state.customLibrary.installAll(T.REGISTRY);renderToolList();renderCustomLibrary();
   if(report.failed.length){console.warn("Custom tools not installed",report.failed);toast(report.failed.length+" custom tool"+(report.failed.length===1?"":"s")+" need validation");}
 }
@@ -904,7 +905,7 @@ async function saveWorksheet(ws,immediate){
   }catch(e){
     if(e&&e.code==="REVISION_CONFLICT"){
       var remote=e.details&&e.details.current?NB.recoveryNormalize(e.details.current).document:null,copy=JSON.parse(JSON.stringify(ws));copy.id=uid();copy.title=(copy.title||"Notebook")+" (conflict copy)";copy.revision=(copy.revision||1)+1;copy.updatedAt=Date.now();
-      await persistenceDb.repository(P.STORES.notebooks).put(copy);state.persistedRevisions.worksheets.set(copy.id,copy.revision||0);
+      await dbPut(P.STORES.notebooks,copy);state.persistedRevisions.worksheets.set(copy.id,copy.revision||0);
       var idx=state.worksheets.findIndex(function(x){return x.id===ws.id;});if(remote&&idx>=0){state.worksheets[idx]=remote;state.persistedRevisions.worksheets.set(remote.id,remote.revision||0);}state.worksheets.unshift(copy);state.activeWorksheet=copy;clearSessionRecovery(ws.id);toast("A newer notebook revision exists; local edits were preserved as a conflict copy");
     }else toast("Could not save notebook: "+errorMessage(e));
   }
@@ -1091,8 +1092,11 @@ async function shareFullBackup(){
 async function recomputeRestorePlan(){
   if(!state.restoreBackup){$("#restorePreview").textContent="No backup selected.";$("#applyRestoreBtn").disabled=true;return;}
   try{
-    var plan=await P.planRestore(persistenceDb,state.restoreBackup,{mode:$("#restoreMode").value,conflictPolicy:$("#restoreConflictPolicy").value});state.restorePlan=plan;
-    var lines=["Verified backup · "+plan.verifiedHash.slice(0,16)+"…","Mode: "+plan.mode];
+    var plan=await P.planRestore(persistenceDb,state.restoreBackup,{mode:$("#restoreMode").value,conflictPolicy:$("#restoreConflictPolicy").value});
+    plan.data[P.STORES.notebooks]=plan.data[P.STORES.notebooks].map(function(item){return NB.normalizeNotebook(item);});
+    plan.data[P.STORES.customTools]=plan.data[P.STORES.customTools].map(function(item){return CT.normalizeManifest(item);});
+    state.restorePlan=plan;
+    var lines=["Verified backup · "+plan.verifiedHash.slice(0,16)+"…","Mode: "+plan.mode,"Domain schemas: notebooks/custom tools validated"];
     P.DATA_STORES.forEach(function(s){lines.push(s+": "+plan.summary.current[s]+" local + "+plan.summary.incoming[s]+" backup → "+plan.summary.result[s]);});
     if(plan.conflicts.length)lines.push("Conflict copies: "+plan.conflicts.length);
     $("#restorePreview").textContent=lines.join("\n");$("#restorePreview").classList.remove("ws-error");$("#applyRestoreBtn").disabled=false;
