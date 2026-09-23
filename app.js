@@ -199,8 +199,9 @@ function copyText(text){
   else fallbackCopy(text);
 }
 function fallbackCopy(text){
-  var ta=document.createElement("textarea");ta.value=text;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.select();
-  try{document.execCommand("copy");toast("Copied");}finally{ta.remove();}
+  var ta=document.createElement("textarea");ta.value=text;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.select();var copied=false;
+  try{copied=typeof document.execCommand==="function"&&document.execCommand("copy")!==false;}catch(e){copied=false;}finally{ta.remove();}
+  toast(copied?"Copied":"Copy unavailable");
 }
 function graphCurrent(){
   var raw=$("#expressionInput").value.trim();if(!raw||/=/.test(raw)&&/^[A-Za-z_]\w*\s*=/.test(raw))return;

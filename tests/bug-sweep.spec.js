@@ -87,6 +87,18 @@ test("dataset column names cannot inject markup through histogram rendering",asy
   expect(await page.evaluate(()=>window.__dataXss||0)).toBe(0);
 });
 
+test("notebook Ref copy does not throw when clipboard APIs are unavailable",async({page})=>{
+  await page.addInitScript(()=>{
+    Object.defineProperty(navigator,"clipboard",{configurable:true,value:undefined});
+    Document.prototype.execCommand=undefined;
+  });
+  const errors=await openApp(page);
+  await page.locator('[data-view="worksheet"]').first().click();
+  await page.locator('[data-ws-action="ref"]').first().click();
+  await expect(page.locator("#toast")).toContainText("Copy unavailable");
+  expect(errors).toEqual([]);
+});
+
 test("notebook title input is recovery-safe before blur",async({page})=>{
   await openApp(page);
   await page.locator('[data-view="worksheet"]').first().click();
