@@ -17,7 +17,7 @@ eq(A.simplish ? "unused" : "ok","ok","API sanity");
 eq(A.simplify("x*x").toString(),"x ^ 2","repeated factor");
 eq(A.simplify("2 + 3/2").toString(),"7/2","exact constant folding");
 eq(A.simplify("sqrt(8)").toString(),"2 * sqrt(2)","radical square-factor simplification");
-eq(A.simplify("sqrt(1/8)").toString(),"1/4 * sqrt(2)","rational radical simplification");
+eq(A.simplify("sqrt(1/8)").toString(),"1/4 * sqrt(2)","rational radical simplification");\n\n// Printer precedence must preserve the represented AST exactly.\neq(A.printAst(M.parseExpression("x/(a*b)")),"x / (a * b)","denominator product parentheses");\neq(A.printAst(M.parseExpression("x-(a+b)")),"x - (a + b)","subtraction right-sum parentheses");
 
 // Rational cancellation must retain original domain restrictions.
 const cancelled=A.simplify("(x^2 - 1)/(x - 1)","x");
