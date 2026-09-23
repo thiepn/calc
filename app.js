@@ -904,8 +904,8 @@ async function duplicateBuiltInCustom(){
 }
 function openCustomBuilder(){populateCustomDuplicateSelect();renderCustomLibrary();if(!state.customCurrent)newCustomTool();var d=$("#customToolDialog");if(!d.open)d.showModal();}
 async function loadCustomTools(){
-  var oldIds=state.customLibrary.list().map(function(x){return x.id;}),items=[];try{items=await dbAll(P.STORES.customTools);}catch(e){}
-  var incomingIds=new Set(items.map(function(x){return x.id;}));oldIds.forEach(function(id){if(!incomingIds.has(id)){var old=state.customLibrary.get(id);if(old)CT.uninstall(old,T.REGISTRY);}});
+  var previous=state.customLibrary.list(),items=[];try{items=await dbAll(P.STORES.customTools);}catch(e){}
+  previous.forEach(function(item){try{CT.uninstall(item,T.REGISTRY);}catch(uninstallError){console.warn("Could not uninstall stale custom tool",uninstallError);}});
   state.customLibrary=new CT.CustomToolLibrary(items);state.persistedRevisions.customTools=new Map(items.map(function(x){return [x.id,x.revision||0];}));var report=state.customLibrary.installAll(T.REGISTRY);renderToolList();renderCustomLibrary();
   if(report.failed.length){console.warn("Custom tools not installed",report.failed);toast(report.failed.length+" custom tool"+(report.failed.length===1?"":"s")+" need validation");}
 }

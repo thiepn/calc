@@ -222,6 +222,27 @@ test("failed custom-tool delete leaves persisted and runtime tool intact",async(
   expect(errors).toEqual([]);
 });
 
+test("cross-tab custom-tool archive removes stale active runtime",async({page})=>{
+  const errors=await openApp(page);
+  const id=await page.evaluate(async()=>{
+    const CT=window.CalcCustomTools,P=window.CalcPersistence;
+    let draft=CT.newFormulaDraft();draft.name="Cross Tab Archive Guard";const active=CT.activate(draft).manifest;
+    const db=new P.CalcDatabase();await db.open();await db.repository(P.STORES.customTools).put(active);return active.id;
+  });
+  await page.reload({waitUntil:"domcontentloaded"});
+  expect(await page.evaluate(id=>!!window.CalcTools.REGISTRY.get("custom."+id),id)).toBeTruthy();
+  await page.evaluate(async id=>{
+    const CT=window.CalcCustomTools,P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();
+    const current=await db.repository(P.STORES.customTools).get(id),archived=CT.archive(current);
+    await db.repository(P.STORES.customTools).put(archived);
+    const channel=new BroadcastChannel("calc-persistence-v1");
+    channel.postMessage({schema:"calc.broadcast/v1",sender:"bug-sweep-remote",entityType:P.STORES.customTools,entityId:id,revision:archived.revision,action:"put"});
+    setTimeout(()=>channel.close(),100);
+  },id);
+  await expect.poll(()=>page.evaluate(id=>!!window.CalcTools.REGISTRY.get("custom."+id),id),{timeout:3000}).toBeFalsy();
+  expect(errors).toEqual([]);
+});
+
 test("all registered tools render and execute their default UI without JS failure",async({page})=>{
   const errors=await openApp(page);
   const ids=await page.evaluate(()=>window.CalcTools.REGISTRY.list().map(t=>t.id));
