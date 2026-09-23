@@ -336,20 +336,26 @@ function importManifest(text){
 }
 
 class CustomToolLibrary{
-  constructor(items){this.items=new Map();(items||[]).forEach(x=>this.items.set(normalizeManifest(x).id,normalizeManifest(x)));}
+  constructor(items){
+    this.items=new Map();this.rejected=[];
+    (items||[]).forEach(x=>{
+      try{const m=normalizeManifest(x);this.items.set(m.id,m);}
+      catch(e){this.rejected.push({id:x&&x.id!==undefined?String(x.id):null,name:x&&x.name!==undefined?String(x.name):"Invalid custom tool",error:e.message,code:e.code||"CUSTOM_TOOL_SCHEMA"});}
+    });
+  }
   list(status){return Array.from(this.items.values()).filter(x=>!status||x.status===status).sort((a,b)=>b.updatedAt-a.updatedAt);}
   get(id){return this.items.get(id)||null;}
   put(raw){const m=normalizeManifest(raw);this.items.set(m.id,m);return m;}
   remove(id){return this.items.delete(id);}
   installAll(registry){
-    registry=registry||T.REGISTRY;const installed=[],failed=[];
+    registry=registry||T.REGISTRY;const installed=[],failed=this.rejected.slice();
     for(const m of this.items.values())if(m.status==="active"){try{const tool=installActive(m,registry);if(tool)installed.push(tool.id);}catch(e){failed.push({id:m.id,name:m.name,error:e.message,code:e.code||"ERROR"});}}
     return {installed:installed,failed:failed};
   }
 }
 
 global.CalcCustomTools={
-  VERSION:"1.0.0-custom-tools",SCHEMA:SCHEMA,
+  VERSION:"1.0.1-custom-tools",SCHEMA:SCHEMA,
   CustomToolError:CustomToolError,CustomToolSchemaError:CustomToolSchemaError,CustomToolValidationError:CustomToolValidationError,CustomToolTestError:CustomToolTestError,CustomToolImportError:CustomToolImportError,
   normalizeManifest:normalizeManifest,validationReport:validationReport,compile:compile,executeManifest:executeManifest,runTests:runTests,
   revise:revise,activate:activate,archive:archive,restoreRevision:restoreRevision,newFormulaDraft:newFormulaDraft,canDuplicateBuiltIn:canDuplicateBuiltIn,duplicateBuiltIn:duplicateBuiltIn,installActive:installActive,uninstall:uninstall,
