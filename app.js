@@ -35,7 +35,7 @@ const state={
   installPrompt:null,history:[],worksheets:[],activeWorksheet:null,
   graph:{session:null,drag:null,pinch:null,pointers:new Map(),geometries:[],worker:null},
   selectedTool:"percentage-of",toolSearch:"",customLibrary:new CT.CustomToolLibrary(),customCurrent:null,customValidationTimer:null,dataset:null,statisticsWorker:null,dataRevision:0,
-  restoreRaw:null,restoreBackup:null,restorePlan:null,swRegistration:null,updateWaiting:null,reloadingForUpdate:false,persistedRevisions:{worksheets:new Map(),customTools:new Map()}
+  restoreRaw:null,restoreBackup:null,restorePlan:null,swRegistration:null,updateWaiting:null,reloadingForUpdate:false,persistedRevisions:{worksheets:new Map(),customTools:new Map()},remoteDeletedCustomIds:new Set()
 };
 
 function toast(msg){
@@ -72,6 +72,12 @@ function dbPutVersioned(store,value,expectedRevision){
 }
 function dbDelete(store,key){
   return persistenceDb.repository(store).delete(key).then(function(result){persistenceCoordinator.publish({entityType:store,entityId:String(key),revision:Date.now(),action:"delete"});return result;});
+}
+async function deletePersistentEntity(store,key,revision){
+  var info=await P.deleteWithTombstone(persistenceDb,store,key,{revision:revision,deviceId:syncManager.deviceId});
+  persistenceCoordinator.publish({entityType:store,entityId:String(key),revision:info.revision,action:"delete"});
+  persistenceCoordinator.publish({entityType:P.STORES.tombstones,entityId:String(store)+":"+String(key),revision:info.revision,action:"put"});
+  return info;
 }
 function dbClear(store){
   return persistenceDb.repository(store).clear().then(function(result){persistenceCoordinator.publish({entityType:store,entityId:"*",revision:Date.now(),action:"clear"});return result;});
@@ -830,6 +836,10 @@ function validateCustomBuilder(full){
 }
 function scheduleCustomValidation(){clearTimeout(state.customValidationTimer);state.customValidationTimer=setTimeout(function(){validateCustomBuilder(false);},180);}
 async function persistCustom(manifest){
+  if(state.remoteDeletedCustomIds.has(manifest.id)){
+    var resurrect=JSON.parse(JSON.stringify(manifest));resurrect.id=uid();resurrect.name=(resurrect.name||"Custom tool")+" (conflict copy)";resurrect.status="draft";resurrect.revision=(resurrect.revision||1)+1;resurrect.updatedAt=Date.now();resurrect.history=resurrect.history||[];manifest=resurrect;state.remoteDeletedCustomIds.delete(resurrect.id);
+    toast("The original custom tool was deleted in another tab; local edits were moved to a Draft conflict copy");
+  }
   var expected=state.persistedRevisions.customTools.has(manifest.id)?state.persistedRevisions.customTools.get(manifest.id):null;
   try{
     await dbPutVersioned(P.STORES.customTools,manifest,expected);state.persistedRevisions.customTools.set(manifest.id,manifest.revision||0);state.customLibrary.put(manifest);renderCustomLibrary();renderToolList();return manifest;
@@ -854,7 +864,9 @@ async function archiveCustomTool(){
   try{var current=state.customCurrent&&state.customLibrary.get(state.customCurrent.id);if(!current)throw new Error("Save the custom tool first");CT.uninstall(current,T.REGISTRY);var m=await persistCustom(CT.archive(current));fillCustomBuilder(m);toast(m.status==="archived"?"Custom tool archived":"Local archive preserved as conflict Draft");}catch(e){toast(errorMessage(e));}
 }
 async function deleteCustomTool(){
-  var current=state.customCurrent&&state.customLibrary.get(state.customCurrent.id);if(!current)return;if(!confirm("Delete custom tool '"+current.name+"'?"))return;CT.uninstall(current,T.REGISTRY);state.customLibrary.remove(current.id);state.persistedRevisions.customTools.delete(current.id);await dbDelete(P.STORES.customTools,current.id);renderCustomLibrary();renderToolList();newCustomTool();toast("Custom tool deleted");
+  var current=state.customCurrent&&state.customLibrary.get(state.customCurrent.id);if(!current)return;if(!confirm("Delete custom tool '"+current.name+"'?"))return;
+  CT.uninstall(current,T.REGISTRY);state.customLibrary.remove(current.id);state.persistedRevisions.customTools.delete(current.id);
+  await deletePersistentEntity(P.STORES.customTools,current.id,(current.revision||0)+1);renderCustomLibrary();renderToolList();newCustomTool();toast("Custom tool deleted");
 }
 function exportCustomTool(){
   try{var m=state.customCurrent&&state.customLibrary.get(state.customCurrent.id)||CT.normalizeManifest(builderManifest()),doc=CT.exportManifest(m),blob=new Blob([JSON.stringify(doc,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=m.name.replace(/[^A-Za-z0-9._-]+/g,"-").replace(/^-+|-+$/g,"")+".calctool.json";a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},1000);}catch(e){toast(errorMessage(e));}
@@ -1059,6 +1071,17 @@ function exportNotebookJson(){
 function exportNotebookMarkdown(){
   try{var name=(state.activeWorksheet.title||"notebook").replace(/[^A-Za-z0-9._-]+/g,"-")+".md";downloadText(name,NB.markdownExport(state.activeWorksheet),"text/markdown");}catch(e){toast(errorMessage(e));}
 }
+async function deleteActiveNotebook(){
+  var ws=state.activeWorksheet;if(!ws)return;if(!confirm("Delete notebook '"+ws.title+"'?"))return;
+  clearTimeout(worksheetSaveTimer);clearTimeout(worksheetEvalTimer);
+  try{
+    await deletePersistentEntity(P.STORES.notebooks,ws.id,(ws.revision||0)+1);state.persistedRevisions.worksheets.delete(ws.id);clearSessionRecovery(ws.id);
+    state.worksheets=state.worksheets.filter(function(x){return x.id!==ws.id;});
+    if(!state.worksheets.length){var next=createNotebook();state.worksheets=[next];state.activeWorksheet=next;await saveWorksheet(next,false);}
+    else state.activeWorksheet=state.worksheets[0];
+    renderWorksheetArea();toast("Notebook deleted");
+  }catch(e){toast(errorMessage(e));}
+}
 
 
 function formatBytes(bytes){
@@ -1089,15 +1112,16 @@ async function shareFullBackup(){
     await navigator.share(data);
   }catch(e){if(e&&e.name!=="AbortError")toast(errorMessage(e));}
 }
+function selectedRestoreStores(){return $("[data-restore-store]:checked").map(function(el){return el.dataset.restoreStore;});}
 async function recomputeRestorePlan(){
   if(!state.restoreBackup){$("#restorePreview").textContent="No backup selected.";$("#applyRestoreBtn").disabled=true;return;}
   try{
-    var plan=await P.planRestore(persistenceDb,state.restoreBackup,{mode:$("#restoreMode").value,conflictPolicy:$("#restoreConflictPolicy").value});
+    var stores=selectedRestoreStores(),plan=await P.planRestore(persistenceDb,state.restoreBackup,{mode:$("#restoreMode").value,conflictPolicy:$("#restoreConflictPolicy").value,stores:stores});
     plan.data[P.STORES.notebooks]=plan.data[P.STORES.notebooks].map(function(item){return NB.normalizeNotebook(item);});
     plan.data[P.STORES.customTools]=plan.data[P.STORES.customTools].map(function(item){return CT.normalizeManifest(item);});
     state.restorePlan=plan;
-    var lines=["Verified backup · "+plan.verifiedHash.slice(0,16)+"…","Mode: "+plan.mode,"Domain schemas: notebooks/custom tools validated"];
-    P.DATA_STORES.forEach(function(s){lines.push(s+": "+plan.summary.current[s]+" local + "+plan.summary.incoming[s]+" backup → "+plan.summary.result[s]);});
+    var lines=["Verified backup · "+plan.verifiedHash.slice(0,16)+"…","Mode: "+plan.mode,"Selected: "+plan.selectedStores.join(", "),"Domain schemas: notebooks/custom tools validated"];
+    P.DATA_STORES.forEach(function(s){lines.push(s+(plan.selectedStores.includes(s)?"":" (unchanged)")+": "+plan.summary.current[s]+" local + "+plan.summary.incoming[s]+" backup → "+plan.summary.result[s]);});
     if(plan.conflicts.length)lines.push("Conflict copies: "+plan.conflicts.length);
     $("#restorePreview").textContent=lines.join("\n");$("#restorePreview").classList.remove("ws-error");$("#applyRestoreBtn").disabled=false;
   }catch(e){state.restorePlan=null;$("#restorePreview").textContent=errorMessage(e);$("#restorePreview").classList.add("ws-error");$("#applyRestoreBtn").disabled=true;}
@@ -1181,6 +1205,17 @@ async function handleCrossTabMessage(message){
     }
     if(message.entityType===P.STORES.notebooks){
       if(message.action==="clear"){toast("Notebooks changed in another tab. Reload recommended.");return;}
+      if(message.action==="delete"){
+        var deletedId=message.entityId,local=state.worksheets.find(function(w){return w.id===deletedId;}),isActive=state.activeWorksheet&&state.activeWorksheet.id===deletedId;
+        if(local&&isActive&&local.blocks.some(function(b){return b.status==="dirty"||b.status==="stale";})){
+          var conflict=JSON.parse(JSON.stringify(local));conflict.id=uid();conflict.title=(conflict.title||"Notebook")+" (local conflict copy)";conflict.revision=(conflict.revision||1)+1;conflict.updatedAt=Date.now();
+          await dbPut(P.STORES.notebooks,conflict);state.persistedRevisions.worksheets.set(conflict.id,conflict.revision||0);state.worksheets.unshift(conflict);state.activeWorksheet=conflict;toast("Notebook was deleted in another tab; unsaved local edits were preserved as a conflict copy");
+        }
+        state.worksheets=state.worksheets.filter(function(w){return w.id!==deletedId;});state.persistedRevisions.worksheets.delete(deletedId);
+        if(isActive&&!state.activeWorksheet||isActive&&state.activeWorksheet.id===deletedId){state.activeWorksheet=state.worksheets[0]||null;}
+        if(!state.activeWorksheet){var replacement=createNotebook();state.worksheets.unshift(replacement);state.activeWorksheet=replacement;await saveWorksheet(replacement,false);}
+        renderWorksheetArea();return;
+      }
       var incoming=await persistenceDb.repository(P.STORES.notebooks).get(message.entityId);if(!incoming)return;
       var idx=state.worksheets.findIndex(function(w){return w.id===incoming.id;}),active=state.activeWorksheet&&state.activeWorksheet.id===incoming.id;
       if(active){
@@ -1196,7 +1231,12 @@ async function handleCrossTabMessage(message){
       return;
     }
     if(message.entityType===P.STORES.customTools){
-      var dialog=$("#customToolDialog");if(dialog&&dialog.open){toast("Custom tools changed in another tab; close/reopen builder to refresh");}
+      if(message.action==="delete"){
+        var old=state.customLibrary.get(message.entityId);if(old)CT.uninstall(old,T.REGISTRY);state.customLibrary.remove(message.entityId);state.persistedRevisions.customTools.delete(message.entityId);state.remoteDeletedCustomIds.add(message.entityId);renderCustomLibrary();renderToolList();
+        var dialog=$("#customToolDialog");if(dialog&&dialog.open&&state.customCurrent&&state.customCurrent.id===message.entityId)toast("This custom tool was deleted in another tab. Saving your local editor will create a Draft conflict copy.");
+        return;
+      }
+      var dialog2=$("#customToolDialog");if(dialog2&&dialog2.open){toast("Custom tools changed in another tab; close/reopen builder to refresh");}
       else await loadCustomTools();return;
     }
     if(message.entityType===P.STORES.history&&state.view==="history"){state.history=(await dbAll(P.STORES.history)).sort(function(a,b){return b.time-a.time;});renderHistory();return;}
@@ -1368,11 +1408,11 @@ function bindEvents(){
   $("#customMode").onchange=updateCustomModeUi;$("#customOutputType").onchange=scheduleCustomValidation;$("#customOutputUnit").oninput=scheduleCustomValidation;$("#customName").oninput=scheduleCustomValidation;$("#customDescription").oninput=scheduleCustomValidation;$("#customExpression").oninput=scheduleCustomValidation;
   $("[data-add-ws-block]").forEach(function(b){b.onclick=function(){addBlock(b.dataset.addWsBlock);};});$("#newWorksheetBtn").onclick=newWorksheet;$("#runWorksheetBtn").onclick=function(){runWorksheet(true);};
   $("#worksheetAutoRun").onchange=function(){if(!state.activeWorksheet)return;checkpointWorksheet("auto-run setting");state.activeWorksheet.settings.autoRun=this.checked;writeSessionRecovery();scheduleWorksheetSave();if(this.checked)runWorksheet(false);};
-  $("#worksheetImportBtn").onclick=function(){$("#worksheetImportFile").click();};$("#worksheetImportFile").onchange=function(){if(this.files&&this.files[0])importNotebookFile(this.files[0]);this.value="";};$("#worksheetExportBtn").onclick=exportNotebookJson;$("#worksheetMarkdownBtn").onclick=exportNotebookMarkdown;
+  $("#worksheetImportBtn").onclick=function(){$("#worksheetImportFile").click();};$("#worksheetImportFile").onchange=function(){if(this.files&&this.files[0])importNotebookFile(this.files[0]);this.value="";};$("#worksheetExportBtn").onclick=exportNotebookJson;$("#worksheetMarkdownBtn").onclick=exportNotebookMarkdown;$("#deleteWorksheetBtn").onclick=deleteActiveNotebook;
   $("#worksheetTitle").addEventListener("change",function(){if(state.activeWorksheet){checkpointWorksheet("rename notebook");state.activeWorksheet.title=this.value||"Untitled notebook";state.activeWorksheet.updatedAt=Date.now();writeSessionRecovery();scheduleWorksheetSave();renderWorksheetList();renderWorksheetVersions();}});
   $("#fullBackupBtn").onclick=downloadFullBackup;$("#shareBackupBtn").onclick=shareFullBackup;$("#restoreBackupBtn").onclick=function(){$("#restoreBackupFile").click();};
   $("#restoreBackupFile").onchange=function(){if(this.files&&this.files[0])chooseRestoreFile(this.files[0]);this.value="";};
-  $("#restorePassword").onchange=openRestoreRaw;$("#restoreMode").onchange=recomputeRestorePlan;$("#restoreConflictPolicy").onchange=recomputeRestorePlan;$("#applyRestoreBtn").onclick=applyRestorePlan;
+  $("#restorePassword").onchange=openRestoreRaw;$("#restoreMode").onchange=recomputeRestorePlan;$("#restoreConflictPolicy").onchange=recomputeRestorePlan;$("[data-restore-store]").forEach(function(el){el.onchange=recomputeRestorePlan;});$("#applyRestoreBtn").onclick=applyRestorePlan;
   $("#integrityCheckBtn").onclick=runIntegrityCheck;$("#persistentStorageBtn").onclick=requestPersistentStorageUi;
   $("#checkUpdateBtn").onclick=checkForUpdate;$("#applyUpdateBtn").onclick=applyAppUpdate;$("#updateBtn").onclick=applyAppUpdate;
   $("#clearHistoryBtn").onclick=async function(){if(!confirm("Clear calculation history?"))return;state.history=[];try{await dbClear("history");}catch(e){}renderHistory();};
