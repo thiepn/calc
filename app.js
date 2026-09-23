@@ -858,6 +858,13 @@ async function persistCustom(manifest){
     await dbPutVersioned(P.STORES.customTools,manifest,expected);state.persistedRevisions.customTools.set(manifest.id,manifest.revision||0);state.customLibrary.put(manifest);renderCustomLibrary();renderToolList();return manifest;
   }catch(e){
     if(e&&e.code==="REVISION_CONFLICT"){
+      var remote=null,previous=state.customLibrary.get(manifest.id);
+      try{if(e.details&&e.details.current)remote=CT.normalizeManifest(e.details.current);}catch(remoteError){console.warn("Could not normalize newer custom-tool revision",remoteError);}
+      if(remote){
+        if(previous)CT.uninstall(previous,T.REGISTRY);
+        state.customLibrary.put(remote);state.persistedRevisions.customTools.set(remote.id,remote.revision||0);
+        if(remote.status==="active"){try{CT.installActive(remote,T.REGISTRY);}catch(installError){console.warn("Newer custom tool could not be installed",installError);}}
+      }
       var conflict=JSON.parse(JSON.stringify(manifest));conflict.id=uid();conflict.name=(conflict.name||"Custom tool")+" (conflict copy)";conflict.status="draft";conflict.revision=(conflict.revision||1)+1;conflict.updatedAt=Date.now();conflict.history=conflict.history||[];
       await dbPut(P.STORES.customTools,conflict);state.persistedRevisions.customTools.set(conflict.id,conflict.revision);state.customLibrary.put(conflict);state.customCurrent=conflict;renderCustomLibrary();renderToolList();toast("A newer custom-tool revision exists; local changes were saved as a Draft conflict copy");return conflict;
     }

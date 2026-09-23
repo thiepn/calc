@@ -167,6 +167,38 @@ test("failed custom-tool draft save leaves active runtime tool intact",async({pa
   expect(errors).toEqual([]);
 });
 
+test("custom-tool revision conflict installs newer remote original and preserves local copy",async({page})=>{
+  const errors=await openApp(page);
+  const seed=await page.evaluate(async()=>{
+    const CT=window.CalcCustomTools,P=window.CalcPersistence;
+    let draft=CT.newFormulaDraft();draft.name="Conflict Guard";const active=CT.activate(draft).manifest;
+    const db=new P.CalcDatabase();await db.open();await db.repository(P.STORES.customTools).put(active);
+    return {id:active.id,revision:active.revision};
+  });
+  await page.reload({waitUntil:"domcontentloaded"});
+  await page.locator('[data-view="tools"]').first().click();
+  await page.locator("#customToolBuilderBtn").click();
+  await page.locator("#customToolLibrary button").filter({hasText:"Conflict Guard"}).click();
+  await page.evaluate(async id=>{
+    const CT=window.CalcCustomTools,P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();
+    const current=await db.repository(P.STORES.customTools).get(id);
+    let remote=CT.revise(current,{name:"Remote Guard"});remote=CT.activate(remote).manifest;
+    await db.repository(P.STORES.customTools).put(remote);
+  },seed.id);
+  await page.locator("#customName").fill("Local Guard");
+  await page.locator("#customSaveDraftBtn").click();
+  await expect(page.locator("#toast")).toContainText("conflict copy");
+  const result=await page.evaluate(async id=>{
+    const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open(),items=await db.repository(P.STORES.customTools).all();
+    const runtime=window.CalcTools.REGISTRY.get("custom."+id);
+    return {runtimeName:runtime&&runtime.name,remote:items.find(x=>x.id===id),copies:items.filter(x=>x.id!==id&&/conflict copy/.test(x.name||""))};
+  },seed.id);
+  expect(result.runtimeName).toBe("Remote Guard");
+  expect(result.remote.name).toBe("Remote Guard");
+  expect(result.copies.length).toBeGreaterThanOrEqual(1);
+  expect(errors).toEqual([]);
+});
+
 test("failed custom-tool delete leaves persisted and runtime tool intact",async({page})=>{
   const errors=await openApp(page);
   const seeded=await page.evaluate(async()=>{
