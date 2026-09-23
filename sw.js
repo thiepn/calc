@@ -1,5 +1,6 @@
 "use strict";
-const CACHE="calc-shell-v22-rc1";
+const APP_VERSION="1.0.0";
+const CACHE="calc-shell-v"+APP_VERSION;
 const ASSETS=["./","./index.html","./styles.css","./math.js","./algebra.js","./calculus.js","./calculus-worker.js","./units.js","./linear-algebra.js","./statistics.js","./statistics-worker.js","./graph.js","./graph-worker.js","./tools.js","./custom-tools.js","./notebook.js","./persistence.js","./app.js","./manifest.webmanifest","./icon.svg"];
 const shellUrl=new URL("./index.html",self.registration.scope).href;
 
@@ -10,7 +11,7 @@ self.addEventListener("install",function(event){
 self.addEventListener("message",function(event){
   var message=event.data||{};
   if(message.type==="SKIP_WAITING"){self.skipWaiting();return;}
-  if(message.type==="GET_VERSION"&&event.source&&event.source.postMessage)event.source.postMessage({type:"SW_VERSION",version:CACHE});
+  if(message.type==="GET_VERSION"&&event.source&&event.source.postMessage)event.source.postMessage({type:"SW_VERSION",version:CACHE,appVersion:APP_VERSION});
 });
 
 self.addEventListener("activate",function(event){
