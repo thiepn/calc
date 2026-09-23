@@ -13,7 +13,8 @@ Calc currently includes:
 - canonical Matrix/Vector/subspace objects and certified numerical decompositions;
 - typed Dataset/probability/inference/regression systems;
 - Graph V2 with explicit, piecewise, parametric, polar, implicit and inequality plots;
-- a registry-driven specialized calculator system with finance, geometry, date, programmer and number-theory tools;\n- a safe declarative Custom Formula Builder with Draft/Active/Archived lifecycle, tests, quantities, relations, revision history, and strict `.calctool.json` import/export;\n- typed Worksheets & Notebooks V2 with Math/Text/Tool/Matrix/Data/Graph blocks, dependencies, stale tracking, version restore, import/export, and recovery mode;\n- a versioned persistence/backup layer with encrypted backups, selective atomic restore, optimistic multi-tab writes, tombstones, storage diagnostics, controlled PWA updates, and provider-neutral sync architecture;
+- a registry-driven specialized calculator system with finance, geometry, date, programmer and number-theory tools;\n- a safe declarative Custom Formula Builder with Draft/Active/Archived lifecycle, tests, quantities, relations, revision history, and strict `.calctool.json` import/export;\n- typed Worksheets & Notebooks V2 with Math/Text/Tool/Matrix/Data/Graph blocks, dependencies, stale tracking, version restore, import/export, and recovery mode;\n- a versioned persistence/backup layer with chunked large-notebook storage, streamed plaintext backups, encrypted backups, selective atomic restore, recoverable Trash, optimistic multi-tab writes, storage diagnostics, controlled PWA updates, and provider-neutral sync architecture;
+- a Phase 13 release-candidate gate with large-fixture soak, v4→v5 migration certification, corruption/interruption tests, offline PWA checks, and Chromium/Firefox/WebKit/mobile browser coverage;
 - persistent history/worksheets;
 - offline/installable PWA support.
 
@@ -259,7 +260,7 @@ Calc now uses a dedicated versioned persistence layer instead of owning IndexedD
 Current database schema:
 
 ```text
-calc-db · version 4
+calc-db · version 5
 
 history
 worksheets
@@ -268,6 +269,7 @@ customTools
 meta
 journal
 tombstones
+chunks
 ```
 
 Data & Backup supports:
@@ -288,7 +290,7 @@ Data & Backup supports:
 
 Notebook and custom-tool writes use optimistic revisions. A stale tab cannot silently overwrite a newer saved revision; local edits are preserved as conflict copies.
 
-DB v4 tombstones preserve explicit notebook/custom-tool deletion history for future cross-device synchronization.
+DB v4 introduced tombstones for explicit deletion history. DB v5 adds the internal `chunks` store used to externalize large notebook sources, serialized results, and revision snapshots. Unchanged chunks are reused rather than rewritten, and recoverable Trash can retain chunk-backed notebook payloads without copying them into one large record.
 
 ### PWA updates
 
@@ -299,6 +301,7 @@ update downloaded
 → Update ready
 → Restart & update
 → flush pending data
+→ persistence integrity/update preflight
 → SKIP_WAITING
 → activate
 → reload
@@ -323,6 +326,22 @@ backup-compatible transfer boundary
 ```
 
 Today, the supported cross-device workflow is encrypted/plain backup transfer and restore; no Calc account or Calc cloud server is required.
+
+## Release-candidate certification
+
+Phase 13 adds a separate `Calc Release Soak` workflow. It reruns the cumulative deterministic suites, enforces static release budgets, then runs production-like browser tests on Chromium, Firefox, WebKit, and a Pixel 7 Chromium profile.
+
+The browser soak covers:
+
+- realistic IndexedDB v4 → v5 migration;
+- multi-megabyte notebook chunk persistence and unchanged-chunk reuse;
+- streamed backup verification and selective restore;
+- Trash isolation during notebook-only restore;
+- explicitly aborted writes and deliberately corrupted chunk recovery;
+- offline service-worker reload on install-oriented Chromium targets;
+- broad persistence performance and heap-growth ceilings.
+
+GitHub Pages is triggered only after that workflow succeeds and checks out the exact certified commit SHA. A normal push can no longer deploy directly around the RC gate.
 
 ## Graph V2
 
@@ -373,7 +392,7 @@ eng(ohm, V=12 V, R=6 ohm)
 - `linear-algebra.js` — Phase 5 linear algebra.
 - `statistics.js` / `statistics-worker.js` — Phase 6 probability/statistics/data.
 - `graph.js` / `graph-worker.js` — Phase 7 graph models, geometry and analysis.
-- `tools.js` — Phase 8 Tool Registry, finance, dates, geometry, programmer and number theory.\n- `custom-tools.js` — Phase 9 safe custom formulas, relations, validation, lifecycle and import/export.\n- `notebook.js` — Phase 10 typed notebook blocks, dependencies, versioning, execution, import/export and recovery.\n- `persistence.js` — Phase 11 DB migrations, repositories, backup/restore, encryption, tombstones, multi-tab coordination, storage diagnostics and sync boundary.
+- `tools.js` — Phase 8 Tool Registry, finance, dates, geometry, programmer and number theory.\n- `custom-tools.js` — Phase 9 safe custom formulas, relations, validation, lifecycle and import/export.\n- `notebook.js` — Phase 10 typed notebook blocks, dependencies, versioning, execution, import/export and recovery.\n- `persistence.js` — Phase 11–13 DB migrations, chunked notebook persistence, backup/restore, encryption, Trash/tombstones, multi-tab coordination, resilience diagnostics and sync boundary.
 - `app.js` — application state, persistence, workspaces and UI routing.
 - `styles.css` — responsive design system.
 - `sw.js` + `manifest.webmanifest` — offline/installable PWA runtime.
@@ -394,7 +413,9 @@ GitHub Actions runs cumulative certification for:
 - Linear Algebra V2;
 - Probability/Statistics/Data V2;
 - Graphing V2;
-- Specialized Calculators V2;\n- Custom Formula Builder;\n- Worksheets & Notebooks V2;\n- Persistence / Backup / PWA architecture.
+- Specialized Calculators V2;\n- Custom Formula Builder;\n- Worksheets & Notebooks V2;\n- Persistence / Backup / PWA architecture;
+- Phase 13 static RC certification;
+- cross-browser production soak before Pages deployment.
 
 The Phase 8 registry-wide test executes every enabled generic tool with its declared defaults in addition to deterministic boundary/reference cases.
 
