@@ -1,0 +1,13 @@
+{
+  "name": "calc-release-certification",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Development-only release certification tooling for Calc.",
+  "scripts": {
+    "test:release-gate": "node tests/release-gate.js",
+    "test:browser": "playwright test tests/release-soak.spec.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}
