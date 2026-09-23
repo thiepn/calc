@@ -1170,6 +1170,7 @@ function formatBytes(bytes){
 function currentClientSettings(){return {theme:state.theme,angle:state.angle,precision:state.precision,deviceId:syncManager.deviceId};}
 async function flushPendingPersistence(){
   clearTimeout(worksheetEvalTimer);var pendingIds=Array.from(worksheetSaveTimers.keys());worksheetSaveTimers.forEach(function(timer){clearTimeout(timer);});worksheetSaveTimers.clear();
+  var recoveryBundle=readSessionRecoveryBundle();Object.keys(recoveryBundle.entries||{}).forEach(function(id){if(pendingIds.indexOf(id)<0)pendingIds.push(id);});
   if(state.activeWorksheet&&pendingIds.indexOf(state.activeWorksheet.id)<0)pendingIds.push(state.activeWorksheet.id);
   for(const id of pendingIds){
     var pending=state.worksheets.find(function(w){return w.id===id;});if(!pending)continue;

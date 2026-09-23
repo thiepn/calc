@@ -345,6 +345,35 @@ test("rapid notebook edits always advance persisted optimistic revision",async({
   await expect.poll(readMaxRevision,{timeout:3000,intervals:[100,150,250,400]}).toBeGreaterThan(afterBlock);
 });
 
+test("backup retries failed non-active notebook recovery entries before export",async({page})=>{
+  const errors=await openApp(page);await goView(page,"worksheet");
+  await page.locator("#worksheetTitle").fill("Retry A");
+  await expect.poll(async()=>page.evaluate(async()=>{const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();return (await P.loadNotebooks(db)).some(x=>x.title==="Retry A");}),{timeout:3000}).toBeTruthy();
+  await page.locator("#newWorksheetBtn").click();await page.locator("#worksheetTitle").fill("Retry B");
+  await expect.poll(async()=>page.evaluate(async()=>{const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();return (await P.loadNotebooks(db)).some(x=>x.title==="Retry B");}),{timeout:3000}).toBeTruthy();
+  await page.locator("#worksheetList button").filter({hasText:"Retry A"}).click();
+  await page.evaluate(()=>{
+    const P=window.CalcPersistence,original=P.saveNotebookIncremental;let failed=false;
+    P.saveNotebookIncremental=async function(db,doc,expected,options){
+      if(doc.title==="Retry A"&&!failed){failed=true;throw new Error("forced scheduled A failure");}
+      return original(db,doc,expected,options);
+    };
+  });
+  await page.locator(".ws-editor").first().fill("444+1");
+  await page.waitForTimeout(700);
+  await page.locator("#worksheetList button").filter({hasText:"Retry B"}).click();
+  const before=await page.evaluate(async()=>{const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();const d=(await P.loadNotebooks(db)).find(x=>x.title==="Retry A");return d&&d.blocks[0].source;});
+  expect(before).not.toBe("444+1");
+  await goView(page,"settings");
+  const downloadPromise=page.waitForEvent("download");
+  await page.locator("#fullBackupBtn").click();
+  const download=await downloadPromise;
+  const path=await download.path();expect(path).toBeTruthy();
+  const persisted=await page.evaluate(async()=>{const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();const d=(await P.loadNotebooks(db)).find(x=>x.title==="Retry A");return d&&d.blocks[0].source;});
+  expect(persisted).toBe("444+1");
+  expect(errors).toEqual([]);
+});
+
 test("backup aborts instead of exporting stale notebook data after a save failure",async({page})=>{
   const errors=await openApp(page);
   await goView(page,"worksheet");
