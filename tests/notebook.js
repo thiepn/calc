@@ -3,6 +3,7 @@ global.window=global;
 require("../math.js");
 require("../algebra.js");
 require("../calculus.js");
+require("../cas.js");
 require("../units.js");
 require("../linear-algebra.js");
 require("../statistics.js");
@@ -55,6 +56,17 @@ eq(nb.blocks[2].result.display,"11","typed block reference result");
 eq(N.deserializeValue(nb.blocks[1].result.serialized).toString(),"10","exact result serialization");
 run=N.evaluateNotebook(nb,{precision:12,angle:"RAD"});
 assert(run.evaluations.every(function(e){return e.cached===true||e.blockId==="b1"&&e.cached===true;}),"second evaluation reuses clean cached blocks");
+
+// U1 CAS uses the same Worksheet Math evaluation surface.
+nb=doc([
+  block("cas1","math","assume(x>0; simplify(sqrt(x^2)))"),
+  block("cas2","math","solve(a*x+b=0, x)")
+]);
+run=N.evaluateNotebook(nb,{precision:12,angle:"RAD"});nb=run.document;
+eq(nb.blocks[0].status,"clean","assumption-aware CAS block clean");
+eq(nb.blocks[0].result.display,"x","assumption-aware CAS block result");
+assert(nb.blocks[1].result.display.includes("a ≠ 0")&&nb.blocks[1].result.display.includes("a = 0 and b = 0"),"parameterized CAS block result");
+assert(!nb.blocks[0].dependencies.includes("assume")&&!nb.blocks[1].dependencies.includes("solve"),"CAS command names are not notebook dependencies");
 
 // Quantity assignment + typed reference preserves units.
 nb=doc([
