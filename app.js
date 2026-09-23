@@ -925,17 +925,19 @@ function scheduleWorksheetEval(){
 }
 async function saveWorksheet(ws,immediate){
   if(ws&&ws.recovery&&ws.recovery.persistenceCorruption){if(immediate)toast("Storage recovery notebooks are read-only to protect the original corrupted record");return false;}
-  ws.updatedAt=Date.now();var payload=JSON.parse(JSON.stringify(ws)),expected=state.persistedRevisions.worksheets.has(ws.id)?state.persistedRevisions.worksheets.get(ws.id):null;
+  ws.updatedAt=Date.now();var payload=JSON.parse(JSON.stringify(ws)),expected=state.persistedRevisions.worksheets.has(ws.id)?state.persistedRevisions.worksheets.get(ws.id):null,saved=false;
   try{
-    await P.saveNotebookIncremental(persistenceDb,payload,expected);publishPersistenceChange(P.STORES.notebooks,payload,"put");state.persistedRevisions.worksheets.set(ws.id,ws.revision||0);clearSessionRecovery(ws.id);if(immediate)toast("Notebook saved");
+    await P.saveNotebookIncremental(persistenceDb,payload,expected);publishPersistenceChange(P.STORES.notebooks,payload,"put");state.persistedRevisions.worksheets.set(ws.id,ws.revision||0);clearSessionRecovery(ws.id);saved=true;if(immediate)toast("Notebook saved");
   }catch(e){
     if(e&&e.code==="REVISION_CONFLICT"){
-      var remote=e.details&&e.details.current?NB.recoveryNormalize(e.details.current).document:null,copy=JSON.parse(JSON.stringify(ws));copy.id=uid();copy.title=(copy.title||"Notebook")+" (conflict copy)";copy.revision=(copy.revision||1)+1;copy.updatedAt=Date.now();
-      await P.saveNotebookIncremental(persistenceDb,copy,null);publishPersistenceChange(P.STORES.notebooks,copy,"put");state.persistedRevisions.worksheets.set(copy.id,copy.revision||0);
-      var idx=state.worksheets.findIndex(function(x){return x.id===ws.id;});if(remote&&idx>=0){state.worksheets[idx]=remote;state.persistedRevisions.worksheets.set(remote.id,remote.revision||0);}state.worksheets.unshift(copy);state.activeWorksheet=copy;clearSessionRecovery(ws.id);toast("A newer notebook revision exists; local edits were preserved as a conflict copy");
-    }else toast("Could not save notebook: "+errorMessage(e));
+      try{
+        var remote=e.details&&e.details.current?NB.recoveryNormalize(e.details.current).document:null,copy=JSON.parse(JSON.stringify(ws));copy.id=uid();copy.title=(copy.title||"Notebook")+" (conflict copy)";copy.revision=(copy.revision||1)+1;copy.updatedAt=Date.now();
+        await P.saveNotebookIncremental(persistenceDb,copy,null);publishPersistenceChange(P.STORES.notebooks,copy,"put");state.persistedRevisions.worksheets.set(copy.id,copy.revision||0);
+        var idx=state.worksheets.findIndex(function(x){return x.id===ws.id;});if(remote&&idx>=0){state.worksheets[idx]=remote;state.persistedRevisions.worksheets.set(remote.id,remote.revision||0);}state.worksheets.unshift(copy);state.activeWorksheet=copy;clearSessionRecovery(ws.id);toast("A newer notebook revision exists; local edits were preserved as a conflict copy");saved=true;
+      }catch(conflictSaveError){toast("Could not preserve notebook conflict copy: "+errorMessage(conflictSaveError));saved=false;}
+    }else{toast("Could not save notebook: "+errorMessage(e));saved=false;}
   }
-  renderWorksheetList();
+  renderWorksheetList();return saved;
 }
 function replaceActiveWorksheet(next){
   state.activeWorksheet=next;var i=state.worksheets.findIndex(function(w){return w.id===next.id;});
@@ -1107,7 +1109,7 @@ function formatBytes(bytes){
 function currentClientSettings(){return {theme:state.theme,angle:state.angle,precision:state.precision,deviceId:syncManager.deviceId};}
 async function flushPendingPersistence(){
   clearTimeout(worksheetSaveTimer);clearTimeout(worksheetEvalTimer);
-  if(state.activeWorksheet)await saveWorksheet(state.activeWorksheet,false);
+  if(state.activeWorksheet){var saved=await saveWorksheet(state.activeWorksheet,false);if(!saved)throw new P.PersistenceError("FLUSH_FAILED","Current notebook could not be persisted; backup/update was cancelled to avoid stale data");}
   await persistSetting("theme",state.theme);await persistSetting("angle",state.angle);await persistSetting("precision",state.precision);await persistSetting("deviceId",syncManager.deviceId);
 }
 async function createBackupArtifact(){

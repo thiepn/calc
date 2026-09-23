@@ -12,7 +12,7 @@ Calc v1.0.1 is a bug-fix and resilience release on top of the v1.0.0 production 
 - Unsafe imported notebook block IDs are rejected before reaching DOM selector paths, and notebook import size is bounded.
 - A corrupt persisted Custom Tool is quarantined without preventing the rest of Calc from starting.
 - Custom-tool alias registration/unregistration no longer damages existing alias resolution.
-- The Tools list layout remains stable after search rendering was made focus-preserving.
+- The Tools list layout remains stable after search rendering was made focus-preserving.\n- Backup/update preflight now fails closed if the active notebook cannot be persisted, so unsaved edits cannot be silently omitted from a backup.
 
 ## Certification
 

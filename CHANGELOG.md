@@ -13,7 +13,7 @@ All notable production changes to Calc are recorded here.
 - Web Storage denial is non-fatal, and notebook imports now have a bounded file-size limit.
 - Malformed persisted custom tools are quarantined instead of aborting application startup.
 - Dynamic custom-tool aliases no longer hijack or erase existing alias mappings.
-- Tool-search results retain their grid layout after the focus-preserving rendering change.
+- Tool-search results retain their grid layout after the focus-preserving rendering change.\n- Backups and app updates now abort if the active notebook cannot be persisted, preventing stale exports after quota/write failures.
 
 ### Verification
 

@@ -112,6 +112,23 @@ test("notebook title input is recovery-safe before blur",async({page})=>{
   expect(recovery.document.title).toBe("Unsaved title probe");
 });
 
+test("backup aborts instead of exporting stale notebook data after a save failure",async({page})=>{
+  const errors=await openApp(page);
+  await page.locator('[data-view="worksheet"]').first().click();
+  await page.waitForTimeout(500);
+  await page.evaluate(()=>{
+    window.CalcPersistence.saveNotebookIncremental=async()=>{const e=new Error("Forced quota failure");e.name="QuotaExceededError";throw e;};
+  });
+  await page.locator("#worksheetTitle").fill("Must not be silently omitted");
+  await page.locator('[data-view="settings"]').first().click();
+  let downloads=0;page.on("download",()=>downloads++);
+  await page.locator("#fullBackupBtn").click();
+  await expect(page.locator("#toast")).toContainText("cancelled");
+  await page.waitForTimeout(250);
+  expect(downloads).toBe(0);
+  expect(errors).toEqual([]);
+});
+
 test("all registered tools render and execute their default UI without JS failure",async({page})=>{
   const errors=await openApp(page);
   const ids=await page.evaluate(()=>window.CalcTools.REGISTRY.list().map(t=>t.id));
