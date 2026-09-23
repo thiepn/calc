@@ -2,6 +2,24 @@
 
 All notable production changes to Calc are recorded here.
 
+## [1.0.1] — 2026-09-23
+
+### Bug fixes and hardening
+
+- Prevented stored HTML/script injection through custom-tool metadata, tool result titles, and CSV histogram column names.
+- Malformed encoded Tool deep links no longer crash Calc during startup or hash navigation.
+- Tool search now keeps focus while typing instead of recreating its own input after each keystroke.
+- Notebook title edits are recovery-safe immediately, reference copying handles clipboard denial, and unsafe imported block IDs are rejected.
+- Web Storage denial is non-fatal, and notebook imports now have a bounded file-size limit.
+- Malformed persisted custom tools are quarantined instead of aborting application startup.
+- Dynamic custom-tool aliases no longer hijack or erase existing alias mappings.
+- Tool-search results retain their grid layout after the focus-preserving rendering change.
+
+### Verification
+
+- Added a browser bug-sweep suite for navigation, deep links, search, injection resistance, recovery, registry-wide tool UI execution, and core Data interactions.
+- The bug sweep runs with the production soak on Chromium, Firefox, WebKit, and mobile Chromium.
+
 ## [1.0.0] — 2026-09-23
 
 ### Calculator platform

@@ -18,8 +18,6 @@ jobs:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     env:
-      RELEASE_VERSION: "1.0.0"
-      RELEASE_TAG: "v1.0.0"
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout repository
@@ -44,11 +42,19 @@ jobs:
           git checkout --detach "$CERTIFIED_SHA"
           test "$(git rev-parse HEAD)" = "$CERTIFIED_SHA"
           echo "CERTIFIED_SHA=$CERTIFIED_SHA" >> "$GITHUB_ENV"
-          echo "Using deployed SHA $CERTIFIED_SHA"
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Load release metadata
+        run: |
+          node <<'NODE'
+          const fs=require("fs");
+          const r=JSON.parse(fs.readFileSync("release.json","utf8"));
+          if(!/^\d+\.\d+\.\d+$/.test(r.version)||r.tag!=="v"+r.version||r.status!=="production") process.exit(1);
+          fs.appendFileSync(process.env.GITHUB_ENV,"RELEASE_VERSION="+r.version+"\nRELEASE_TAG="+r.tag+"\n");
+          NODE
 
       - name: Final production release gate
         run: node tests/production-release-gate.js
@@ -58,13 +64,13 @@ jobs:
           set -euo pipefail
           LIVE_BASE="https://thiepn.github.io/calc"
           curl -fsSL --retry 12 --retry-all-errors --retry-delay 3 "$LIVE_BASE/release.json" -o /tmp/calc-release.json
-          node -e 'const r=require("/tmp/calc-release.json"); if(r.version!=="1.0.0"||r.tag!=="v1.0.0"||r.status!=="production") process.exit(1);'
-          test "$(curl -fsSL --retry 8 --retry-all-errors --retry-delay 2 "$LIVE_BASE/VERSION" | tr -d '\r\n')" = "1.0.0"
+          node -e 'const r=require("/tmp/calc-release.json"); if(r.version!==process.env.RELEASE_VERSION||r.tag!==process.env.RELEASE_TAG||r.status!=="production") process.exit(1);'
+          test "$(curl -fsSL --retry 8 --retry-all-errors --retry-delay 2 "$LIVE_BASE/VERSION" | tr -d '\r\n')" = "$RELEASE_VERSION"
           curl -fsSL --retry 8 --retry-all-errors --retry-delay 2 "$LIVE_BASE/manifest.webmanifest" -o /tmp/calc-manifest.json
-          node -e 'const r=require("/tmp/calc-manifest.json"); if(r.version!=="1.0.0") process.exit(1);'
-          curl -fsSL --retry 8 --retry-all-errors --retry-delay 2 "$LIVE_BASE/app.js" | grep -F 'const APP_VERSION="1.0.0";'
-          curl -fsSL --retry 8 --retry-all-errors --retry-delay 2 "$LIVE_BASE/sw.js" | grep -F 'const APP_VERSION="1.0.0";'
-          echo "Live deployment reports Calc v1.0.0."
+          node -e 'const r=require("/tmp/calc-manifest.json"); if(r.version!==process.env.RELEASE_VERSION) process.exit(1);'
+          curl -fsSL --retry 8 --retry-all-errors --retry-delay 2 "$LIVE_BASE/app.js" | grep -F "const APP_VERSION=\"$RELEASE_VERSION\";"
+          curl -fsSL --retry 8 --retry-all-errors --retry-delay 2 "$LIVE_BASE/sw.js" | grep -F "const APP_VERSION=\"$RELEASE_VERSION\";"
+          echo "Live deployment reports Calc $RELEASE_TAG."
 
       - name: Generate immutable release checksums
         run: node tests/generate-release-artifacts.js
@@ -73,32 +79,22 @@ jobs:
         run: |
           set -euo pipefail
           if TAG_SHA="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.object.sha' 2>/dev/null)"; then
-            if [ "$TAG_SHA" != "$CERTIFIED_SHA" ]; then
-              echo "Existing $RELEASE_TAG points to $TAG_SHA, expected $CERTIFIED_SHA"
-              exit 1
-            fi
-            echo "Existing tag $RELEASE_TAG already matches certified SHA."
-          else
-            echo "$RELEASE_TAG does not exist yet."
+            test "$TAG_SHA" = "$CERTIFIED_SHA"
           fi
 
-      - name: Create or verify v1.0.0 GitHub Release
+      - name: Create or verify production GitHub Release
         run: |
           set -euo pipefail
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             TAG_SHA="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')"
-            if [ "$TAG_SHA" != "$CERTIFIED_SHA" ]; then
-              echo "Existing $RELEASE_TAG points to $TAG_SHA, expected $CERTIFIED_SHA"
-              exit 1
-            fi
-            echo "$RELEASE_TAG already exists at certified SHA $CERTIFIED_SHA."
+            test "$TAG_SHA" = "$CERTIFIED_SHA"
           else
             gh release create "$RELEASE_TAG" \
               --target "$CERTIFIED_SHA" \
-              --title "Calc v1.0.0" \
+              --title "Calc $RELEASE_TAG" \
               --notes-file RELEASE_NOTES.md \
-              release-artifacts/calc-v1.0.0-checksums.txt \
-              release-artifacts/calc-v1.0.0-manifest.json
+              "release-artifacts/calc-$RELEASE_TAG-checksums.txt" \
+              "release-artifacts/calc-$RELEASE_TAG-manifest.json"
           fi
 
       - name: Verify released tag

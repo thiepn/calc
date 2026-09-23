@@ -35,6 +35,7 @@ const generated={
   generatedAt:new Date().toISOString(),
   files:entries
 };
-fs.writeFileSync(path.join(outputDir,"calc-v1.0.0-checksums.txt"),lines.join("\n")+"\n");
-fs.writeFileSync(path.join(outputDir,"calc-v1.0.0-manifest.json"),JSON.stringify(generated,null,2)+"\n");
+const prefix="calc-"+release.tag;
+fs.writeFileSync(path.join(outputDir,prefix+"-checksums.txt"),lines.join("\n")+"\n");
+fs.writeFileSync(path.join(outputDir,prefix+"-manifest.json"),JSON.stringify(generated,null,2)+"\n");
 console.log("Generated release artifacts for "+files.length+" files at "+certifiedSha);

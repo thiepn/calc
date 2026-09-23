@@ -28,20 +28,22 @@ test("baseline shell and calculation remain stable",async({page},testInfo)=>{
     dbVersion:window.CalcPersistence.DB_VERSION,
     widthOk:document.documentElement.scrollWidth<=window.innerWidth+3
   }));
-  expect(state.appVersion).toBe("1.0.0");
+  const release=await page.evaluate(async()=>await (await fetch("./release.json",{cache:"no-store"})).json());
+  expect(state.appVersion).toBe(release.version);
   expect(state.dbVersion).toBe(5);
   if(testInfo.project.name==="mobile-chromium")expect(state.widthOk).toBeTruthy();
   expect(errors).toEqual([]);
 });
 
-test("clean-device v1.0.0 install initializes healthy local-first state",async({page})=>{
+test("clean-device production install initializes healthy local-first state",async({page})=>{
   const errors=await openApp(page);
   const state=await page.evaluate(async()=>{
     const P=window.CalcPersistence,db=new P.CalcDatabase();const native=await db.open();
     const preflight=await P.updatePreflight(db),history=await db.repository(P.STORES.history).count(),notebooks=await P.loadNotebooks(db),settings=await db.repository(P.STORES.settings).all();
     return {appVersion:window.CalcAppVersion,dbVersion:native.version,history,notebooks:notebooks.length,settings:settings.length,preflightOk:preflight.ok};
   });
-  expect(state.appVersion).toBe("1.0.0");
+  const release=await page.evaluate(async()=>await (await fetch("./release.json",{cache:"no-store"})).json());
+  expect(state.appVersion).toBe(release.version);
   expect(state.dbVersion).toBe(5);
   expect(state.history).toBe(0);
   expect(state.notebooks).toBeGreaterThanOrEqual(1);
@@ -95,12 +97,13 @@ test("v4 → v5 migration preserves realistic existing data",async({page})=>{
   expect(migrated.theme).toBe("graphite");
   expect(migrated.tools).toBe(1);
   expect(migrated.tombs).toBe(1);
-  expect(migrated.backupVersion).toBe("1.0.0");
+  const release=await page.evaluate(async()=>await (await fetch("./release.json",{cache:"no-store"})).json());
+  expect(migrated.backupVersion).toBe(release.version);
   expect(migrated.backupDbVersion).toBe(5);
   expect(errors).toEqual([]);
 });
 
-test("pre-upgrade v4 backup restores into production v1.0.0",async({page})=>{
+test("pre-upgrade v4 backup restores into production release",async({page})=>{
   await openApp(page);
   const result=await page.evaluate(async()=>{
     const P=window.CalcPersistence,data={};
@@ -126,7 +129,8 @@ test("pre-upgrade v4 backup restores into production v1.0.0",async({page})=>{
   expect(result.precision).toBe(15);
   expect(result.tools).toBe(1);
   expect(result.tombs).toBe(1);
-  expect(result.postVersion).toBe("1.0.0");
+  const release=await page.evaluate(async()=>await (await fetch("./release.json",{cache:"no-store"})).json());
+  expect(result.postVersion).toBe(release.version);
   expect(result.postDbVersion).toBe(5);
   expect(result.preflightOk).toBeTruthy();
 });
@@ -208,8 +212,9 @@ test("offline PWA reload remains functional",async({page,context},testInfo)=>{
       controller.postMessage({type:"GET_VERSION"});
     });
   });
-  expect(version.version).toBe("calc-shell-v1.0.0");
-  expect(version.appVersion).toBe("1.0.0");
+  expect(version.version).toBe("calc-shell-v"+version.appVersion);
+  const release=await page.evaluate(async()=>await (await fetch("./release.json",{cache:"no-store"})).json());
+  expect(version.appVersion).toBe(release.version);
   await context.setOffline(true);
   try{
     await page.reload({waitUntil:"domcontentloaded"});

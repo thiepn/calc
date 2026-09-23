@@ -1,27 +1,19 @@
-# Calc v1.0.0
+# Calc v1.0.1
 
-Calc v1.0.0 is the first production baseline of the local-first universal calculator and mathematical workstation.
+Calc v1.0.1 is a bug-fix and resilience release on top of the v1.0.0 production baseline.
 
-## Included
+## Fixed
 
-The release includes the complete calculator stack built through Implementation Phases 1–13: exact arithmetic, symbolic algebra, calculus and numerical methods, quantities and units, linear algebra, statistics and data tools, Graph V2, specialized calculators, Custom Formula Builder, typed notebooks, and the versioned local-first persistence/backup system.
-
-## Data safety
-
-Calc v1.0.0 uses IndexedDB schema v5. Large notebook payloads are chunked and incrementally persisted. Backups support integrity verification, optional password encryption, selective atomic restore, and compatibility with older supported database backups. Deleted recoverable content is retained in Trash for 30 days.
-
-Updates are controlled: pending persistence is flushed and an integrity/update preflight must pass before a waiting service worker is activated.
+- Dynamic custom-tool metadata and CSV column names are rendered as text rather than executable HTML.
+- Malformed Tool deep links no longer crash application initialization.
+- Tool search remains focused through continuous typing.
+- Notebook title edits are recovery-safe before blur, and reference copying handles clipboard denial safely.
+- Calc no longer treats localStorage availability as a startup requirement.
+- Unsafe imported notebook block IDs are rejected before reaching DOM selector paths, and notebook import size is bounded.
+- A corrupt persisted Custom Tool is quarantined without preventing the rest of Calc from starting.
+- Custom-tool alias registration/unregistration no longer damages existing alias resolution.
+- The Tools list layout remains stable after search rendering was made focus-preserving.
 
 ## Certification
 
-The exact release commit must pass:
-
-- the cumulative deterministic mathematics and product test suite;
-- the production release static gate;
-- realistic v4 → v5 upgrade and backup/restore tests;
-- multi-megabyte persistence and corruption/fault tests;
-- Chromium, Firefox, WebKit, and mobile Chromium browser soak;
-- offline PWA reload checks;
-- gated GitHub Pages deployment.
-
-The GitHub release is created only after the certified commit is successfully deployed.
+The release is certified by the cumulative deterministic suites plus the cross-browser production soak and runtime bug sweep on Chromium, Firefox, WebKit, and mobile Chromium. GitHub Pages deploys only the exact certified SHA, and the production release workflow verifies the live version before creating the tag.

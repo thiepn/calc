@@ -2,7 +2,7 @@
 
 A local-first universal calculator PWA and mathematical workstation.
 
-**Current stable release: v1.0.0** · IndexedDB schema v5 · production channel.
+**Current stable release: v1.0.1** · IndexedDB schema v5 · production channel.
 
 ## Current implementation
 
@@ -347,16 +347,16 @@ GitHub Pages is triggered only after that workflow succeeds and checks out the e
 
 ## Production release
 
-Calc v1.0.0 is the production baseline. Release metadata is centralized in `VERSION` and `release.json`, while runtime/backup/PWA version sources are certification-locked to the same `1.0.0` value.
+Calc v1.0.0 remains the original production baseline; v1.0.1 is the current bug-fix release. Release metadata is centralized in `VERSION` and `release.json`, and runtime/backup/PWA version sources are certification-locked to the current release version.
 
-After the release soak passes, GitHub Pages deploys the exact certified SHA. A separate production-release workflow then verifies the live Pages metadata, generates SHA-256 checksums for the shipped runtime files, and creates or verifies the `v1.0.0` GitHub Release against that exact deployed SHA.
+After the release soak passes, GitHub Pages deploys the exact certified SHA. A separate production-release workflow then verifies the live Pages metadata, generates SHA-256 checksums for the shipped runtime files, and creates or verifies the release tag declared in `release.json` against that exact deployed SHA.
 
 The final release gate also certifies:
 
 - clean-device startup and schema initialization;
 - healthy persistence/update preflight;
 - restoration of a valid pre-upgrade DB-v4 backup into DB v5;
-- valid v1.0.0 backup generation after upgrade/restore;
+- valid current-version backup generation after upgrade/restore;
 - production service-worker version handshake and offline reload.
 
 ## Graph V2
