@@ -13,7 +13,7 @@ Calc currently includes:
 - canonical Matrix/Vector/subspace objects and certified numerical decompositions;
 - typed Dataset/probability/inference/regression systems;
 - Graph V2 with explicit, piecewise, parametric, polar, implicit and inequality plots;
-- a registry-driven specialized calculator system with finance, geometry, date, programmer and number-theory tools;\n- a safe declarative Custom Formula Builder with Draft/Active/Archived lifecycle, tests, quantities, relations, revision history, and strict `.calctool.json` import/export;\n- typed Worksheets & Notebooks V2 with Math/Text/Tool/Matrix/Data/Graph blocks, dependencies, stale tracking, version restore, import/export, and recovery mode;
+- a registry-driven specialized calculator system with finance, geometry, date, programmer and number-theory tools;\n- a safe declarative Custom Formula Builder with Draft/Active/Archived lifecycle, tests, quantities, relations, revision history, and strict `.calctool.json` import/export;\n- typed Worksheets & Notebooks V2 with Math/Text/Tool/Matrix/Data/Graph blocks, dependencies, stale tracking, version restore, import/export, and recovery mode;\n- a versioned persistence/backup layer with encrypted backups, selective atomic restore, optimistic multi-tab writes, tombstones, storage diagnostics, controlled PWA updates, and provider-neutral sync architecture;
 - persistent history/worksheets;
 - offline/installable PWA support.
 
@@ -252,6 +252,78 @@ Other notebook capabilities include:
 - recovery mode for malformed legacy records;
 - 500-block notebook complexity budget.
 
+## Persistence, Backup & PWA
+
+Calc now uses a dedicated versioned persistence layer instead of owning IndexedDB schema logic inside the UI.
+
+Current database schema:
+
+```text
+calc-db · version 4
+
+history
+worksheets
+settings
+customTools
+meta
+journal
+tombstones
+```
+
+Data & Backup supports:
+
+- full `.calcbackup.json` backups;
+- optional password-encrypted `.calcbackup.enc.json` backups;
+- PBKDF2-SHA-256 + AES-GCM encryption through Web Crypto;
+- Web Share file transfer where supported;
+- merge or replace restore;
+- selective History / Notebooks / Settings / Custom Tools / deletion-metadata restore;
+- newer / incoming / conflict-copy merge policies;
+- hash/integrity verification before restore;
+- stale-plan protection if another tab changes selected data after preview;
+- atomic restore with recovery journal;
+- database integrity reports;
+- storage/quota reporting;
+- persistent-storage requests.
+
+Notebook and custom-tool writes use optimistic revisions. A stale tab cannot silently overwrite a newer saved revision; local edits are preserved as conflict copies.
+
+DB v4 tombstones preserve explicit notebook/custom-tool deletion history for future cross-device synchronization.
+
+### PWA updates
+
+New service workers now install and wait instead of replacing an active editing session.
+
+```text
+update downloaded
+→ Update ready
+→ Restart & update
+→ flush pending data
+→ SKIP_WAITING
+→ activate
+→ reload
+```
+
+`persistence.js` is part of the offline application shell.
+
+### Cross-device architecture
+
+Calc remains local-first. Remote sync is disabled by default.
+
+Phase 11 provides:
+
+```text
+calc.sync/v1
+SyncAdapter
+DisabledSyncAdapter
+SyncManager
+stable device ID
+tombstones
+backup-compatible transfer boundary
+```
+
+Today, the supported cross-device workflow is encrypted/plain backup transfer and restore; no Calc account or Calc cloud server is required.
+
 ## Graph V2
 
 Graph supports:
@@ -301,7 +373,7 @@ eng(ohm, V=12 V, R=6 ohm)
 - `linear-algebra.js` — Phase 5 linear algebra.
 - `statistics.js` / `statistics-worker.js` — Phase 6 probability/statistics/data.
 - `graph.js` / `graph-worker.js` — Phase 7 graph models, geometry and analysis.
-- `tools.js` — Phase 8 Tool Registry, finance, dates, geometry, programmer and number theory.\n- `custom-tools.js` — Phase 9 safe custom formulas, relations, validation, lifecycle and import/export.\n- `notebook.js` — Phase 10 typed notebook blocks, dependencies, versioning, execution, import/export and recovery.
+- `tools.js` — Phase 8 Tool Registry, finance, dates, geometry, programmer and number theory.\n- `custom-tools.js` — Phase 9 safe custom formulas, relations, validation, lifecycle and import/export.\n- `notebook.js` — Phase 10 typed notebook blocks, dependencies, versioning, execution, import/export and recovery.\n- `persistence.js` — Phase 11 DB migrations, repositories, backup/restore, encryption, tombstones, multi-tab coordination, storage diagnostics and sync boundary.
 - `app.js` — application state, persistence, workspaces and UI routing.
 - `styles.css` — responsive design system.
 - `sw.js` + `manifest.webmanifest` — offline/installable PWA runtime.
@@ -322,8 +394,8 @@ GitHub Actions runs cumulative certification for:
 - Linear Algebra V2;
 - Probability/Statistics/Data V2;
 - Graphing V2;
-- Specialized Calculators V2;\n- Custom Formula Builder;\n- Worksheets & Notebooks V2.
+- Specialized Calculators V2;\n- Custom Formula Builder;\n- Worksheets & Notebooks V2;\n- Persistence / Backup / PWA architecture.
 
 The Phase 8 registry-wide test executes every enabled generic tool with its declared defaults in addition to deterministic boundary/reference cases.
 
-See the files under `docs/math/` and `docs/release/` for the exact supported semantics, verification scope and deliberate limitations. Custom Tools are specified in `docs/math/CUSTOM_TOOLS_SEMANTICS.md`; notebook semantics are specified in `docs/math/NOTEBOOK_SEMANTICS.md`.
+See the files under `docs/math/` and `docs/release/` for the exact supported semantics, verification scope and deliberate limitations. Custom Tools are specified in `docs/math/CUSTOM_TOOLS_SEMANTICS.md`; notebook semantics are specified in `docs/math/NOTEBOOK_SEMANTICS.md`; persistence/PWA semantics are specified in `docs/math/PERSISTENCE_PWA_SEMANTICS.md`.
