@@ -984,7 +984,7 @@ function saveWorksheet(ws,immediate){
   if(!ws)return Promise.resolve(false);var id=ws.id,previous=worksheetSaveChains.get(id)||Promise.resolve(),run;
   run=previous.catch(function(){}).then(function(){return saveWorksheetNow(ws,immediate);});
   worksheetSaveChains.set(id,run);
-  run.finally(function(){if(worksheetSaveChains.get(id)===run)worksheetSaveChains.delete(id);});
+  var cleanup=function(){if(worksheetSaveChains.get(id)===run)worksheetSaveChains.delete(id);};run.then(cleanup,cleanup);
   return run;
 }
 function replaceActiveWorksheet(next){
