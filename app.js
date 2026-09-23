@@ -10,6 +10,7 @@ const G=window.CalcGraph;
 const T=window.CalcTools;
 const CT=window.CalcCustomTools;
 const NB=window.CalcNotebook;
+const P=window.CalcPersistence;
 const $=function(s,r){return (r||document).querySelector(s);};
 const $$=function(s,r){return Array.from((r||document).querySelectorAll(s));};
 const uid=function(){return crypto.randomUUID?crypto.randomUUID():"id-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);};
@@ -21,15 +22,20 @@ const VIEW_META={
   data:["Data","Datasets, distributions, inference, regression and statistical models."],
   tools:["Tools","Registered everyday, finance, geometry, date, programmer and engineering calculators."],
   worksheet:["Worksheet","Persistent multi-step mathematical work."],
-  history:["History","Your local calculation history."]
+  history:["History","Your local calculation history."],
+  settings:["Data & Backup","Persistence, backups, storage, updates, and cross-device architecture."]
 };
 
+const persistenceDb=new P.CalcDatabase();
+const persistenceCoordinator=new P.CrossTabCoordinator();
+const syncManager=new P.SyncManager();
 const state={
   view:"calculate",angle:localStorage.getItem("calc.angle")||"RAD",precision:12,
-  env:{},lastResult:null,theme:localStorage.getItem("calc.theme")||"system",
+  env:{},lastResult:null,theme:localStorage.getItem("calc.theme")||"system",settingsReady:false,
   installPrompt:null,history:[],worksheets:[],activeWorksheet:null,
   graph:{session:null,drag:null,pinch:null,pointers:new Map(),geometries:[],worker:null},
-  selectedTool:"percentage-of",toolSearch:"",customLibrary:new CT.CustomToolLibrary(),customCurrent:null,customValidationTimer:null,dataset:null,statisticsWorker:null,dataRevision:0
+  selectedTool:"percentage-of",toolSearch:"",customLibrary:new CT.CustomToolLibrary(),customCurrent:null,customValidationTimer:null,dataset:null,statisticsWorker:null,dataRevision:0,
+  restoreBackup:null,restorePlan:null,swRegistration:null,updateWaiting:null,reloadingForUpdate:false
 };
 
 function toast(msg){
@@ -38,7 +44,7 @@ function toast(msg){
 }
 function errorMessage(e){return e&&e.message?e.message:String(e);}
 function setTheme(theme){
-  state.theme=theme;localStorage.setItem("calc.theme",theme);
+  state.theme=theme;localStorage.setItem("calc.theme",theme);if(state.settingsReady)persistSetting("theme",theme);
   var root=document.documentElement;
   if(theme==="graphite"||theme==="oled")root.dataset.theme=theme;
   else if(theme==="light")root.removeAttribute("data-theme");
@@ -57,43 +63,32 @@ function cycleTheme(){
 }
 matchMedia("(prefers-color-scheme: dark)").addEventListener&&matchMedia("(prefers-color-scheme: dark)").addEventListener("change",function(){if(state.theme==="system")setTheme("system");});
 
-let dbPromise=null;
-function openDb(){
-  if(dbPromise)return dbPromise;
-  dbPromise=new Promise(function(resolve,reject){
-    if(!("indexedDB" in window)){reject(new Error("Local database is unavailable"));return;}
-    var req=indexedDB.open("calc-db",2);
-    req.onupgradeneeded=function(){
-      var db=req.result;
-      if(!db.objectStoreNames.contains("history"))db.createObjectStore("history",{keyPath:"id"});
-      if(!db.objectStoreNames.contains("worksheets"))db.createObjectStore("worksheets",{keyPath:"id"});
-      if(!db.objectStoreNames.contains("settings"))db.createObjectStore("settings",{keyPath:"key"});
-      if(!db.objectStoreNames.contains("customTools"))db.createObjectStore("customTools",{keyPath:"id"});
-    };
-    req.onsuccess=function(){resolve(req.result);};
-    req.onerror=function(){reject(req.error||new Error("Could not open local database"));};
-  });
-  return dbPromise;
+function openDb(){return persistenceDb.open();}
+function dbPut(store,value){
+  return persistenceDb.repository(store).put(value).then(function(result){publishPersistenceChange(store,value,"put");return result;});
 }
-async function dbTx(store,mode,fn){
-  var db=await openDb();
-  return new Promise(function(resolve,reject){
-    var tx=db.transaction(store,mode),os=tx.objectStore(store),result;
-    try{result=fn(os);}catch(e){reject(e);return;}
-    tx.oncomplete=function(){resolve(result&&result.result!==undefined?result.result:result);};
-    tx.onerror=function(){reject(tx.error||new Error("Database transaction failed"));};
-    tx.onabort=function(){reject(tx.error||new Error("Database transaction aborted"));};
-  });
+function dbDelete(store,key){
+  return persistenceDb.repository(store).delete(key).then(function(result){persistenceCoordinator.publish({entityType:store,entityId:String(key),revision:Date.now(),action:"delete"});return result;});
 }
-function dbPut(store,value){return dbTx(store,"readwrite",function(os){return os.put(value);});}
-function dbDelete(store,key){return dbTx(store,"readwrite",function(os){return os.delete(key);});}
-function dbClear(store){return dbTx(store,"readwrite",function(os){return os.clear();});}
-async function dbAll(store){
-  var db=await openDb();
-  return new Promise(function(resolve,reject){
-    var req=db.transaction(store,"readonly").objectStore(store).getAll();
-    req.onsuccess=function(){resolve(req.result||[]);};req.onerror=function(){reject(req.error);};
-  });
+function dbClear(store){
+  return persistenceDb.repository(store).clear().then(function(result){persistenceCoordinator.publish({entityType:store,entityId:"*",revision:Date.now(),action:"clear"});return result;});
+}
+function dbAll(store){return persistenceDb.repository(store).all();}
+function entityKeyForStore(store,value){return store===P.STORES.settings?value&&value.key:value&&value.id;}
+function publishPersistenceChange(store,value,action){
+  var key=entityKeyForStore(store,value);if(!key)return;
+  persistenceCoordinator.publish({entityType:store,entityId:String(key),revision:Number(value&&value.revision)||Number(value&&value.updatedAt)||Number(value&&value.time)||Date.now(),action:action||"put"});
+}
+function persistSetting(key,value){return persistenceDb.repository(P.STORES.settings).put({key:key,value:value,updatedAt:Date.now()}).catch(function(){});}
+async function loadAppSettings(){
+  var items=[];try{items=await persistenceDb.repository(P.STORES.settings).all();}catch(e){}
+  var map={};items.forEach(function(x){if(x&&x.key)map[x.key]=x.value;});
+  state.theme=map.theme||localStorage.getItem("calc.theme")||state.theme;
+  state.angle=map.angle||localStorage.getItem("calc.angle")||state.angle;
+  state.precision=Number(map.precision)||state.precision;
+  var deviceId=map.deviceId;if(!deviceId){deviceId=uid();await persistenceDb.repository(P.STORES.settings).put({key:"deviceId",value:deviceId,updatedAt:Date.now()});}
+  syncManager.deviceId=deviceId;state.settingsReady=true;localStorage.setItem("calc.theme",state.theme);localStorage.setItem("calc.angle",state.angle);
+  await persistSetting("theme",state.theme);await persistSetting("angle",state.angle);await persistSetting("precision",state.precision);
 }
 
 function switchView(view){
@@ -107,6 +102,7 @@ function switchView(view){
   if(view==="graph")setTimeout(function(){resizeGraph();drawGraph();},20);
   if(view==="history")renderHistory();
   if(view==="worksheet")renderWorksheetArea();
+  if(view==="settings")refreshPersistenceSettings();
 }
 function closeMobileNav(){
   $("#sidebar").classList.remove("open");$("#mobileNavBackdrop").classList.add("hidden");
