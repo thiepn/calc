@@ -27,6 +27,12 @@ const sorted=ds.sortedBy("y","desc");
 eq(sorted.rowIds[0],ds.rowIds[3],"sorting preserves row identity");
 eq(sorted.column("name").get(0),"d","sorting keeps aligned columns");
 
+const duplicateHeaders=S.Dataset.fromDelimited("x,x,x (2),y\n1,10,100,5\n2,20,200,6");
+assert(JSON.stringify(duplicateHeaders.columns.map(c=>c.name))===JSON.stringify(["x","x (2)","x (2) (2)","y"]),"duplicate CSV headers become deterministic unique names");
+eq(duplicateHeaders.column("x").get(0),1,"first duplicate header remains addressable");
+eq(duplicateHeaders.column("x (2)").get(0),10,"second duplicate header remains independently addressable");
+throwsCode(()=>new S.Dataset([new S.DataColumn("dup",[1]),new S.DataColumn("dup",[2])]),"DATASET_ERROR","Dataset rejects ambiguous duplicate column names");
+
 const quoted=S.Dataset.fromDelimited('id,text\n1,"hello, world"\n2,"line1\nline2"');
 eq(quoted.column("text").get(0),"hello, world","quoted delimiter");
 eq(quoted.column("text").get(1),"line1\nline2","quoted newline");

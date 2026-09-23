@@ -59,6 +59,7 @@ class Dataset{
     this.columns=(columns||[]).map(c=>c instanceof DataColumn?c:new DataColumn(c.name,c.values,c));
     const n=this.columns.length?this.columns[0].length:(rowIds?rowIds.length:0);
     if(this.columns.some(c=>c.length!==n))throw new DatasetError("All dataset columns must have the same row count");
+    const columnNames=this.columns.map(c=>c.name);if(new Set(columnNames).size!==columnNames.length)throw new DatasetError("Dataset column names must be unique");
     this.rowIds=rowIds?rowIds.slice():Array.from({length:n},(_,i)=>"r"+(i+1));
     if(this.rowIds.length!==n)throw new DatasetError("Row IDs must match row count");
     if(new Set(this.rowIds).size!==this.rowIds.length)throw new DatasetError("Row IDs must be unique");
@@ -143,7 +144,8 @@ function parseDelimitedDataset(text,options){
   const width=Math.max.apply(null,rows.map(r=>r.length));rows=rows.map(r=>Array.from({length:width},(_,i)=>r[i]===undefined?"":r[i]));
   const firstNumeric=rows[0].every(v=>v===""||parseNumericLocale(v,decimalComma)!==null);
   const hasHeader=options.header!==undefined?!!options.header:!firstNumeric;
-  const names=hasHeader?rows[0].map((v,i)=>String(v).trim()||"Column "+(i+1)):Array.from({length:width},(_,i)=>"Column "+(i+1));
+  const rawNames=hasHeader?rows[0].map((v,i)=>String(v).trim()||"Column "+(i+1)):Array.from({length:width},(_,i)=>"Column "+(i+1));
+  const usedNames=new Set(),names=rawNames.map(function(base){let name=base,n=2;while(usedNames.has(name))name=base+" ("+(n++)+")";usedNames.add(name);return name;});
   const body=hasHeader?rows.slice(1):rows;
   const columns=names.map((name,j)=>{
     const raw=body.map(r=>cleanCell(r[j]));
