@@ -26,6 +26,8 @@ assert(persistence.includes("saveNotebookIncremental")&&persistence.includes("ch
 assert(persistence.includes("buildBackupBlobFromDb"),"Chunked backup builder missing");
 assert(persistence.includes("restoreTombstone")&&persistence.includes("trashChunkRefs"),"Trash recovery engine missing");
 assert(app.includes("P.updatePreflight")&&app.includes("P.resilienceDiagnostics"),"Persistence preflight/diagnostics not wired");
+const badSelectorCollections=app.split("\n").filter(line=>(/(^|[^$])\$\([^;]*\)\.(?:forEach|map|filter|some|every|reduce|find|findIndex)\b/).test(line));
+assert(badSelectorCollections.length===0,"Single-element $() selector used with collection operation: "+badSelectorCollections.join(" | "));
 assert(sw.includes('const CACHE="calc-shell-v22-rc1";'),"RC service-worker shell version mismatch");
 
 const assetMatch=sw.match(/const ASSETS=\[(.*?)\];/s);
