@@ -28,6 +28,8 @@ jobs:
           node --check sw.js
           node --check playwright.config.js
           node --check tests/release-gate.js
+          node --check tests/production-release-gate.js
+          node --check tests/generate-release-artifacts.js
           node --check tests/release-soak.spec.js
       - name: Cumulative deterministic certification
         run: |
@@ -47,6 +49,8 @@ jobs:
           node tests/persistence-integration.js
       - name: Release-candidate static gate
         run: node tests/release-gate.js
+      - name: Production v1.0.0 release gate
+        run: node tests/production-release-gate.js
 
   browser-soak:
     name: Browser soak · ${{ matrix.project }}
