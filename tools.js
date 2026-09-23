@@ -236,10 +236,10 @@ class ToolDefinition{
 }
 class ToolRegistry{
   constructor(){this.map=new Map();this.aliasMap=new Map();}
-  indexAliases(d){[d.id,d.name].concat(d.aliases).forEach(a=>this.aliasMap.set(String(a).toLowerCase(),d.id));}
-  unindexAliases(d){for(const [alias,id] of Array.from(this.aliasMap.entries()))if(id===d.id)this.aliasMap.delete(alias);}
+  indexAliases(d){[d.id,d.name].concat(d.aliases).forEach(a=>{const key=String(a).toLowerCase();if(!this.aliasMap.has(key))this.aliasMap.set(key,d.id);});}
+  rebuildAliases(){this.aliasMap.clear();for(const d of this.map.values())this.indexAliases(d);}
   register(spec){const d=spec instanceof ToolDefinition?spec:new ToolDefinition(spec);if(this.map.has(d.id))throw new ToolError("DUPLICATE_TOOL","Duplicate tool '"+d.id+"'");this.map.set(d.id,d);this.indexAliases(d);return d;}
-  unregister(id,options){options=options||{};const d=this.map.get(id);if(!d)return false;if(!options.allowBuiltIn&&!String(id).startsWith("custom."))throw new ToolError("PROTECTED_TOOL","Only custom.* tools may be removed dynamically");this.unindexAliases(d);this.map.delete(id);return true;}
+  unregister(id,options){options=options||{};const d=this.map.get(id);if(!d)return false;if(!options.allowBuiltIn&&!String(id).startsWith("custom."))throw new ToolError("PROTECTED_TOOL","Only custom.* tools may be removed dynamically");this.map.delete(id);this.rebuildAliases();return true;}
   replaceCustom(spec){const d=spec instanceof ToolDefinition?spec:new ToolDefinition(spec);if(!String(d.id).startsWith("custom."))throw new ToolError("CUSTOM_TOOL_ID","Dynamic custom tools require a custom.* ID");if(this.map.has(d.id))this.unregister(d.id);return this.register(d);}
   get(id){return this.map.get(id)||this.map.get(this.aliasMap.get(String(id).toLowerCase()))||null;}
   list(category){return Array.from(this.map.values()).filter(t=>t.enabled&&(!category||t.category===category));}
