@@ -105,7 +105,7 @@ async function loadAppSettings(){
   state.theme=map.theme||localGet("calc.theme")||state.theme;
   state.angle=map.angle||localGet("calc.angle")||state.angle;
   state.precision=Number(map.precision)||state.precision;
-  var deviceId=map.deviceId;if(!deviceId){deviceId=uid();await persistenceDb.repository(P.STORES.settings).put({key:"deviceId",value:deviceId,updatedAt:Date.now()});}
+  var deviceId=map.deviceId;if(!deviceId){deviceId=uid();try{await persistenceDb.repository(P.STORES.settings).put({key:"deviceId",value:deviceId,updatedAt:Date.now()});}catch(e){syncManager.deviceId=deviceId;state.settingsReady=false;localSet("calc.theme",state.theme);localSet("calc.angle",state.angle);console.warn("Device ID could not be persisted; settings remain in degraded mode",e);return false;}}
   syncManager.deviceId=deviceId;state.settingsReady=true;localSet("calc.theme",state.theme);localSet("calc.angle",state.angle);
   await persistSetting("theme",state.theme);await persistSetting("angle",state.angle);await persistSetting("precision",state.precision);return true;
 }
@@ -1444,7 +1444,7 @@ function bindEvents(){
   $$("[data-view]").forEach(function(b){b.addEventListener("click",function(){switchView(b.dataset.view);});});
   $("#mobileNavBtn").onclick=openMobileNav;$("#mobileNavBackdrop").onclick=closeMobileNav;
   $("#themeBtn").onclick=cycleTheme;
-  $("#angleBtn").textContent=state.angle;$("#angleBtn").onclick=function(){var arr=["RAD","DEG","GRAD"],i=arr.indexOf(state.angle);state.angle=arr[(i+1)%3];localSet("calc.angle",state.angle);persistSetting("angle",state.angle);$("#angleBtn").textContent=state.angle;previewExpression();if(state.view==="graph")plotGraph();};
+  $("#angleBtn").textContent=state.angle;$("#angleBtn").onclick=function(){var arr=["RAD","DEG","GRAD"],i=arr.indexOf(state.angle);state.angle=arr[(i+1)%3];localSet("calc.angle",state.angle);if(state.settingsReady)persistSetting("angle",state.angle);$("#angleBtn").textContent=state.angle;previewExpression();if(state.view==="graph")plotGraph();};
   $("#commandBtn").onclick=openCommands;
   document.addEventListener("keydown",function(e){
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();openCommands();return;}

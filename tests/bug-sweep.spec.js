@@ -50,6 +50,7 @@ test("settings read failure is non-destructive and blocks unsafe backup",async({
     const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open(),repo=db.repository(P.STORES.settings);
     await repo.put({key:"theme",value:"oled",updatedAt:1});
     await repo.put({key:"precision",value:17,updatedAt:1});
+    await repo.put({key:"angle",value:"GRAD",updatedAt:1});
     await repo.put({key:"deviceId",value:"stable-device",updatedAt:1});
   });
   await page.addInitScript(()=>{
