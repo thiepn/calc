@@ -79,7 +79,7 @@ function publishPersistenceChange(store,value,action){
   var key=entityKeyForStore(store,value);if(!key)return;
   persistenceCoordinator.publish({entityType:store,entityId:String(key),revision:Number(value&&value.revision)||Number(value&&value.updatedAt)||Number(value&&value.time)||Date.now(),action:action||"put"});
 }
-function persistSetting(key,value){return persistenceDb.repository(P.STORES.settings).put({key:key,value:value,updatedAt:Date.now()}).catch(function(){});}
+function persistSetting(key,value){return dbPut(P.STORES.settings,{key:key,value:value,updatedAt:Date.now()}).catch(function(){});}
 async function loadAppSettings(){
   var items=[];try{items=await persistenceDb.repository(P.STORES.settings).all();}catch(e){}
   var map={};items.forEach(function(x){if(x&&x.key)map[x.key]=x.value;});
