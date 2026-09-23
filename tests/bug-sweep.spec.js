@@ -203,6 +203,20 @@ test("notebook Ref copy does not throw when clipboard APIs are unavailable",asyn
   expect(errors).toEqual([]);
 });
 
+test("delete-last-notebook reports unsaved replacement when replacement persistence fails",async({page})=>{
+  const errors=await openApp(page);
+  await goView(page,"worksheet");
+  await expect(page.locator("#worksheetList button")).toHaveCount(1);
+  await page.evaluate(()=>{window.CalcPersistence.saveNotebookIncremental=async()=>{throw new Error("forced replacement save failure");};});
+  page.once("dialog",dialog=>dialog.accept());
+  await page.locator("#deleteWorksheetBtn").click();
+  await expect(page.locator("#toast")).toContainText("new blank notebook could not be saved");
+  await expect(page.locator("#worksheetList button")).toHaveCount(1);
+  const trash=await page.evaluate(async()=>{const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();return (await P.listTrash(db)).filter(x=>x.entityType===P.STORES.notebooks).length;});
+  expect(trash).toBeGreaterThanOrEqual(1);
+  expect(errors).toEqual([]);
+});
+
 test("failed notebook version restore rolls back UI and never reports success",async({page})=>{
   const errors=await openApp(page);
   await goView(page,"worksheet");

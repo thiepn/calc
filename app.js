@@ -1139,9 +1139,10 @@ async function deleteActiveNotebook(){
     persistenceCoordinator.publish({entityType:P.STORES.notebooks,entityId:String(ws.id),revision:info.revision,action:"delete"});persistenceCoordinator.publish({entityType:P.STORES.tombstones,entityId:P.STORES.notebooks+":"+String(ws.id),revision:info.revision,action:"put"});
     state.persistedRevisions.worksheets.delete(ws.id);clearSessionRecovery(ws.id);
     state.worksheets=state.worksheets.filter(function(x){return x.id!==ws.id;});
-    if(!state.worksheets.length){var next=createNotebook();state.worksheets=[next];state.activeWorksheet=next;await saveWorksheet(next,false);}
+    var replacementSaved=true;
+    if(!state.worksheets.length){var next=createNotebook();state.worksheets=[next];state.activeWorksheet=next;replacementSaved=await saveWorksheet(next,false);}
     else state.activeWorksheet=state.worksheets[0];
-    renderWorksheetArea();toast("Notebook deleted");
+    renderWorksheetArea();toast(replacementSaved?"Notebook deleted":"Notebook deleted; new blank notebook could not be saved");
   }catch(e){toast(errorMessage(e));}
 }
 
