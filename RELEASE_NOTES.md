@@ -26,6 +26,7 @@ Calc v1.0.1 is a bug-fix and resilience release on top of the v1.0.0 production 
 - Custom Tool Archive/Export operate on current editor values, including unsaved visible changes.
 - Per-notebook autosave timers prevent edits in one notebook from cancelling or saving another after a fast switch.
 - Session recovery keeps multiple unsaved notebooks and backup/update retries failed non-active saves before proceeding.
+- Notebook writes are serialized per document; slow overlapping saves preserve the newest recovery snapshot and do not create false conflict copies.
 
 ## Certification
 

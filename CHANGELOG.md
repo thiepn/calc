@@ -40,6 +40,7 @@ All notable production changes to Calc are recorded here.
 - Session recovery now retains multiple unsaved notebooks with backward compatibility for the old single-snapshot format.
 - Recovered notebook copies register their persisted revision immediately so later edits remain protected by optimistic concurrency.
 - Backup/update flush retries failed non-active notebook recovery entries so unsaved data from another notebook cannot be omitted.
+- Per-notebook writes are serialized, so overlapping slow saves cannot manufacture false conflicts or let an older save clear a newer recovery snapshot.
 
 - The bug sweep runs alongside the existing migration, backup/restore, large-persistence, corruption, performance, and offline PWA soak on Chromium, Firefox, WebKit, and mobile Chromium.
 
