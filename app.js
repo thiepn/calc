@@ -1317,9 +1317,11 @@ async function handleCrossTabMessage(message){
         var hasLocal=state.activeWorksheet.blocks.some(function(b){return b.status==="dirty"||b.status==="stale";});
         if(hasLocal){
           var copy=JSON.parse(JSON.stringify(state.activeWorksheet));copy.id=uid();copy.title=(copy.title||"Notebook")+" (local conflict copy)";copy.revision=(copy.revision||1)+1;copy.updatedAt=Date.now();
-          await P.saveNotebookIncremental(persistenceDb,copy,null);publishPersistenceChange(P.STORES.notebooks,copy,"put");state.worksheets.unshift(copy);toast("Another tab changed this notebook; local edits were preserved as a conflict copy");
+          await P.saveNotebookIncremental(persistenceDb,copy,null);publishPersistenceChange(P.STORES.notebooks,copy,"put");state.persistedRevisions.worksheets.set(copy.id,copy.revision||0);state.worksheets.unshift(copy);toast("Another tab changed this notebook; local edits were preserved as a conflict copy");
         }
-        var normalized=NB.recoveryNormalize(incoming).document;state.persistedRevisions.worksheets.set(normalized.id,normalized.revision||0);if(idx>=0)state.worksheets[idx]=normalized;state.activeWorksheet=normalized;renderWorksheetArea();
+        var normalized=NB.recoveryNormalize(incoming).document;state.persistedRevisions.worksheets.set(normalized.id,normalized.revision||0);
+        idx=state.worksheets.findIndex(function(w){return w.id===normalized.id;});if(idx>=0)state.worksheets[idx]=normalized;else state.worksheets.unshift(normalized);
+        state.activeWorksheet=normalized;renderWorksheetArea();
       }else{
         var normalized2=NB.recoveryNormalize(incoming).document;state.persistedRevisions.worksheets.set(normalized2.id,normalized2.revision||0);if(idx>=0)state.worksheets[idx]=normalized2;else state.worksheets.unshift(normalized2);renderWorksheetList();
       }

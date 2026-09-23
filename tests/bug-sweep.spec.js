@@ -173,6 +173,43 @@ test("backup aborts instead of exporting stale notebook data after a save failur
   expect(errors).toEqual([]);
 });
 
+test("remote notebook update preserves local dirty edits as a visible conflict copy",async({page})=>{
+  const errors=await openApp(page);
+  await page.locator('[data-view="worksheet"]').first().click();
+  const auto=page.locator("#worksheetAutoRun");if(await auto.isChecked())await auto.uncheck();
+  await page.waitForTimeout(450);
+  const editor=page.locator(".ws-editor").first();
+  await editor.fill("123+456");
+  const local=await page.evaluate(()=>{
+    const raw=sessionStorage.getItem("calc.notebook.recovery");return raw?JSON.parse(raw):null;
+  });
+  expect(local).toBeTruthy();
+  await page.evaluate(async id=>{
+    const P=window.CalcPersistence,NB=window.CalcNotebook,db=new P.CalcDatabase();await db.open();
+    const current=await P.loadNotebook(db,id);if(!current)throw new Error("active notebook missing");
+    const remote=NB.commitRevision(current,"remote update");remote.title="Remote notebook";remote.updatedAt=Date.now();
+    await P.saveNotebookIncremental(db,remote,current.revision);
+    const channel=new BroadcastChannel("calc-persistence-v1");
+    channel.postMessage({schema:"calc.broadcast/v1",sender:"bug-sweep-notebook-remote",entityType:P.STORES.notebooks,entityId:id,revision:remote.revision,action:"put"});
+    setTimeout(()=>channel.close(),100);
+  },local.id);
+  await expect(page.locator("#toast")).toContainText("local edits were preserved as a conflict copy");
+  await expect(page.locator("#worksheetList")).toContainText("(local conflict copy)");
+  await expect(page.locator("#worksheetTitle")).toHaveValue("Remote notebook");
+  const result=await page.evaluate(async originalId=>{
+    const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open(),docs=await P.loadNotebooks(db);
+    return {
+      originals:docs.filter(x=>x.id===originalId).map(x=>({title:x.title,source:x.blocks[0]&&x.blocks[0].source})),
+      conflicts:docs.filter(x=>x.id!==originalId&&/local conflict copy/.test(x.title||"")).map(x=>({id:x.id,title:x.title,source:x.blocks[0]&&x.blocks[0].source,revision:x.revision}))
+    };
+  },local.id);
+  expect(result.originals).toHaveLength(1);
+  expect(result.originals[0].title).toBe("Remote notebook");
+  expect(result.conflicts.length).toBeGreaterThanOrEqual(1);
+  expect(result.conflicts.some(x=>x.source==="123+456")).toBeTruthy();
+  expect(errors).toEqual([]);
+});
+
 test("failed custom-tool draft save leaves active runtime tool intact",async({page})=>{
   const errors=await openApp(page);
   const seeded=await page.evaluate(async()=>{
