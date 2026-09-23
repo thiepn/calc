@@ -799,10 +799,10 @@ function addCustomTestRow(t){
   row.querySelectorAll("input,select,textarea").forEach(function(el){el.addEventListener("input",scheduleCustomValidation);el.addEventListener("change",scheduleCustomValidation);});$("#customTestRows").appendChild(row);
 }
 function builderVariableData(){
-  return $("#customVariableRows .custom-variable-row").map(function(row){return {name:$(".ct-var-name",row).value.trim(),label:$(".ct-var-label",row).value.trim(),type:$(".ct-var-type",row).value,unit:$(".ct-var-unit",row).value.trim()||null,default:$(".ct-var-default",row).value,min:$(".ct-var-min",row).value,max:$(".ct-var-max",row).value,positive:$(".ct-var-positive",row).checked,nonzero:$(".ct-var-nonzero",row).checked};});
+  return $$("#customVariableRows .custom-variable-row").map(function(row){return {name:$(".ct-var-name",row).value.trim(),label:$(".ct-var-label",row).value.trim(),type:$(".ct-var-type",row).value,unit:$(".ct-var-unit",row).value.trim()||null,default:$(".ct-var-default",row).value,min:$(".ct-var-min",row).value,max:$(".ct-var-max",row).value,positive:$(".ct-var-positive",row).checked,nonzero:$(".ct-var-nonzero",row).checked};});
 }
 function builderTestData(){
-  return $("#customTestRows .custom-test-row").map(function(row,index){var inputs;try{inputs=JSON.parse($(".ct-test-inputs",row).value||"{}");}catch(e){throw new CT.CustomToolSchemaError("Test "+(index+1)+" inputs are invalid JSON");}var kind=$(".ct-test-kind",row).value,raw=$(".ct-test-expected",row).value,expected={};expected[kind]=kind==="value"?Number(raw):raw;return {name:$(".ct-test-name",row).value||("Test "+(index+1)),inputs:inputs,expected:expected,tolerance:Number($(".ct-test-tolerance",row).value||1e-9)};});
+  return $$("#customTestRows .custom-test-row").map(function(row,index){var inputs;try{inputs=JSON.parse($(".ct-test-inputs",row).value||"{}");}catch(e){throw new CT.CustomToolSchemaError("Test "+(index+1)+" inputs are invalid JSON");}var kind=$(".ct-test-kind",row).value,raw=$(".ct-test-expected",row).value,expected={};expected[kind]=kind==="value"?Number(raw):raw;return {name:$(".ct-test-name",row).value||("Test "+(index+1)),inputs:inputs,expected:expected,tolerance:Number($(".ct-test-tolerance",row).value||1e-9)};});
 }
 function builderManifest(){
   var base=state.customCurrent||CT.newFormulaDraft(),mode=$("#customMode").value,raw={id:base.id,name:$("#customName").value,description:$("#customDescription").value,aliases:base.aliases||[],mode:mode,status:base.status||"draft",variables:builderVariableData(),tests:builderTestData(),createdAt:base.createdAt,updatedAt:base.updatedAt,revision:base.revision,history:base.history||[]};
@@ -1120,7 +1120,7 @@ async function shareFullBackup(){
     await navigator.share(data);
   }catch(e){if(e&&e.name!=="AbortError")toast(errorMessage(e));}
 }
-function selectedRestoreStores(){return $("[data-restore-store]:checked").map(function(el){return el.dataset.restoreStore;});}
+function selectedRestoreStores(){return $$("[data-restore-store]:checked").map(function(el){return el.dataset.restoreStore;});}
 async function recomputeRestorePlan(){
   if(!state.restoreBackup){$("#restorePreview").textContent="No backup selected.";$("#applyRestoreBtn").disabled=true;return;}
   try{
@@ -1467,13 +1467,13 @@ function bindEvents(){
   $("#customValidateBtn").onclick=function(){validateCustomBuilder(true);};$("#customSaveDraftBtn").onclick=function(){saveCustomDraft(true);};$("#customActivateBtn").onclick=activateCustomTool;$("#customArchiveBtn").onclick=archiveCustomTool;$("#customExportBtn").onclick=exportCustomTool;$("#customDeleteBtn").onclick=deleteCustomTool;
   $("#customDuplicateBtn").onclick=duplicateBuiltInCustom;$("#customImportBtn").onclick=function(){$("#customImportFile").click();};$("#customImportFile").onchange=function(){if(this.files&&this.files[0])importCustomFile(this.files[0]);this.value="";};
   $("#customMode").onchange=updateCustomModeUi;$("#customOutputType").onchange=scheduleCustomValidation;$("#customOutputUnit").oninput=scheduleCustomValidation;$("#customName").oninput=scheduleCustomValidation;$("#customDescription").oninput=scheduleCustomValidation;$("#customExpression").oninput=scheduleCustomValidation;
-  $("[data-add-ws-block]").forEach(function(b){b.onclick=function(){addBlock(b.dataset.addWsBlock);};});$("#newWorksheetBtn").onclick=newWorksheet;$("#runWorksheetBtn").onclick=function(){runWorksheet(true);};
+  $$("[data-add-ws-block]").forEach(function(b){b.onclick=function(){addBlock(b.dataset.addWsBlock);};});$("#newWorksheetBtn").onclick=newWorksheet;$("#runWorksheetBtn").onclick=function(){runWorksheet(true);};
   $("#worksheetAutoRun").onchange=function(){if(!state.activeWorksheet)return;checkpointWorksheet("auto-run setting");state.activeWorksheet.settings.autoRun=this.checked;writeSessionRecovery();scheduleWorksheetSave();if(this.checked)runWorksheet(false);};
   $("#worksheetImportBtn").onclick=function(){$("#worksheetImportFile").click();};$("#worksheetImportFile").onchange=function(){if(this.files&&this.files[0])importNotebookFile(this.files[0]);this.value="";};$("#worksheetExportBtn").onclick=exportNotebookJson;$("#worksheetMarkdownBtn").onclick=exportNotebookMarkdown;$("#deleteWorksheetBtn").onclick=deleteActiveNotebook;
   $("#worksheetTitle").addEventListener("change",function(){if(state.activeWorksheet){checkpointWorksheet("rename notebook");state.activeWorksheet.title=this.value||"Untitled notebook";state.activeWorksheet.updatedAt=Date.now();writeSessionRecovery();scheduleWorksheetSave();renderWorksheetList();renderWorksheetVersions();}});
   $("#fullBackupBtn").onclick=downloadFullBackup;$("#shareBackupBtn").onclick=shareFullBackup;$("#restoreBackupBtn").onclick=function(){$("#restoreBackupFile").click();};
   $("#restoreBackupFile").onchange=function(){if(this.files&&this.files[0])chooseRestoreFile(this.files[0]);this.value="";};
-  $("#restorePassword").onchange=openRestoreRaw;$("#restoreMode").onchange=recomputeRestorePlan;$("#restoreConflictPolicy").onchange=recomputeRestorePlan;$("[data-restore-store]").forEach(function(el){el.onchange=recomputeRestorePlan;});$("#applyRestoreBtn").onclick=applyRestorePlan;
+  $("#restorePassword").onchange=openRestoreRaw;$("#restoreMode").onchange=recomputeRestorePlan;$("#restoreConflictPolicy").onchange=recomputeRestorePlan;$$("[data-restore-store]").forEach(function(el){el.onchange=recomputeRestorePlan;});$("#applyRestoreBtn").onclick=applyRestorePlan;
   $("#integrityCheckBtn").onclick=runIntegrityCheck;$("#persistentStorageBtn").onclick=requestPersistentStorageUi;
   $("#storageBenchmarkBtn").onclick=runStorageBenchmarkUi;$("#resilienceTestBtn").onclick=runResilienceSuite;$("#refreshTrashBtn").onclick=refreshTrash;$("#emptyTrashBtn").onclick=emptyTrashUi;
   $("#checkUpdateBtn").onclick=checkForUpdate;$("#applyUpdateBtn").onclick=applyAppUpdate;$("#updateBtn").onclick=applyAppUpdate;
