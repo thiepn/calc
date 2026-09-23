@@ -25,6 +25,7 @@ class PersistenceError extends Error{
 }
 class BackupError extends PersistenceError{constructor(message,details){super("BACKUP_ERROR",message,details);}}
 class RestoreError extends PersistenceError{constructor(message,details){super("RESTORE_ERROR",message,details);}}
+class RestoreStaleError extends PersistenceError{constructor(message,details){super("RESTORE_STALE_PLAN",message,details);}}
 class IntegrityError extends PersistenceError{constructor(message,details){super("INTEGRITY_ERROR",message,details);}}
 class MigrationError extends PersistenceError{constructor(message,details){super("MIGRATION_ERROR",message,details);}}
 
@@ -251,29 +252,38 @@ function cloneWithConflictId(item,store,key){
 async function planRestore(db,backupInput,options){
   options=options||{};const checked=await validateBackup(backupInput),backup=checked.backup,mode=options.mode||"merge";
   if(!["merge","replace"].includes(mode))throw new RestoreError("Restore mode must be merge or replace");
-  const current=await db.allData(),result={},conflicts=[];
+  const current=await db.allData(),result={},conflicts=[],currentHashes={};
+  for(const s of DATA_STORES)currentHashes[s]=await hashValue(current[s]);
   for(const s of DATA_STORES){
     if(mode==="replace")result[s]=backup.data[s].map(x=>JSON.parse(JSON.stringify(x)));
     else{const merged=mergeStore(current[s],backup.data[s],s,options.conflictPolicy||"newer");result[s]=merged.items;conflicts.push.apply(conflicts,merged.conflicts);}
   }
-  return {schema:BACKUP_SCHEMA,mode:mode,data:result,conflicts:conflicts,summary:{current:Object.fromEntries(DATA_STORES.map(s=>[s,current[s].length])),incoming:Object.fromEntries(DATA_STORES.map(s=>[s,backup.data[s].length])),result:Object.fromEntries(DATA_STORES.map(s=>[s,result[s].length]))},verifiedHash:checked.payloadHash};
+  return {schema:BACKUP_SCHEMA,mode:mode,data:result,conflicts:conflicts,currentHashes:currentHashes,summary:{current:Object.fromEntries(DATA_STORES.map(s=>[s,current[s].length])),incoming:Object.fromEntries(DATA_STORES.map(s=>[s,backup.data[s].length])),result:Object.fromEntries(DATA_STORES.map(s=>[s,result[s].length]))},verifiedHash:checked.payloadHash};
 }
 async function applyRestore(db,plan){
   if(!plan||!plan.data)throw new RestoreError("Restore plan is missing");
+  if(plan.currentHashes){
+    const current=await db.allData(),changed=[];
+    for(const s of DATA_STORES){const h=await hashValue(current[s]);if(h!==plan.currentHashes[s])changed.push(s);}
+    if(changed.length)throw new RestoreStaleError("Local data changed after the restore preview. Rebuild the restore plan before applying.",{stores:changed});
+  }
   const journalId=randomId("restore"),entry={id:journalId,type:"restore",status:"started",mode:plan.mode,createdAt:now(),summary:plan.summary};
   await db.repository(STORES.journal).put(entry);
   try{
-    await db.transaction(DATA_STORES,"readwrite",async function(stores){
+    const storesForTransaction=DATA_STORES.concat([STORES.journal,STORES.meta]);
+    await db.transaction(storesForTransaction,"readwrite",async function(stores){
       for(const s of DATA_STORES){
         await requestPromise(stores[s].clear());
         for(const item of plan.data[s])await requestPromise(stores[s].put(item));
       }
+      entry.status="committed";entry.committedAt=now();
+      await requestPromise(stores[STORES.journal].put(entry));
+      await requestPromise(stores[STORES.meta].put({key:"lastRestore",id:journalId,mode:plan.mode,committedAt:entry.committedAt,verifiedHash:plan.verifiedHash}));
     });
-    entry.status="committed";entry.committedAt=now();await db.repository(STORES.journal).put(entry);
-    await db.repository(STORES.meta).put({key:"lastRestore",id:journalId,mode:plan.mode,committedAt:entry.committedAt,verifiedHash:plan.verifiedHash});
     return entry;
   }catch(e){
     entry.status="failed";entry.failedAt=now();entry.error=e.message;try{await db.repository(STORES.journal).put(entry);}catch(_e){}
+    if(e&&e.code==="RESTORE_STALE_PLAN")throw e;
     throw new RestoreError("Atomic restore failed; original transaction was aborted",{message:e.message,journalId:journalId});
   }
 }
@@ -334,7 +344,7 @@ class SyncManager{
 
 global.CalcPersistence={
   VERSION:"1.0.0-persistence",DB_NAME:DB_NAME,DB_VERSION:DB_VERSION,BACKUP_SCHEMA:BACKUP_SCHEMA,ENCRYPTED_BACKUP_SCHEMA:ENCRYPTED_BACKUP_SCHEMA,SYNC_SCHEMA:SYNC_SCHEMA,STORES:STORES,DATA_STORES:DATA_STORES,
-  PersistenceError:PersistenceError,BackupError:BackupError,RestoreError:RestoreError,IntegrityError:IntegrityError,MigrationError:MigrationError,
+  PersistenceError:PersistenceError,BackupError:BackupError,RestoreError:RestoreError,RestoreStaleError:RestoreStaleError,IntegrityError:IntegrityError,MigrationError:MigrationError,
   stableStringify:stableStringify,sha256Text:sha256Text,hashValue:hashValue,migrationPlan:migrationPlan,applyUpgrade:applyUpgrade,
   Repository:Repository,CalcDatabase:CalcDatabase,assertVersionedWrite:assertVersionedWrite,buildBackup:buildBackup,validateBackup:validateBackup,encryptBackup:encryptBackup,decryptBackup:decryptBackup,openBackup:openBackup,mergeStore:mergeStore,planRestore:planRestore,applyRestore:applyRestore,
   integrityReport:integrityReport,storageEstimate:storageEstimate,requestPersistentStorage:requestPersistentStorage,cleanupJournal:cleanupJournal,recoveryReport:recoveryReport,
