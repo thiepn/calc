@@ -18,6 +18,8 @@ const $$=function(s,r){return Array.from((r||document).querySelectorAll(s));};
 const escapeHtml=function(value){return String(value===undefined||value===null?"":value).replace(/[&<>"']/g,function(ch){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch];});};
 const escapeAttr=escapeHtml;
 const safeDecodeURIComponent=function(value){try{return decodeURIComponent(String(value));}catch(e){return null;}};
+const localGet=function(key){try{return localStorage.getItem(key);}catch(e){return null;}};
+const localSet=function(key,value){try{localStorage.setItem(key,value);}catch(e){}};
 const uid=function(){return crypto.randomUUID?crypto.randomUUID():"id-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);};
 
 const VIEW_META={
@@ -35,8 +37,8 @@ const persistenceDb=new P.CalcDatabase();
 const persistenceCoordinator=new P.CrossTabCoordinator();
 const syncManager=new P.SyncManager();
 const state={
-  view:"calculate",angle:localStorage.getItem("calc.angle")||"RAD",precision:12,
-  env:{},lastResult:null,theme:localStorage.getItem("calc.theme")||"system",settingsReady:false,
+  view:"calculate",angle:localGet("calc.angle")||"RAD",precision:12,
+  env:{},lastResult:null,theme:localGet("calc.theme")||"system",settingsReady:false,
   installPrompt:null,history:[],worksheets:[],activeWorksheet:null,
   graph:{session:null,drag:null,pinch:null,pointers:new Map(),geometries:[],worker:null},
   selectedTool:"percentage-of",toolSearch:"",customLibrary:new CT.CustomToolLibrary(),customCurrent:null,customValidationTimer:null,dataset:null,statisticsWorker:null,dataRevision:0,
@@ -49,7 +51,7 @@ function toast(msg){
 }
 function errorMessage(e){if(e&&(e.name==="QuotaExceededError"||e.code==="QuotaExceededError"||e.code===22))return "Local storage quota is full. Download a backup, remove unneeded local data, or request persistent storage.";return e&&e.message?e.message:String(e);}
 function setTheme(theme){
-  state.theme=theme;localStorage.setItem("calc.theme",theme);if(state.settingsReady)persistSetting("theme",theme);
+  state.theme=theme;localSet("calc.theme",theme);if(state.settingsReady)persistSetting("theme",theme);
   var root=document.documentElement;
   if(theme==="graphite"||theme==="oled")root.dataset.theme=theme;
   else if(theme==="light")root.removeAttribute("data-theme");
@@ -97,11 +99,11 @@ function persistSetting(key,value){return dbPut(P.STORES.settings,{key:key,value
 async function loadAppSettings(){
   var items=[];try{items=await persistenceDb.repository(P.STORES.settings).all();}catch(e){}
   var map={};items.forEach(function(x){if(x&&x.key)map[x.key]=x.value;});
-  state.theme=map.theme||localStorage.getItem("calc.theme")||state.theme;
-  state.angle=map.angle||localStorage.getItem("calc.angle")||state.angle;
+  state.theme=map.theme||localGet("calc.theme")||state.theme;
+  state.angle=map.angle||localGet("calc.angle")||state.angle;
   state.precision=Number(map.precision)||state.precision;
   var deviceId=map.deviceId;if(!deviceId){deviceId=uid();await persistenceDb.repository(P.STORES.settings).put({key:"deviceId",value:deviceId,updatedAt:Date.now()});}
-  syncManager.deviceId=deviceId;state.settingsReady=true;localStorage.setItem("calc.theme",state.theme);localStorage.setItem("calc.angle",state.angle);
+  syncManager.deviceId=deviceId;state.settingsReady=true;localSet("calc.theme",state.theme);localSet("calc.angle",state.angle);
   await persistSetting("theme",state.theme);await persistSetting("angle",state.angle);await persistSetting("precision",state.precision);
 }
 
@@ -1268,7 +1270,7 @@ async function handleCrossTabMessage(message){
     if(message.entityType===P.STORES.settings){
       var item=await persistenceDb.repository(P.STORES.settings).get(message.entityId);if(!item)return;
       if(item.key==="theme"&&item.value!==state.theme){state.settingsReady=false;state.theme=item.value;setTheme(item.value);state.settingsReady=true;}
-      if(item.key==="angle"&&item.value!==state.angle){state.angle=item.value;localStorage.setItem("calc.angle",state.angle);$("#angleBtn").textContent=state.angle;}
+      if(item.key==="angle"&&item.value!==state.angle){state.angle=item.value;localSet("calc.angle",state.angle);$("#angleBtn").textContent=state.angle;}
       return;
     }
     if(message.entityType===P.STORES.notebooks){
@@ -1412,7 +1414,7 @@ function bindEvents(){
   $$("[data-view]").forEach(function(b){b.addEventListener("click",function(){switchView(b.dataset.view);});});
   $("#mobileNavBtn").onclick=openMobileNav;$("#mobileNavBackdrop").onclick=closeMobileNav;
   $("#themeBtn").onclick=cycleTheme;
-  $("#angleBtn").textContent=state.angle;$("#angleBtn").onclick=function(){var arr=["RAD","DEG","GRAD"],i=arr.indexOf(state.angle);state.angle=arr[(i+1)%3];localStorage.setItem("calc.angle",state.angle);persistSetting("angle",state.angle);$("#angleBtn").textContent=state.angle;previewExpression();if(state.view==="graph")plotGraph();};
+  $("#angleBtn").textContent=state.angle;$("#angleBtn").onclick=function(){var arr=["RAD","DEG","GRAD"],i=arr.indexOf(state.angle);state.angle=arr[(i+1)%3];localSet("calc.angle",state.angle);persistSetting("angle",state.angle);$("#angleBtn").textContent=state.angle;previewExpression();if(state.view==="graph")plotGraph();};
   $("#commandBtn").onclick=openCommands;
   document.addEventListener("keydown",function(e){
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();openCommands();return;}
