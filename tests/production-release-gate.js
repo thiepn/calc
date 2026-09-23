@@ -54,7 +54,8 @@ assert(phase.includes("immutable Calc v1.0.0 production baseline"),"Phase 14 fre
 assert(phase.includes("pre-upgrade v4 backup"),"Phase 14 backup-before-upgrade requirement missing");
 
 assert(soakWorkflow.includes("tests/production-release-gate.js"),"production release gate is not part of release soak");
-assert(soakWorkflow.includes("calc-release-soak-v14-"),"Phase 14 soak concurrency group missing");
+assert(soakWorkflow.includes('calc-release-soak-v14-${{ github.sha }}'),"Phase 14 soak must be SHA-scoped");
+assert(soakWorkflow.includes("Reject stale push candidate")&&soakWorkflow.includes("git rev-parse origin/main"),"release soak stale-candidate guard missing");
 assert(soakTests.includes("clean-device v1.0.0 install"),"clean-device production test missing");
 assert(soakTests.includes("pre-upgrade v4 backup restores into production v1.0.0"),"backup-before-upgrade compatibility test missing");
 assert(soakTests.includes('expect(version.version).toBe("calc-shell-v1.0.0")'),"production service-worker handshake test missing");
