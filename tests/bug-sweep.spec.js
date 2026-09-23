@@ -203,6 +203,25 @@ test("notebook Ref copy does not throw when clipboard APIs are unavailable",asyn
   expect(errors).toEqual([]);
 });
 
+test("failed notebook import write rolls back UI and never reports success",async({page})=>{
+  const errors=await openApp(page);
+  await goView(page,"worksheet");
+  const before=await page.locator("#worksheetList button").count();
+  const fixture=await page.evaluate(()=>{
+    const NB=window.CalcNotebook,doc=NB.normalizeNotebook({schema:NB.SCHEMA,id:"import-source",title:"Import Failure Probe",revision:1,blocks:[NB.newBlock("text",{source:"fixture"})],versions:[],settings:{autoRun:false}});
+    return JSON.stringify({schema:NB.SCHEMA,exportedAt:new Date().toISOString(),notebook:doc});
+  });
+  await page.evaluate(()=>{
+    const P=window.CalcPersistence;
+    P.saveNotebookIncremental=async()=>{const e=new Error("forced import write failure");e.name="QuotaExceededError";throw e;};
+  });
+  await page.locator("#worksheetImportFile").setInputFiles({name:"failure.calcnb.json",mimeType:"application/json",buffer:Buffer.from(fixture)});
+  await expect(page.locator("#toast")).not.toContainText("Notebook imported");
+  await expect(page.locator("#worksheetList button")).toHaveCount(before);
+  await expect(page.locator("#worksheetTitle")).not.toHaveValue("Import Failure Probe");
+  expect(errors).toEqual([]);
+});
+
 test("notebook title input is recovery-safe before blur",async({page})=>{
   await openApp(page);
   await goView(page,"worksheet");

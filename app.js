@@ -1100,7 +1100,17 @@ function addBlock(type){
   if(!state.activeWorksheet)return;try{var ws=NB.addBlock(state.activeWorksheet,type);replaceActiveWorksheet(ws);writeSessionRecovery();renderWorksheetBlocks();renderWorksheetVersions();scheduleWorksheetSave();var inputs=$$("[data-block='"+ws.blocks[ws.blocks.length-1].id+"'] textarea");if(inputs.length)inputs[0].focus();}catch(e){toast(errorMessage(e));}
 }
 async function importNotebookFile(file){
-  try{var text=await file.text(),nb=NB.importNotebook(text);state.worksheets.unshift(nb);state.activeWorksheet=nb;await saveWorksheet(nb,false);renderWorksheetArea();toast("Notebook imported");}catch(e){toast(errorMessage(e));}
+  try{
+    var text=await file.text(),nb=NB.importNotebook(text),previous=state.activeWorksheet;
+    state.worksheets.unshift(nb);state.activeWorksheet=nb;
+    var saved=await saveWorksheet(nb,false);
+    if(!saved){
+      state.worksheets=state.worksheets.filter(function(x){return x.id!==nb.id;});state.persistedRevisions.worksheets.delete(nb.id);state.activeWorksheet=previous||state.worksheets[0]||null;
+      if(state.activeWorksheet)renderWorksheetArea();else renderWorksheetList();
+      return;
+    }
+    renderWorksheetArea();toast("Notebook imported");
+  }catch(e){toast(errorMessage(e));}
 }
 function downloadBlob(name,blob){
   var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
