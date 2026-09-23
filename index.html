@@ -354,18 +354,30 @@
             </section>
 
             <section class="panel settings-panel">
-              <div class="section-heading"><div><h2>Integrity & Storage</h2><p>Database schema, quota, persistence, and recovery journal.</p></div></div>
+              <div class="section-heading"><div><h2>Integrity & Storage</h2><p>Database schema, quota, persistence, recovery, and bounded stress diagnostics.</p></div></div>
               <div class="action-row">
                 <button id="integrityCheckBtn">Run integrity check</button>
                 <button id="persistentStorageBtn">Request persistent storage</button>
+                <button id="storageBenchmarkBtn">Benchmark storage</button>
+                <button id="resilienceTestBtn" class="primary-btn">Run resilience suite</button>
               </div>
               <div id="storageStatus" class="settings-status">Checking storage…</div>
               <div id="integrityStatus" class="settings-status muted">Integrity check has not run.</div>
               <div id="recoveryStatus" class="settings-status muted">Checking recovery journal…</div>
+              <div id="diagnosticsStatus" class="settings-status muted">Resilience diagnostics have not run.</div>
             </section>
 
             <section class="panel settings-panel">
-              <div class="section-heading"><div><h2>App Update</h2><p>Updates activate only when you choose to restart.</p></div></div>
+              <div class="section-heading">
+                <div><h2>Trash & Recovery</h2><p>Deleted recoverable items are retained locally for 30 days before cleanup.</p></div>
+                <button id="refreshTrashBtn" class="small-btn">Refresh</button>
+              </div>
+              <div id="trashList" class="trash-list muted">Loading Trash…</div>
+              <button id="emptyTrashBtn" class="danger-ghost">Empty Trash</button>
+            </section>
+
+            <section class="panel settings-panel">
+              <div class="section-heading"><div><h2>App Update</h2><p>Updates activate only after persistence preflight passes and you choose to restart.</p></div></div>
               <div id="updateStatus" class="settings-status">Current app shell is active.</div>
               <div class="action-row"><button id="checkUpdateBtn">Check for update</button><button id="applyUpdateBtn" class="primary-btn" disabled>Restart & update</button></div>
             </section>
