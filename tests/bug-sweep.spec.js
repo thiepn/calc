@@ -334,6 +334,9 @@ test("custom builder close applies deferred cross-tab refresh",async({page})=>{
   expect(await page.evaluate(id=>!!window.CalcTools.REGISTRY.get("custom."+id),id)).toBeTruthy();
   await page.locator("#customCloseBtn").click();
   await expect.poll(()=>page.evaluate(id=>!!window.CalcTools.REGISTRY.get("custom."+id),id),{timeout:3000}).toBeFalsy();
+  await page.locator("#customToolBuilderBtn").click();
+  await expect(page.locator("#customStatusBadge")).toContainText("Archived");
+  await expect(page.locator("#customName")).toHaveValue("Deferred Refresh Guard");
   expect(errors).toEqual([]);
 });
 

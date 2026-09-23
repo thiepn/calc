@@ -909,11 +909,13 @@ async function duplicateBuiltInCustom(){
 }
 function openCustomBuilder(){populateCustomDuplicateSelect();renderCustomLibrary();if(!state.customCurrent)newCustomTool();var d=$("#customToolDialog");if(!d.open)d.showModal();}
 async function loadCustomTools(){
-  var previous=state.customLibrary.list(),items;
+  var previous=state.customLibrary.list(),currentId=state.customCurrent&&state.customCurrent.id,currentWasPersisted=!!(currentId&&state.persistedRevisions.customTools.has(currentId)),items;
   try{items=await dbAll(P.STORES.customTools);}
   catch(e){console.warn("Custom tools refresh failed; keeping last known-good runtime",e);toast("Could not refresh custom tools: "+errorMessage(e));return false;}
   previous.forEach(function(item){try{CT.uninstall(item,T.REGISTRY);}catch(uninstallError){console.warn("Could not uninstall stale custom tool",uninstallError);}});
-  state.customLibrary=new CT.CustomToolLibrary(items);state.persistedRevisions.customTools=new Map(items.map(function(x){return [x.id,x.revision||0];}));var report=state.customLibrary.installAll(T.REGISTRY);renderToolList();renderCustomLibrary();
+  state.customLibrary=new CT.CustomToolLibrary(items);state.persistedRevisions.customTools=new Map(items.map(function(x){return [x.id,x.revision||0];}));var report=state.customLibrary.installAll(T.REGISTRY);
+  if(currentWasPersisted){var refreshed=state.customLibrary.get(currentId);if(refreshed)fillCustomBuilder(refreshed);else state.customCurrent=null;}
+  renderToolList();renderCustomLibrary();
   if(report.failed.length){console.warn("Custom tools not installed",report.failed);toast(report.failed.length+" custom tool"+(report.failed.length===1?"":"s")+" need validation");}return true;
 }
 
