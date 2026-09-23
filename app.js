@@ -897,7 +897,7 @@ function newWorksheet(){
   var ws=createNotebook();state.worksheets.unshift(ws);state.activeWorksheet=ws;renderWorksheetArea();saveWorksheet(ws,true);
 }
 async function loadWorksheets(){
-  var raw=[];try{raw=(await P.loadNotebooks(persistenceDb)).sort(function(a,b){return b.updatedAt-a.updatedAt;});}catch(e){console.warn("Notebook load failed",e);}
+  var raw=[];try{raw=(await P.loadNotebooks(persistenceDb,{tolerant:true})).sort(function(a,b){return b.updatedAt-a.updatedAt;});}catch(e){console.warn("Notebook load failed",e);}
   state.worksheets=[];state.persistedRevisions.worksheets=new Map();var recovered=0;
   raw.forEach(function(item){var rec=NB.recoveryNormalize(item);if(rec.recovered)recovered++;state.worksheets.push(rec.document);state.persistedRevisions.worksheets.set(rec.document.id,rec.document.revision||0);});
   if(!state.worksheets.length)newWorksheet();else{state.activeWorksheet=state.worksheets[0];renderWorksheetArea();}
@@ -911,6 +911,7 @@ function scheduleWorksheetEval(){
   worksheetEvalTimer=setTimeout(function(){runWorksheet(false);},220);
 }
 async function saveWorksheet(ws,immediate){
+  if(ws&&ws.recovery&&ws.recovery.persistenceCorruption){if(immediate)toast("Storage recovery notebooks are read-only to protect the original corrupted record");return false;}
   ws.updatedAt=Date.now();var payload=JSON.parse(JSON.stringify(ws)),expected=state.persistedRevisions.worksheets.has(ws.id)?state.persistedRevisions.worksheets.get(ws.id):null;
   try{
     await P.saveNotebookIncremental(persistenceDb,payload,expected);publishPersistenceChange(P.STORES.notebooks,payload,"put");state.persistedRevisions.worksheets.set(ws.id,ws.revision||0);clearSessionRecovery(ws.id);if(immediate)toast("Notebook saved");
@@ -931,11 +932,11 @@ function renderWorksheetArea(){
   if(!state.activeWorksheet)return;
   $("#worksheetTitle").value=state.activeWorksheet.title;$("#worksheetAutoRun").checked=state.activeWorksheet.settings.autoRun!==false;
   renderWorksheetList();renderWorksheetBlocks();renderWorksheetVersions();renderWorksheetRecovery();
-  if(state.activeWorksheet.blocks.some(function(b){return b.status!=="clean"&&b.type!=="text";}))runWorksheet(false);
+  if(!(state.activeWorksheet.recovery&&state.activeWorksheet.recovery.safeMode)&&state.activeWorksheet.blocks.some(function(b){return b.status!=="clean"&&b.type!=="text";}))runWorksheet(false);
 }
 function renderWorksheetRecovery(){
   var b=$("#worksheetRecoveryBanner"),r=state.activeWorksheet&&state.activeWorksheet.recovery;
-  if(r&&r.safeMode){b.classList.remove("hidden");b.textContent="Recovery mode · "+(r.issues||[]).join(" · ");}
+  if(r&&r.safeMode){b.classList.remove("hidden");b.textContent=(r.persistenceCorruption?"Read-only storage recovery · ":"Recovery mode · ")+(r.issues||[]).join(" · ");}
   else{b.classList.add("hidden");b.textContent="";}
 }
 function renderWorksheetList(){
