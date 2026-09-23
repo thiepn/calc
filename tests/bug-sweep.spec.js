@@ -18,6 +18,17 @@ test("all primary workspaces navigate without runtime errors",async({page})=>{
   expect(errors).toEqual([]);
 });
 
+test("blocked localStorage does not prevent startup",async({page})=>{
+  await page.addInitScript(()=>{
+    Object.defineProperty(window,"localStorage",{configurable:true,get(){throw new DOMException("Blocked","SecurityError");}});
+  });
+  const errors=await openApp(page);
+  await page.locator("#expressionInput").fill("21*2");
+  await page.locator("#expressionInput").press("Enter");
+  await expect(page.locator("#exactResult")).toHaveText("42");
+  expect(errors).toEqual([]);
+});
+
 test("malformed tool hash cannot crash startup or hash navigation",async({page})=>{
   const errors=await openApp(page,"/index.html#tools/%E0%A4%A");
   await expect(page.locator('[data-view-panel="tools"]')).toHaveClass(/active/);
