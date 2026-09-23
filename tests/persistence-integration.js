@@ -17,6 +17,8 @@ assert(pIndex<appIndex,"persistence runtime loads before app.js");
 assert(index.includes('id="view-settings"'),"Data & Backup workspace exists");
 assert(index.includes('id="fullBackupBtn"')&&index.includes('id="applyRestoreBtn"'),"backup/restore UI exists");
 assert(index.includes('id="backupPassword"')&&index.includes('id="restorePassword"')&&index.includes('id="shareBackupBtn"'),"encrypted/share backup UI exists");
+assert(index.includes('data-restore-store="worksheets"')&&index.includes('data-restore-store="tombstones"'),"selective restore UI exists");
+assert(index.includes('id="deleteWorksheetBtn"'),"notebook deletion UI exists");
 assert(index.includes('id="updateBtn"')&&index.includes('id="applyUpdateBtn"'),"controlled update UI exists");
 
 assert(app.includes("const P=window.CalcPersistence;"),"app binds persistence runtime");
@@ -28,6 +30,8 @@ assert(app.includes("P.buildBackup"),"full backup wired");
 assert(app.includes("P.planRestore"),"restore planning wired");
 assert(app.includes("P.applyRestore"),"atomic restore wired");
 assert(app.includes("dbPutVersioned")&&app.includes("putVersioned"),"optimistic versioned writes wired");
+assert(app.includes("deletePersistentEntity")&&app.includes("deleteWithTombstone"),"tombstone deletion workflow wired");
+assert(app.includes("selectedRestoreStores"),"selective restore workflow wired");
 assert(app.includes("P.encryptBackup")&&app.includes("P.openBackup"),"encrypted backup workflow wired");
 assert(app.includes("P.integrityReport"),"integrity UI wired");
 assert(app.includes("P.CrossTabCoordinator")||app.includes("new P.CrossTabCoordinator"),"cross-tab coordinator wired");
@@ -39,10 +43,13 @@ assert(sw.includes('message.type==="SKIP_WAITING"'),"service worker skip-waiting
 assert(sw.includes('message.type==="GET_VERSION"'),"service worker version handshake");
 assert(sw.includes('type:"SW_ACTIVATED"'),"service worker activation notification");
 
-assert(persistence.includes("const DB_VERSION=3;"),"database schema v3");
+assert(persistence.includes("const DB_VERSION=4;"),"database schema v4");
 assert(persistence.includes('const BACKUP_SCHEMA="calc.backup/v1";'),"backup schema present");
 assert(persistence.includes('const ENCRYPTED_BACKUP_SCHEMA="calc.backup.encrypted/v1";'),"encrypted backup schema present");
 assert(persistence.includes('const SYNC_SCHEMA="calc.sync/v1";'),"sync schema present");
+assert(persistence.includes("create-tombstones"),"v4 tombstone migration present");
+assert(persistence.includes("deleteWithTombstone"),"tombstone persistence present");
+assert(persistence.includes("selectedStores"),"selective restore engine present");
 assert(persistence.includes("class CrossTabCoordinator"),"cross-tab architecture present");
 assert(persistence.includes("class SyncManager"),"sync manager boundary present");
 
