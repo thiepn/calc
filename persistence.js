@@ -167,7 +167,11 @@ class CalcDatabase{
   }
   async allData(){
     const result={};
-    for(const s of DATA_STORES)result[s]=s===STORES.notebooks?await loadNotebooks(this):await this.repository(s).all();
+    for(const s of DATA_STORES){
+      if(s===STORES.notebooks)result[s]=await loadNotebooks(this);
+      else if(s===STORES.tombstones)result[s]=await loadTombstones(this);
+      else result[s]=await this.repository(s).all();
+    }
     return result;
   }
 }
@@ -175,6 +179,12 @@ class CalcDatabase{
 function jsonClone(v){return v===undefined?undefined:JSON.parse(JSON.stringify(v));}
 function clockNow(){return global.performance&&typeof global.performance.now==="function"?global.performance.now():Date.now();}
 function notebookChunkId(notebookId,blockId,index){return "nbchunk:"+String(notebookId)+":"+String(blockId)+":source:"+index;}
+function notebookExtraChunkId(notebookId,key,index){return "nbchunk:"+String(notebookId)+":extra:"+String(key).replace(/[^A-Za-z0-9._:-]+/g,"_")+":"+index;}
+function versionStorageKey(version,index){
+  const snap=version&&version.snapshot||{};if(Number.isFinite(Number(snap.revision))&&Number(snap.revision)>0)return "r"+Number(snap.revision);
+  if(Number.isFinite(Number(snap.updatedAt))&&Number(snap.updatedAt)>0)return "u"+Number(snap.updatedAt);
+  return "i"+Number(index||0);
+}
 function externalizedEntries(record){
   return record&&record.persistence&&record.persistence.schema===NOTEBOOK_STORAGE_SCHEMA&&Array.isArray(record.persistence.externalized)?record.persistence.externalized:[];
 }
@@ -202,20 +212,41 @@ function splitStringChunks(text,maxBytes){
   }
   return out;
 }
+async function appendExternalizedPayload(notebookId,descriptor,text,idPrefix,chunkBytes,chunks,externalized,updatedAt){
+  text=String(text||"");const parts=splitStringChunks(text,chunkBytes),refs=[];
+  for(let i=0;i<parts.length;i++){
+    const data=parts[i],id=idPrefix+":"+i,hash=await sha256Text(data),partBytes=utf8Bytes(data).byteLength;
+    refs.push({id:id,hash:hash,bytes:partBytes});
+    chunks.push({id:id,notebookId:String(notebookId),blockId:descriptor.blockId||null,field:descriptor.field,index:i,total:parts.length,hash:hash,bytes:partBytes,data:data,updatedAt:Number(updatedAt)||now()});
+  }
+  externalized.push(Object.assign({},descriptor,{hash:await sha256Text(text),bytes:utf8Bytes(text).byteLength,chunks:refs}));
+}
 async function encodeNotebookForStorage(notebook,options){
   options=options||{};const threshold=Math.max(4096,Number(options.externalizeBytes)||NOTEBOOK_EXTERNALIZE_BYTES),chunkBytes=Math.max(4096,Number(options.chunkBytes)||NOTEBOOK_CHUNK_BYTES),record=jsonClone(notebook),chunks=[],externalized=[];
   delete record.persistence;
   for(const block of record.blocks||[]){
     const source=String(block.source||""),bytes=utf8Bytes(source).byteLength;
-    if(bytes<threshold)continue;
-    const parts=splitStringChunks(source,chunkBytes),refs=[];
-    for(let i=0;i<parts.length;i++){
-      const data=parts[i],id=notebookChunkId(record.id,block.id,i),hash=await sha256Text(data),partBytes=utf8Bytes(data).byteLength;
-      refs.push({id:id,hash:hash,bytes:partBytes});
-      chunks.push({id:id,notebookId:String(record.id),blockId:String(block.id),field:"source",index:i,total:parts.length,hash:hash,bytes:partBytes,data:data,updatedAt:Number(record.updatedAt)||now()});
+    if(bytes>=threshold){
+      await appendExternalizedPayload(record.id,{scope:"block",blockId:String(block.id),field:"source",encoding:"text"},source,"nbchunk:"+String(record.id)+":"+String(block.id)+":source",chunkBytes,chunks,externalized,record.updatedAt);
+      block.source="";
     }
-    externalized.push({blockId:String(block.id),field:"source",hash:await sha256Text(source),bytes:bytes,chunks:refs});
-    block.source="";
+    if(block.result&&block.result.serialized!==null&&block.result.serialized!==undefined){
+      const serialized=JSON.stringify(block.result.serialized),serializedBytes=utf8Bytes(serialized).byteLength;
+      if(serializedBytes>=threshold){
+        await appendExternalizedPayload(record.id,{scope:"block",blockId:String(block.id),field:"result.serialized",encoding:"json"},serialized,"nbchunk:"+String(record.id)+":"+String(block.id)+":result",chunkBytes,chunks,externalized,record.updatedAt);
+        block.result.serialized=null;
+      }
+    }
+  }
+  for(let vi=0;vi<(record.versions||[]).length;vi++){
+    const version=record.versions[vi],snapshot=version&&version.snapshot;if(!snapshot||!Array.isArray(snapshot.blocks))continue;
+    const versionKey=versionStorageKey(version,vi);
+    for(const block of snapshot.blocks){
+      const source=String(block.source||""),bytes=utf8Bytes(source).byteLength;if(bytes<threshold)continue;
+      const prefix="nbchunk:"+String(record.id)+":version:"+versionKey+":"+String(block.id)+":source";
+      await appendExternalizedPayload(record.id,{scope:"version",versionKey:versionKey,versionIndex:vi,blockId:String(block.id),field:"source",encoding:"text"},source,prefix,chunkBytes,chunks,externalized,record.updatedAt);
+      block.source="";
+    }
   }
   if(externalized.length)record.persistence={schema:NOTEBOOK_STORAGE_SCHEMA,externalized:externalized,chunkBytes:chunkBytes,updatedAt:Number(record.updatedAt)||now()};
   return {record:record,chunks:chunks,externalizedBytes:externalized.reduce((n,e)=>n+e.bytes,0)};
@@ -227,16 +258,29 @@ async function hydrateNotebookRecord(db,raw){
   await db.transaction([STORES.chunks],"readonly",async function(stores){
     for(const ref of allRefs){loaded.set(ref.id,await requestPromise(stores[STORES.chunks].get(ref.id)));}
   });
-  for(const entry of entries){
-    const block=byId.get(String(entry.blockId));if(!block)throw new IntegrityError("Chunk metadata references a missing notebook block",{notebookId:record.id,blockId:entry.blockId});
-    let source="";
+  async function assemble(entry){
+    let text="";
     for(const ref of entry.chunks||[]){
-      const chunk=loaded.get(ref.id);if(!chunk)throw new IntegrityError("Notebook payload chunk is missing",{notebookId:record.id,blockId:entry.blockId,chunkId:ref.id});
-      const actual=await sha256Text(String(chunk.data||""));if(ref.hash&&actual!==ref.hash)throw new IntegrityError("Notebook payload chunk hash mismatch",{notebookId:record.id,blockId:entry.blockId,chunkId:ref.id,expected:ref.hash,actual:actual});
-      source+=String(chunk.data||"");
+      const chunk=loaded.get(ref.id);if(!chunk)throw new IntegrityError("Notebook payload chunk is missing",{notebookId:record.id,blockId:entry.blockId,chunkId:ref.id,field:entry.field});
+      const actual=await sha256Text(String(chunk.data||""));if(ref.hash&&actual!==ref.hash)throw new IntegrityError("Notebook payload chunk hash mismatch",{notebookId:record.id,blockId:entry.blockId,chunkId:ref.id,field:entry.field,expected:ref.hash,actual:actual});
+      text+=String(chunk.data||"");
     }
-    const totalHash=await sha256Text(source);if(entry.hash&&totalHash!==entry.hash)throw new IntegrityError("Notebook payload hash mismatch",{notebookId:record.id,blockId:entry.blockId,expected:entry.hash,actual:totalHash});
-    block.source=source;
+    const totalHash=await sha256Text(text);if(entry.hash&&totalHash!==entry.hash)throw new IntegrityError("Notebook payload hash mismatch",{notebookId:record.id,blockId:entry.blockId,field:entry.field,expected:entry.hash,actual:totalHash});
+    return text;
+  }
+  for(const entry of entries){
+    const text=await assemble(entry);
+    if(entry.scope==="version"){
+      let version=(record.versions||[]).find(function(v,i){return versionStorageKey(v,i)===entry.versionKey;});
+      if(!version&&Number.isInteger(entry.versionIndex))version=(record.versions||[])[entry.versionIndex];
+      const block=version&&version.snapshot&&Array.isArray(version.snapshot.blocks)?version.snapshot.blocks.find(function(b){return String(b.id)===String(entry.blockId);}):null;
+      if(!block)throw new IntegrityError("Chunk metadata references a missing notebook version block",{notebookId:record.id,blockId:entry.blockId,versionKey:entry.versionKey});
+      block.source=text;continue;
+    }
+    const block=byId.get(String(entry.blockId));if(!block)throw new IntegrityError("Chunk metadata references a missing notebook block",{notebookId:record.id,blockId:entry.blockId});
+    if(entry.field==="result.serialized"){
+      try{if(!block.result)block.result={};block.result.serialized=JSON.parse(text);}catch(e){throw new IntegrityError("Notebook result payload is invalid JSON",{notebookId:record.id,blockId:entry.blockId});}
+    }else block.source=text;
   }
   delete record.persistence;return record;
 }
@@ -244,6 +288,17 @@ async function loadNotebook(db,id){return hydrateNotebookRecord(db,await db.repo
 async function loadNotebooks(db){
   const raw=await db.repository(STORES.notebooks).all(),out=[];
   for(const item of raw)out.push(await hydrateNotebookRecord(db,item));
+  return out;
+}
+async function loadTombstones(db){
+  const raw=await db.repository(STORES.tombstones).all(),out=[];
+  for(const item of raw){
+    const copy=jsonClone(item);
+    if(copy&&copy.payload&&copy.entityType===STORES.notebooks&&copy.payloadEncoding===NOTEBOOK_STORAGE_SCHEMA){
+      copy.payload=await hydrateNotebookRecord(db,copy.payload);delete copy.payloadEncoding;
+    }
+    out.push(copy);
+  }
   return out;
 }
 async function saveNotebookIncremental(db,notebook,expectedRevision,options){
@@ -266,12 +321,12 @@ async function saveNotebookIncremental(db,notebook,expectedRevision,options){
     throw e;
   }
 }
+function trashChunkRefs(tomb){return tomb&&tomb.payloadEncoding===NOTEBOOK_STORAGE_SCHEMA&&tomb.payload?chunkRefsOf(tomb.payload):[];}
 async function deleteNotebookWithTombstone(db,key,options){
-  options=options||{};const raw=await db.repository(STORES.notebooks).get(key),canonical=raw?await hydrateNotebookRecord(db,raw):null,baseRevision=raw?revisionOf(raw):0,revision=Number(options.revision)||baseRevision+1;
-  const tomb={id:STORES.notebooks+":"+String(key),entityType:STORES.notebooks,entityId:String(key),revision:revision,deletedAt:now(),deviceId:options.deviceId||null,payload:canonical?jsonClone(canonical):null,recoverable:!!canonical,purgeAfter:now()+TRASH_RETENTION_MS};
-  await db.transaction([STORES.notebooks,STORES.tombstones,STORES.chunks],"readwrite",async function(stores){
+  options=options||{};const raw=await db.repository(STORES.notebooks).get(key),baseRevision=raw?revisionOf(raw):0,revision=Number(options.revision)||baseRevision+1;
+  const tomb={id:STORES.notebooks+":"+String(key),entityType:STORES.notebooks,entityId:String(key),revision:revision,deletedAt:now(),deviceId:options.deviceId||null,payload:raw?jsonClone(raw):null,payloadEncoding:raw?NOTEBOOK_STORAGE_SCHEMA:null,recoverable:!!raw,purgeAfter:now()+TRASH_RETENTION_MS};
+  await db.transaction([STORES.notebooks,STORES.tombstones],"readwrite",async function(stores){
     const latest=await requestPromise(stores[STORES.notebooks].get(key));if(raw&&latest&&revisionOf(latest)!==baseRevision)throw new PersistenceError("REVISION_CONFLICT","Notebook changed before deletion",{store:STORES.notebooks,key:key,expected:baseRevision,actual:revisionOf(latest)});
-    for(const id of chunkRefsOf(latest||raw))await requestPromise(stores[STORES.chunks].delete(id));
     await requestPromise(stores[STORES.notebooks].delete(key));await requestPromise(stores[STORES.tombstones].put(tomb));
   });
   return {store:STORES.notebooks,key:key,revision:revision,tombstone:tomb};
@@ -420,18 +475,28 @@ async function applyRestore(db,plan){
   }
 }
 async function integrityReport(db){
-  const issues=[],warnings=[],hashes={},counts={},rawNotebooks=await db.repository(STORES.notebooks).all(),referenced=new Set(),canonical=[];
-  counts[STORES.notebooks]=rawNotebooks.length;
+  const issues=[],warnings=[],hashes={},counts={},referenced=new Set(),canonicalNotebooks=[],canonicalTombstones=[];
+  const rawNotebooks=await db.repository(STORES.notebooks).all(),rawTombstones=await db.repository(STORES.tombstones).all();
+  counts[STORES.notebooks]=rawNotebooks.length;counts[STORES.tombstones]=rawTombstones.length;
   for(const raw of rawNotebooks){
     chunkRefsOf(raw).forEach(function(id){referenced.add(id);});
-    try{canonical.push(await hydrateNotebookRecord(db,raw));}catch(e){issues.push({store:STORES.notebooks,key:raw&&raw.id,message:e.message,code:e.code||"ERROR"});}
+    try{canonicalNotebooks.push(await hydrateNotebookRecord(db,raw));}catch(e){issues.push({store:STORES.notebooks,key:raw&&raw.id,message:e.message,code:e.code||"ERROR"});}
   }
-  if(!issues.some(function(i){return i.store===STORES.notebooks;})){try{validateStoreItems(STORES.notebooks,canonical);hashes[STORES.notebooks]=await hashValue(canonical);}catch(e){issues.push({store:STORES.notebooks,message:e.message,code:e.code||"ERROR"});}}
+  for(const tomb of rawTombstones){
+    trashChunkRefs(tomb).forEach(function(id){referenced.add(id);});
+    try{
+      const copy=jsonClone(tomb);
+      if(copy.payload&&copy.entityType===STORES.notebooks&&copy.payloadEncoding===NOTEBOOK_STORAGE_SCHEMA){copy.payload=await hydrateNotebookRecord(db,copy.payload);delete copy.payloadEncoding;}
+      canonicalTombstones.push(copy);
+    }catch(e){issues.push({store:STORES.tombstones,key:tomb&&tomb.id,message:e.message,code:e.code||"ERROR"});}
+  }
+  if(!issues.some(function(i){return i.store===STORES.notebooks;})){try{validateStoreItems(STORES.notebooks,canonicalNotebooks);hashes[STORES.notebooks]=await hashValue(canonicalNotebooks);}catch(e){issues.push({store:STORES.notebooks,message:e.message,code:e.code||"ERROR"});}}
+  if(!issues.some(function(i){return i.store===STORES.tombstones;})){try{validateStoreItems(STORES.tombstones,canonicalTombstones);hashes[STORES.tombstones]=await hashValue(canonicalTombstones);}catch(e){issues.push({store:STORES.tombstones,message:e.message,code:e.code||"ERROR"});}}
   for(const s of DATA_STORES){
-    if(s===STORES.notebooks)continue;
+    if(s===STORES.notebooks||s===STORES.tombstones)continue;
     try{const items=await db.repository(s).all();counts[s]=items.length;validateStoreItems(s,items);hashes[s]=await hashValue(items);}catch(e){issues.push({store:s,message:e.message,code:e.code||"ERROR"});}
   }
-  const chunkItems=await db.repository(STORES.chunks).all(),orphans=chunkItems.filter(function(ch){return !referenced.has(ch.id);});
+  const chunkItems=await db.repository(STORES.chunks).all(),orphans=chunkItems.filter(function(ch){return !ch.diagnostic&&!referenced.has(ch.id);});
   if(orphans.length)warnings.push({store:STORES.chunks,code:"ORPHAN_CHUNKS",message:orphans.length+" unreferenced payload chunk(s) can be cleaned safely"});
   const schema=await db.repository(STORES.meta).get("schema");
   return {ok:issues.length===0,dbVersion:DB_VERSION,schemaMeta:schema||null,counts:counts,hashes:hashes,issues:issues,warnings:warnings,chunkStats:{records:chunkItems.length,referenced:referenced.size,orphaned:orphans.length},checkedAt:now()};
@@ -465,29 +530,40 @@ async function deleteWithTombstone(db,store,key,options){
   return {store:store,key:key,revision:revision,tombstone:tomb};
 }
 async function listTrash(db){const items=await db.repository(STORES.tombstones).all();return items.sort(function(a,b){return Number(b.deletedAt||0)-Number(a.deletedAt||0);});}
-async function purgeTombstone(db,id){await db.repository(STORES.tombstones).delete(id);return true;}
-async function emptyTrash(db){await db.repository(STORES.tombstones).clear();return true;}
+async function purgeTombstone(db,id){
+  const tomb=await db.repository(STORES.tombstones).get(id);if(!tomb)return false;const refs=trashChunkRefs(tomb);
+  await db.transaction([STORES.tombstones,STORES.chunks],"readwrite",async function(stores){for(const ref of refs)await requestPromise(stores[STORES.chunks].delete(ref));await requestPromise(stores[STORES.tombstones].delete(id));});return true;
+}
+async function emptyTrash(db){
+  const items=await db.repository(STORES.tombstones).all(),refs=[];items.forEach(function(item){refs.push.apply(refs,trashChunkRefs(item));});
+  await db.transaction([STORES.tombstones,STORES.chunks],"readwrite",async function(stores){for(const ref of refs)await requestPromise(stores[STORES.chunks].delete(ref));await requestPromise(stores[STORES.tombstones].clear());});return true;
+}
 async function cleanupTrash(db,maxAgeMs){
-  maxAgeMs=Number(maxAgeMs)||TRASH_RETENTION_MS;const items=await db.repository(STORES.tombstones).all(),cutoff=now()-maxAgeMs,removed=[];
-  for(const item of items){if(Number(item.deletedAt||0)<cutoff){await db.repository(STORES.tombstones).delete(item.id);removed.push(item.id);}}
-  return removed;
+  maxAgeMs=Number(maxAgeMs)||TRASH_RETENTION_MS;const items=await db.repository(STORES.tombstones).all(),cutoff=now()-maxAgeMs,expired=items.filter(function(item){return Number(item.deletedAt||0)<cutoff;}),refs=[];
+  expired.forEach(function(item){refs.push.apply(refs,trashChunkRefs(item));});if(!expired.length)return [];
+  await db.transaction([STORES.tombstones,STORES.chunks],"readwrite",async function(stores){for(const ref of refs)await requestPromise(stores[STORES.chunks].delete(ref));for(const item of expired)await requestPromise(stores[STORES.tombstones].delete(item.id));});
+  return expired.map(function(item){return item.id;});
 }
 async function restoreTombstone(db,id){
   const tomb=await db.repository(STORES.tombstones).get(id);if(!tomb)throw new RestoreError("Trash item no longer exists");
   if(!tomb.payload)throw new RestoreError("This older trash record contains deletion metadata only and cannot be restored");
   const store=tomb.entityType;if(!DATA_STORES.includes(store)||store===STORES.tombstones)throw new RestoreError("Unsupported trash entity type");
-  let payload=jsonClone(tomb.payload),key=entityKey(store,payload);
   if(store===STORES.notebooks){
-    const existing=await db.repository(store).get(key);
-    if(existing){payload.id=randomId("notebook-restored");payload.title=(payload.title||"Notebook")+" (restored copy)";payload.revision=Math.max(1,revisionOf(payload)+1);payload.updatedAt=now();key=payload.id;}
-    const encoded=await encodeNotebookForStorage(payload);
+    const wasChunkBacked=tomb.payloadEncoding===NOTEBOOK_STORAGE_SCHEMA,rawPayload=jsonClone(tomb.payload),payload=wasChunkBacked?await hydrateNotebookRecord(db,rawPayload):jsonClone(rawPayload),originalKey=entityKey(store,payload),existing=await db.repository(store).get(originalKey);
+    if(!existing&&wasChunkBacked){
+      await db.transaction([STORES.notebooks,STORES.tombstones],"readwrite",async function(stores){await requestPromise(stores[STORES.notebooks].put(rawPayload));await requestPromise(stores[STORES.tombstones].delete(id));});
+      return {store:store,key:originalKey,item:payload};
+    }
+    let key=originalKey;if(existing){payload.id=randomId("notebook-restored");payload.title=(payload.title||"Notebook")+" (restored copy)";payload.revision=Math.max(1,revisionOf(payload)+1);payload.updatedAt=now();key=payload.id;}
+    const encoded=await encodeNotebookForStorage(payload),oldRefs=trashChunkRefs(tomb),newIds=new Set(encoded.chunks.map(function(ch){return ch.id;}));
     await db.transaction([STORES.notebooks,STORES.chunks,STORES.tombstones],"readwrite",async function(stores){
       for(const chunk of encoded.chunks)await requestPromise(stores[STORES.chunks].put(chunk));
+      for(const ref of oldRefs)if(!newIds.has(ref))await requestPromise(stores[STORES.chunks].delete(ref));
       await requestPromise(stores[STORES.notebooks].put(encoded.record));await requestPromise(stores[STORES.tombstones].delete(id));
     });
     return {store:store,key:key,item:payload};
   }
-  const existing=await db.repository(store).get(key);
+  let payload=jsonClone(tomb.payload),key=entityKey(store,payload),existing=await db.repository(store).get(key);
   if(existing){
     if(store===STORES.settings)throw new RestoreError("A setting with this key already exists; restore it through backup/restore instead");
     payload.id=String(key)+"-restored-"+Date.now().toString(36);if(payload.title)payload.title+=" (restored copy)";if(payload.name)payload.name+=" (restored copy)";payload.updatedAt=now();key=payload.id;
@@ -578,7 +654,7 @@ async function adversarialPersistenceTest(){
 }
 async function updatePreflight(db){
   const integrity=await integrityReport(db),recovery=await recoveryReport(db);
-  return {ok:integrity.ok&&!recovery.needsAttention,integrity:integrity,recovery:recovery,checkedAt:now()};
+  return {ok:integrity.ok&&recovery.incomplete.length===0,integrity:integrity,recovery:recovery,checkedAt:now()};
 }
 async function resilienceDiagnostics(db,options){
   options=options||{};const started=clockNow(),results=[];
@@ -591,7 +667,7 @@ async function resilienceDiagnostics(db,options){
     if(headroom!==null&&headroom<128*1024)return {status:"skipped",message:"Insufficient safe quota headroom for a bounded write test",estimate:estimate};
     const perf=await storagePerformance(db,{totalBytes:target});return {status:"pass",message:"Bounded write/read/delete cycle completed",estimate:estimate,performance:perf};
   });
-  await run("Update preflight",async function(){const p=await updatePreflight(db);if(!p.ok)throw new IntegrityError("Update preflight found unresolved persistence issues",{integrity:p.integrity.issues,recovery:p.recovery});return {status:"pass",message:"Integrity and recovery journal are clean"};});
+  await run("Update preflight",async function(){const p=await updatePreflight(db);if(!p.ok)throw new IntegrityError("Update preflight found unresolved persistence issues",{integrity:p.integrity.issues,recovery:p.recovery});return {status:"pass",message:"Integrity is clean and no transaction is left incomplete"};});
   return {ok:results.every(function(r){return r.status!=="fail";}),results:results,durationMs:clockNow()-started};
 }
 
@@ -630,7 +706,7 @@ global.CalcPersistence={
   PersistenceError:PersistenceError,BackupError:BackupError,RestoreError:RestoreError,RestoreStaleError:RestoreStaleError,IntegrityError:IntegrityError,MigrationError:MigrationError,
   stableStringify:stableStringify,sha256Text:sha256Text,hashValue:hashValue,migrationPlan:migrationPlan,applyUpgrade:applyUpgrade,
   Repository:Repository,CalcDatabase:CalcDatabase,assertVersionedWrite:assertVersionedWrite,buildBackup:buildBackup,buildBackupBlob:buildBackupBlob,validateBackup:validateBackup,encryptBackup:encryptBackup,decryptBackup:decryptBackup,openBackup:openBackup,mergeStore:mergeStore,planRestore:planRestore,applyRestore:applyRestore,
-  encodeNotebookForStorage:encodeNotebookForStorage,hydrateNotebookRecord:hydrateNotebookRecord,loadNotebook:loadNotebook,loadNotebooks:loadNotebooks,saveNotebookIncremental:saveNotebookIncremental,deleteNotebookWithTombstone:deleteNotebookWithTombstone,
+  encodeNotebookForStorage:encodeNotebookForStorage,hydrateNotebookRecord:hydrateNotebookRecord,loadNotebook:loadNotebook,loadNotebooks:loadNotebooks,loadTombstones:loadTombstones,saveNotebookIncremental:saveNotebookIncremental,deleteNotebookWithTombstone:deleteNotebookWithTombstone,
   integrityReport:integrityReport,storageEstimate:storageEstimate,storagePerformance:storagePerformance,requestPersistentStorage:requestPersistentStorage,cleanupJournal:cleanupJournal,recordTombstone:recordTombstone,deleteWithTombstone:deleteWithTombstone,listTrash:listTrash,restoreTombstone:restoreTombstone,purgeTombstone:purgeTombstone,emptyTrash:emptyTrash,cleanupTrash:cleanupTrash,recoveryReport:recoveryReport,
   migrationSoakTest:migrationSoakTest,multiTabStressTest:multiTabStressTest,adversarialPersistenceTest:adversarialPersistenceTest,updatePreflight:updatePreflight,resilienceDiagnostics:resilienceDiagnostics,
   CrossTabCoordinator:CrossTabCoordinator,SyncAdapter:SyncAdapter,DisabledSyncAdapter:DisabledSyncAdapter,SyncManager:SyncManager
