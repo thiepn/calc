@@ -40,6 +40,8 @@ assets.forEach(asset=>assert(exists(asset),"Service worker references missing as
 assert(!/<script[^>]+src=["']https?:\/\//i.test(index),"External runtime scripts are forbidden in RC shell");
 assert(!/<link[^>]+href=["']https?:\/\//i.test(index),"External runtime styles/resources are forbidden in RC shell");
 assert(!styles.includes("\\n"),"Literal escaped newline found in production stylesheet");
+assert(app.includes("file.size>NB.MAX_IMPORT_BYTES"),"Notebook file-size guard must run before file.text()");
+assert(app.includes("file.size>CT.MAX_JSON_BYTES"),"Custom Tool file-size guard must run before file.text()");
 assert(manifest.start_url==="./"&&manifest.scope==="./","PWA start_url/scope must remain repository-relative");
 assert(manifest.display==="standalone","PWA must remain standalone");
 assert(index.includes("maximum-scale=1")&&index.includes("user-scalable=no"),"Installed PWA zoom lock regressed");

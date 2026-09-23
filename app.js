@@ -902,7 +902,7 @@ function exportCustomTool(){
   try{var m=state.customCurrent&&state.customLibrary.get(state.customCurrent.id)||CT.normalizeManifest(builderManifest()),doc=CT.exportManifest(m),blob=new Blob([JSON.stringify(doc,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=m.name.replace(/[^A-Za-z0-9._-]+/g,"-").replace(/^-+|-+$/g,"")+".calctool.json";a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},1000);}catch(e){toast(errorMessage(e));}
 }
 async function importCustomFile(file){
-  try{var text=await file.text(),m=await persistCustom(CT.importManifest(text));fillCustomBuilder(m);toast("Imported as Draft");}catch(e){toast(errorMessage(e));}
+  try{if(file.size>CT.MAX_JSON_BYTES)throw new CT.CustomToolImportError("Custom tool file exceeds "+CT.MAX_JSON_BYTES+" bytes");var text=await file.text(),m=await persistCustom(CT.importManifest(text));fillCustomBuilder(m);toast("Imported as Draft");}catch(e){toast(errorMessage(e));}
 }
 async function duplicateBuiltInCustom(){
   try{var m=await persistCustom(CT.duplicateBuiltIn($("#customDuplicateSelect").value));fillCustomBuilder(m);toast("Built-in duplicated as Draft");}catch(e){toast(errorMessage(e));}
@@ -1110,6 +1110,7 @@ function addBlock(type){
 }
 async function importNotebookFile(file){
   try{
+    if(file.size>NB.MAX_IMPORT_BYTES)throw new NB.NotebookImportError("Notebook file exceeds "+NB.MAX_IMPORT_BYTES+" bytes");
     var text=await file.text(),nb=NB.importNotebook(text),previous=state.activeWorksheet;
     state.worksheets.unshift(nb);state.activeWorksheet=nb;
     var saved=await saveWorksheet(nb,false);

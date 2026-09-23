@@ -355,7 +355,7 @@ class CustomToolLibrary{
 }
 
 global.CalcCustomTools={
-  VERSION:"1.0.1-custom-tools",SCHEMA:SCHEMA,
+  VERSION:"1.0.2-custom-tools",SCHEMA:SCHEMA,MAX_JSON_BYTES:MAX_JSON_BYTES,
   CustomToolError:CustomToolError,CustomToolSchemaError:CustomToolSchemaError,CustomToolValidationError:CustomToolValidationError,CustomToolTestError:CustomToolTestError,CustomToolImportError:CustomToolImportError,
   normalizeManifest:normalizeManifest,validationReport:validationReport,compile:compile,executeManifest:executeManifest,runTests:runTests,
   revise:revise,activate:activate,archive:archive,restoreRevision:restoreRevision,newFormulaDraft:newFormulaDraft,canDuplicateBuiltIn:canDuplicateBuiltIn,duplicateBuiltIn:duplicateBuiltIn,installActive:installActive,uninstall:uninstall,
