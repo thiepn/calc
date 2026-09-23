@@ -994,8 +994,17 @@ function renderWorksheetVersions(){
   versions.slice().reverse().forEach(function(entry,reverseIndex){
     var actual=versions.length-1-reverseIndex,row=document.createElement("div");row.className="worksheet-version-row";
     var s=document.createElement("span");s.textContent="r"+entry.snapshot.revision+" · "+(entry.reason||"edit")+" · "+new Date(entry.snapshot.updatedAt).toLocaleString();
-    var b=document.createElement("button");b.className="small-btn";b.textContent="Restore";b.onclick=function(){
-      try{var restored=NB.restoreVersion(state.activeWorksheet,actual);replaceActiveWorksheet(restored);renderWorksheetArea();saveWorksheet(restored,false);toast("Notebook version restored");}catch(e){toast(errorMessage(e));}
+    var b=document.createElement("button");b.className="small-btn";b.textContent="Restore";b.onclick=async function(){
+      var previous=state.activeWorksheet;
+      try{
+        var restored=NB.restoreVersion(previous,actual);replaceActiveWorksheet(restored);renderWorksheetArea();
+        var saved=await saveWorksheet(restored,false);
+        if(!saved){
+          if(state.activeWorksheet&&state.activeWorksheet.id===restored.id){replaceActiveWorksheet(previous);renderWorksheetArea();}
+          return;
+        }
+        if(state.activeWorksheet&&state.activeWorksheet.id===restored.id)toast("Notebook version restored");
+      }catch(e){if(state.activeWorksheet&&previous)replaceActiveWorksheet(previous);renderWorksheetArea();toast(errorMessage(e));}
     };row.append(s,b);box.appendChild(row);
   });
 }

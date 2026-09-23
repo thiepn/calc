@@ -203,6 +203,20 @@ test("notebook Ref copy does not throw when clipboard APIs are unavailable",asyn
   expect(errors).toEqual([]);
 });
 
+test("failed notebook version restore rolls back UI and never reports success",async({page})=>{
+  const errors=await openApp(page);
+  await goView(page,"worksheet");
+  const title=page.locator("#worksheetTitle");
+  await title.click();await title.fill("Current Version");
+  await expect(page.locator("#worksheetVersionList button").first()).toBeVisible();
+  await page.evaluate(()=>{window.CalcPersistence.saveNotebookIncremental=async()=>{throw new Error("forced version restore failure");};});
+  await page.locator("#worksheetVersionList button").first().click();
+  await expect(page.locator("#toast")).toContainText("forced version restore failure");
+  await expect(title).toHaveValue("Current Version");
+  await expect(page.locator("#toast")).not.toContainText("Notebook version restored");
+  expect(errors).toEqual([]);
+});
+
 test("failed notebook import write rolls back UI and never reports success",async({page})=>{
   const errors=await openApp(page);
   await goView(page,"worksheet");
