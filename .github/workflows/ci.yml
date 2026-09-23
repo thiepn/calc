@@ -48,6 +48,9 @@ jobs:
           node --check tests/notebook.js
           node --check tests/persistence.js
           node --check tests/persistence-integration.js
+          node --check playwright.config.js
+          node --check tests/release-gate.js
+          node --check tests/release-soak.spec.js
       - name: Core smoke tests
         run: node tests/smoke.js
       - name: Core kernel certification
@@ -76,3 +79,5 @@ jobs:
         run: node tests/persistence.js
       - name: Persistence browser integration certification
         run: node tests/persistence-integration.js
+      - name: Release-candidate static gate
+        run: node tests/release-gate.js
