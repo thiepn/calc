@@ -69,6 +69,7 @@ jobs:
           node --check tests/production-release-gate.js
           node --check tests/generate-release-artifacts.js
           node --check tests/release-soak.spec.js
+          node --check tests/bug-sweep.spec.js
       - name: Core smoke tests
         run: node tests/smoke.js
       - name: Core kernel certification
