@@ -18,6 +18,35 @@ test("all primary workspaces navigate without runtime errors",async({page})=>{
   expect(errors).toEqual([]);
 });
 
+test("settings read failure is non-destructive and blocks unsafe backup",async({page})=>{
+  const errors=await openApp(page);
+  await page.evaluate(async()=>{
+    const P=window.CalcPersistence,db=new P.CalcDatabase();await db.open(),repo=db.repository(P.STORES.settings);
+    await repo.put({key:"theme",value:"oled",updatedAt:1});
+    await repo.put({key:"precision",value:17,updatedAt:1});
+    await repo.put({key:"deviceId",value:"stable-device",updatedAt:1});
+  });
+  await page.addInitScript(()=>{
+    const original=IDBObjectStore.prototype.getAll;
+    IDBObjectStore.prototype.getAll=function(...args){if(this.name==="settings")throw new Error("forced settings read failure");return original.apply(this,args);};
+  });
+  await page.reload({waitUntil:"domcontentloaded"});
+  await expect(page.locator("#app")).toBeVisible();
+  const stored=await page.evaluate(async()=>{
+    const P=window.CalcPersistence,db=await new Promise((resolve,reject)=>{const r=indexedDB.open(P.DB_NAME,P.DB_VERSION);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+    const tx=db.transaction(P.STORES.settings,"readonly"),store=tx.objectStore(P.STORES.settings);
+    const get=key=>new Promise((resolve,reject)=>{const r=store.get(key);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+    const values=await Promise.all(["theme","precision","deviceId"].map(get));db.close();return Object.fromEntries(values.map(x=>[x.key,x.value]));
+  });
+  expect(stored).toEqual({theme:"oled",precision:17,deviceId:"stable-device"});
+  let downloads=0;page.on("download",()=>downloads++);
+  await page.locator('[data-view="settings"]').first().click();
+  await page.locator("#fullBackupBtn").click();
+  await expect(page.locator("#toast")).toContainText("settings could not be loaded safely");
+  expect(downloads).toBe(0);
+  expect(errors).toEqual([]);
+});
+
 test("blocked localStorage does not prevent startup",async({page})=>{
   await page.addInitScript(()=>{
     Object.defineProperty(window,"localStorage",{configurable:true,get(){throw new DOMException("Blocked","SecurityError");}});
@@ -220,6 +249,27 @@ test("failed custom-tool delete leaves persisted and runtime tool intact",async(
     return {runtime:!!window.CalcTools.REGISTRY.get("custom."+id),stored:!!await db.repository(P.STORES.customTools).get(id)};
   },seeded);
   expect(state.runtime).toBeTruthy();expect(state.stored).toBeTruthy();
+  expect(errors).toEqual([]);
+});
+
+test("failed custom-tool refresh keeps last known-good runtime",async({page})=>{
+  const errors=await openApp(page);
+  const id=await page.evaluate(async()=>{
+    const CT=window.CalcCustomTools,P=window.CalcPersistence;
+    let draft=CT.newFormulaDraft();draft.name="Refresh Failure Guard";const active=CT.activate(draft).manifest;
+    const db=new P.CalcDatabase();await db.open();await db.repository(P.STORES.customTools).put(active);return active.id;
+  });
+  await page.reload({waitUntil:"domcontentloaded"});
+  await expect.poll(()=>page.evaluate(id=>!!window.CalcTools.REGISTRY.get("custom."+id),id),{timeout:5000}).toBeTruthy();
+  await page.evaluate(id=>{
+    const P=window.CalcPersistence,original=P.Repository.prototype.all;
+    P.Repository.prototype.all=function(){if(this.store===P.STORES.customTools)return Promise.reject(new Error("forced custom read failure"));return original.call(this);};
+    const channel=new BroadcastChannel("calc-persistence-v1");
+    channel.postMessage({schema:"calc.broadcast/v1",sender:"bug-sweep-read-failure",entityType:P.STORES.customTools,entityId:id,revision:999,action:"put"});
+    setTimeout(()=>channel.close(),100);
+  },id);
+  await expect(page.locator("#toast")).toContainText("Could not refresh custom tools");
+  expect(await page.evaluate(id=>!!window.CalcTools.REGISTRY.get("custom."+id),id)).toBeTruthy();
   expect(errors).toEqual([]);
 });
 

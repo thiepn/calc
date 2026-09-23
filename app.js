@@ -95,16 +95,19 @@ function publishPersistenceChange(store,value,action){
   var key=entityKeyForStore(store,value);if(!key)return;
   persistenceCoordinator.publish({entityType:store,entityId:String(key),revision:Number(value&&value.revision)||Number(value&&value.updatedAt)||Number(value&&value.time)||Date.now(),action:action||"put"});
 }
-function persistSetting(key,value){return dbPut(P.STORES.settings,{key:key,value:value,updatedAt:Date.now()}).catch(function(){});}
+function persistSettingStrict(key,value){return dbPut(P.STORES.settings,{key:key,value:value,updatedAt:Date.now()});}
+function persistSetting(key,value){return persistSettingStrict(key,value).catch(function(){});}
 async function loadAppSettings(){
-  var items=[];try{items=await persistenceDb.repository(P.STORES.settings).all();}catch(e){}
+  var items;
+  try{items=await persistenceDb.repository(P.STORES.settings).all();}
+  catch(e){state.settingsReady=false;console.warn("Settings load failed; persisted settings were left untouched",e);return false;}
   var map={};items.forEach(function(x){if(x&&x.key)map[x.key]=x.value;});
   state.theme=map.theme||localGet("calc.theme")||state.theme;
   state.angle=map.angle||localGet("calc.angle")||state.angle;
   state.precision=Number(map.precision)||state.precision;
   var deviceId=map.deviceId;if(!deviceId){deviceId=uid();await persistenceDb.repository(P.STORES.settings).put({key:"deviceId",value:deviceId,updatedAt:Date.now()});}
   syncManager.deviceId=deviceId;state.settingsReady=true;localSet("calc.theme",state.theme);localSet("calc.angle",state.angle);
-  await persistSetting("theme",state.theme);await persistSetting("angle",state.angle);await persistSetting("precision",state.precision);
+  await persistSetting("theme",state.theme);await persistSetting("angle",state.angle);await persistSetting("precision",state.precision);return true;
 }
 
 function switchView(view){
@@ -906,10 +909,12 @@ async function duplicateBuiltInCustom(){
 }
 function openCustomBuilder(){populateCustomDuplicateSelect();renderCustomLibrary();if(!state.customCurrent)newCustomTool();var d=$("#customToolDialog");if(!d.open)d.showModal();}
 async function loadCustomTools(){
-  var previous=state.customLibrary.list(),items=[];try{items=await dbAll(P.STORES.customTools);}catch(e){}
+  var previous=state.customLibrary.list(),items;
+  try{items=await dbAll(P.STORES.customTools);}
+  catch(e){console.warn("Custom tools refresh failed; keeping last known-good runtime",e);toast("Could not refresh custom tools: "+errorMessage(e));return false;}
   previous.forEach(function(item){try{CT.uninstall(item,T.REGISTRY);}catch(uninstallError){console.warn("Could not uninstall stale custom tool",uninstallError);}});
   state.customLibrary=new CT.CustomToolLibrary(items);state.persistedRevisions.customTools=new Map(items.map(function(x){return [x.id,x.revision||0];}));var report=state.customLibrary.installAll(T.REGISTRY);renderToolList();renderCustomLibrary();
-  if(report.failed.length){console.warn("Custom tools not installed",report.failed);toast(report.failed.length+" custom tool"+(report.failed.length===1?"":"s")+" need validation");}
+  if(report.failed.length){console.warn("Custom tools not installed",report.failed);toast(report.failed.length+" custom tool"+(report.failed.length===1?"":"s")+" need validation");}return true;
 }
 
 let worksheetSaveTimer=null,worksheetEvalTimer=null,worksheetCheckpointAt=0,worksheetTitleEditCheckpointed=false;
@@ -1126,7 +1131,8 @@ function currentClientSettings(){return {theme:state.theme,angle:state.angle,pre
 async function flushPendingPersistence(){
   clearTimeout(worksheetSaveTimer);clearTimeout(worksheetEvalTimer);
   if(state.activeWorksheet){var saved=await saveWorksheet(state.activeWorksheet,false);if(!saved)throw new P.PersistenceError("FLUSH_FAILED","Current notebook could not be persisted; backup/update was cancelled to avoid stale data");}
-  await persistSetting("theme",state.theme);await persistSetting("angle",state.angle);await persistSetting("precision",state.precision);await persistSetting("deviceId",syncManager.deviceId);
+  if(!state.settingsReady)throw new P.PersistenceError("FLUSH_FAILED","Persisted settings could not be loaded safely; backup/update was cancelled to avoid overwriting unknown settings");
+  await persistSettingStrict("theme",state.theme);await persistSettingStrict("angle",state.angle);await persistSettingStrict("precision",state.precision);await persistSettingStrict("deviceId",syncManager.deviceId);
 }
 async function createBackupArtifact(){
   await flushPendingPersistence();
