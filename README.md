@@ -2,9 +2,9 @@
 
 A local-first universal calculator PWA and mathematical workstation.
 
-**Current stable release: v1.0.1** · IndexedDB schema v5 · production channel.
+**Current stable release: v2.0.0** · IndexedDB schema v5 · production channel.
 
-v1.0.1 is the post-v1.0 bug-fix baseline, focused on persistence truthfulness, cross-tab conflict safety, mobile layout recovery, import/render hardening, and expanded cross-browser regression coverage.
+v2.0.0 begins Calc's University Mathematics Workstation line with Phase U1: a conservative advanced CAS layer for assumptions, parameterized solving, stronger exact systems/inequalities, and verified symbolic integration.
 
 ## Current implementation
 
@@ -12,7 +12,7 @@ Calc currently includes:
 
 - exact arbitrary-size Integer/Rational arithmetic;
 - finite Real and exact-capable Complex scalars;
-- symbolic algebra, equation solving, calculus and numerical methods;
+- symbolic algebra, advanced CAS/parameter solving, calculus and numerical methods;
 - first-class physical quantities, units, constants and engineering relations;
 - canonical Matrix/Vector/subspace objects and certified numerical decompositions;
 - typed Dataset/probability/inference/regression systems;
@@ -23,6 +23,26 @@ Calc currently includes:
 - offline/installable PWA support.
 
 Calc deliberately distinguishes exact from approximate, unsupported from impossible, physical dimension from semantic quantity kind, statistical missingness from zero, and rendering from mathematical conclusions.
+
+## Advanced CAS — v2.0 / U1
+
+The Calculate input and Worksheet Math blocks share the same U1 CAS router.
+
+Examples:
+
+```text
+assume(x>0; simplify(sqrt(x^2)))
+solve(a*x+b=0, x)
+solve(sin(2*x)=0, x)
+system(x+y=3; x*y=2)
+psystem(x,y; a*x+y=1; x+a*y=2)
+inequality((x+1)/(x-2)>=0, x)
+integrate(x*exp(x), x)
+integrate(1/(x^2+1), x)
+cashelp()
+```
+
+U1 is intentionally certified rather than universal: unsupported symbolic forms return explicit errors instead of guessed algebra. Exact assumptions, solver families, integration rules, and limitations are documented in `docs/math/ADVANCED_CAS_SEMANTICS.md`.
 
 ## Tools V2
 
