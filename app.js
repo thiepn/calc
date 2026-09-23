@@ -41,7 +41,7 @@ const state={
   env:{},lastResult:null,theme:localGet("calc.theme")||"system",settingsReady:false,
   installPrompt:null,history:[],worksheets:[],activeWorksheet:null,
   graph:{session:null,drag:null,pinch:null,pointers:new Map(),geometries:[],worker:null},
-  selectedTool:"percentage-of",toolSearch:"",customLibrary:new CT.CustomToolLibrary(),customCurrent:null,customValidationTimer:null,dataset:null,statisticsWorker:null,dataRevision:0,
+  selectedTool:"percentage-of",toolSearch:"",customLibrary:new CT.CustomToolLibrary(),customCurrent:null,customValidationTimer:null,customToolsRefreshPending:false,dataset:null,statisticsWorker:null,dataRevision:0,
   restoreRaw:null,restoreBackup:null,restorePlan:null,swRegistration:null,updateWaiting:null,reloadingForUpdate:false,persistedRevisions:{worksheets:new Map(),customTools:new Map()},remoteDeletedCustomIds:new Set()
 };
 
@@ -1323,7 +1323,7 @@ async function handleCrossTabMessage(message){
         var dialog=$("#customToolDialog");if(dialog&&dialog.open&&state.customCurrent&&state.customCurrent.id===message.entityId)toast("This custom tool was deleted in another tab. Saving your local editor will create a Draft conflict copy.");
         return;
       }
-      var dialog2=$("#customToolDialog");if(dialog2&&dialog2.open){toast("Custom tools changed in another tab; close/reopen builder to refresh");}
+      var dialog2=$("#customToolDialog");if(dialog2&&dialog2.open){state.customToolsRefreshPending=true;toast("Custom tools changed in another tab; close the builder to refresh");}
       else await loadCustomTools();return;
     }
     if(message.entityType===P.STORES.history&&state.view==="history"){state.history=(await dbAll(P.STORES.history)).sort(function(a,b){return b.time-a.time;});renderHistory();return;}
@@ -1492,6 +1492,7 @@ function bindEvents(){
   $("#meanCiBtn").onclick=function(){renderInference("ci");};$("#oneSampleTBtn").onclick=function(){renderInference("test");};
   $("#distributionType").onchange=renderDistributionParams;$("#distributionEvalBtn").onclick=function(){renderDistribution("eval");};$("#distributionQuantileBtn").onclick=function(){renderDistribution("quantile");};
   $("#customToolBuilderBtn").onclick=openCustomBuilder;$("#customCloseBtn").onclick=function(){$("#customToolDialog").close();};
+  $("#customToolDialog").addEventListener("close",function(){if(!state.customToolsRefreshPending)return;state.customToolsRefreshPending=false;loadCustomTools().catch(function(e){toast(errorMessage(e));});});
   $("#customNewBtn").onclick=newCustomTool;$("#customAddVariableBtn").onclick=function(){addCustomVariableRow();scheduleCustomValidation();};$("#customAddTestBtn").onclick=function(){addCustomTestRow();scheduleCustomValidation();};
   $("#customValidateBtn").onclick=function(){validateCustomBuilder(true);};$("#customSaveDraftBtn").onclick=function(){saveCustomDraft(true).catch(function(e){toast(errorMessage(e));});};$("#customActivateBtn").onclick=activateCustomTool;$("#customArchiveBtn").onclick=archiveCustomTool;$("#customExportBtn").onclick=exportCustomTool;$("#customDeleteBtn").onclick=deleteCustomTool;
   $("#customDuplicateBtn").onclick=duplicateBuiltInCustom;$("#customImportBtn").onclick=function(){$("#customImportFile").click();};$("#customImportFile").onchange=function(){if(this.files&&this.files[0])importCustomFile(this.files[0]);this.value="";};
