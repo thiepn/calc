@@ -49,8 +49,8 @@ class MemoryDb{
       const oldClear=os.clear,oldPut=os.put,oldGet=os.get,oldGetAll=os.getAll,oldDelete=os.delete;
       os.clear=function(){const req=oldClear();queueMicrotask(()=>{if(req.onsuccess)req.onsuccess({target:{result:undefined}});});this._pending=(this._pending||[]).concat([req]);return req;};
       os.put=function(value){const req=oldPut(value);queueMicrotask(()=>{if(req.onsuccess)req.onsuccess({target:{result:true}});});this._pending=(this._pending||[]).concat([req]);return req;};
-      os.get=function(key){const req=oldGet(key);queueMicrotask(()=>{const v=memoryDb.data[req.store].get(key),result=v===undefined?undefined:JSON.parse(JSON.stringify(v));if(req.onsuccess)req.onsuccess({target:{result:result}});});return req;};
-      os.getAll=function(){const req=oldGetAll();queueMicrotask(()=>{const result=Array.from(memoryDb.data[req.store].values()).map(v=>JSON.parse(JSON.stringify(v)));if(req.onsuccess)req.onsuccess({target:{result:result}});});return req;};
+      os.get=function(key){const req=oldGet(key);queueMicrotask(()=>{const v=memoryDb.data[req.store].get(key);req.result=v===undefined?undefined:JSON.parse(JSON.stringify(v));if(req.onsuccess)req.onsuccess({target:req});});return req;};
+      os.getAll=function(){const req=oldGetAll();queueMicrotask(()=>{req.result=Array.from(memoryDb.data[req.store].values()).map(v=>JSON.parse(JSON.stringify(v)));if(req.onsuccess)req.onsuccess({target:req});});return req;};
       os.delete=function(key){const req=oldDelete(key);queueMicrotask(()=>{if(req.onsuccess)req.onsuccess({target:{result:undefined}});});this._pending=(this._pending||[]).concat([req]);return req;};
     });
     if(this.failTransactions)throw Object.assign(new Error("simulated atomic failure"),{code:"SIMULATED"});
