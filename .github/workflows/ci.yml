@@ -50,6 +50,8 @@ jobs:
           node --check tests/persistence-integration.js
           node --check playwright.config.js
           node --check tests/release-gate.js
+          node --check tests/production-release-gate.js
+          node --check tests/generate-release-artifacts.js
           node --check tests/release-soak.spec.js
       - name: Core smoke tests
         run: node tests/smoke.js
@@ -81,3 +83,5 @@ jobs:
         run: node tests/persistence-integration.js
       - name: Release-candidate static gate
         run: node tests/release-gate.js
+      - name: Production v1.0.0 release gate
+        run: node tests/production-release-gate.js
