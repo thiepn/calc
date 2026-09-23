@@ -197,6 +197,7 @@ async function validateBackup(input){
   }
   if(!backup||typeof backup!=="object"||backup.schema!==BACKUP_SCHEMA)throw new BackupError("Unsupported backup schema");
   if(!backup.manifest||!backup.data)throw new BackupError("Backup manifest/data is missing");
+  if(backup.app&&Number(backup.app.dbVersion)>DB_VERSION)throw new BackupError("Backup was created by a newer Calc database schema",{backupDbVersion:Number(backup.app.dbVersion),supportedDbVersion:DB_VERSION});
   const allowed=new Set(DATA_STORES);for(const s of backup.manifest.stores||[])if(!allowed.has(s))throw new BackupError("Unknown backup store '"+s+"'");
   for(const s of DATA_STORES){if(!Array.isArray(backup.data[s]))backup.data[s]=[];validateStoreItems(s,backup.data[s]);}
   if(countBackupItems(backup.data)>MAX_BACKUP_ITEMS)throw new BackupError("Backup exceeds total item limit");
