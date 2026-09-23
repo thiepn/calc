@@ -139,12 +139,15 @@ test("interrupted transaction and corrupt chunk are detected without silent over
 test("offline PWA reload remains functional",async({page,context},testInfo)=>{
   test.skip(!["chromium","mobile-chromium"].includes(testInfo.project.name),"PWA offline certification is gated on Chromium install semantics");
   await openApp(page);
-  const sw=await page.evaluate(async()=>{
-    await navigator.serviceWorker.ready;
-    if(!navigator.serviceWorker.controller){location.reload();return {reload:true};}
-    return {reload:false};
-  });
-  if(sw.reload){await page.waitForLoadState("domcontentloaded");await page.evaluate(()=>navigator.serviceWorker.ready);}
+  await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
+  let controlled=await page.evaluate(()=>!!navigator.serviceWorker.controller);
+  if(!controlled){
+    await page.reload({waitUntil:"domcontentloaded"});
+    await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
+    await expect.poll(()=>page.evaluate(()=>!!navigator.serviceWorker.controller),{timeout:10000}).toBe(true);
+    controlled=true;
+  }
+  expect(controlled).toBeTruthy();
   const version=await page.evaluate(async()=>{
     const controller=navigator.serviceWorker.controller;if(!controller)throw new Error("No controlling service worker");
     return new Promise((resolve,reject)=>{
