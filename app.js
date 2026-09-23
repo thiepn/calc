@@ -11,6 +11,8 @@ const T=window.CalcTools;
 const CT=window.CalcCustomTools;
 const NB=window.CalcNotebook;
 const P=window.CalcPersistence;
+const APP_VERSION="1.0.0";
+window.CalcAppVersion=APP_VERSION;
 const $=function(s,r){return (r||document).querySelector(s);};
 const $$=function(s,r){return Array.from((r||document).querySelectorAll(s));};
 const uid=function(){return crypto.randomUUID?crypto.randomUUID():"id-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);};
@@ -1101,9 +1103,9 @@ async function createBackupArtifact(){
   await flushPendingPersistence();
   var password=$("#backupPassword")?$("#backupPassword").value:"",suffix=".calcbackup.json",blob,backup=null,payload=null;
   if(password){
-    backup=await P.buildBackup({db:persistenceDb,appVersion:"phase-12",clientSettings:currentClientSettings()});payload=await P.encryptBackup(backup,password);suffix=".calcbackup.enc.json";blob=P.buildBackupBlob(payload);
+    backup=await P.buildBackup({db:persistenceDb,appVersion:APP_VERSION,clientSettings:currentClientSettings()});payload=await P.encryptBackup(backup,password);suffix=".calcbackup.enc.json";blob=P.buildBackupBlob(payload);
   }else{
-    var streamed=await P.buildBackupBlobFromDb({db:persistenceDb,appVersion:"phase-12",clientSettings:currentClientSettings()});blob=streamed.blob;
+    var streamed=await P.buildBackupBlobFromDb({db:persistenceDb,appVersion:APP_VERSION,clientSettings:currentClientSettings()});blob=streamed.blob;
   }
   var stamp=new Date().toISOString().replace(/[:.]/g,"-"),name="calc-"+stamp+suffix;
   return {backup:backup,payload:payload,name:name,blob:blob,mime:"application/json",encrypted:!!password};
