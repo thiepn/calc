@@ -24,11 +24,29 @@ test("baseline shell and calculation remain stable",async({page},testInfo)=>{
   await expect(page.locator("#exactResult")).toHaveText("4");
   await expect(page.locator('[data-view="settings"]').first()).toBeVisible();
   const state=await page.evaluate(()=>({
+    appVersion:window.CalcAppVersion,
     dbVersion:window.CalcPersistence.DB_VERSION,
     widthOk:document.documentElement.scrollWidth<=window.innerWidth+3
   }));
+  expect(state.appVersion).toBe("1.0.0");
   expect(state.dbVersion).toBe(5);
   if(testInfo.project.name==="mobile-chromium")expect(state.widthOk).toBeTruthy();
+  expect(errors).toEqual([]);
+});
+
+test("clean-device v1.0.0 install initializes healthy local-first state",async({page})=>{
+  const errors=await openApp(page);
+  const state=await page.evaluate(async()=>{
+    const P=window.CalcPersistence,db=new P.CalcDatabase();const native=await db.open();
+    const preflight=await P.updatePreflight(db),history=await db.repository(P.STORES.history).count(),notebooks=await P.loadNotebooks(db),settings=await db.repository(P.STORES.settings).all();
+    return {appVersion:window.CalcAppVersion,dbVersion:native.version,history,notebooks:notebooks.length,settings:settings.length,preflightOk:preflight.ok};
+  });
+  expect(state.appVersion).toBe("1.0.0");
+  expect(state.dbVersion).toBe(5);
+  expect(state.history).toBe(0);
+  expect(state.notebooks).toBeGreaterThanOrEqual(1);
+  expect(state.settings).toBeGreaterThanOrEqual(4);
+  expect(state.preflightOk).toBeTruthy();
   expect(errors).toEqual([]);
 });
 
@@ -66,7 +84,8 @@ test("v4 → v5 migration preserves realistic existing data",async({page})=>{
   const migrated=await page.evaluate(async()=>{
     const P=window.CalcPersistence,db=new P.CalcDatabase();const native=await db.open(),stores=Array.from(native.objectStoreNames);
     const history=await db.repository(P.STORES.history).count(),notebooks=await P.loadNotebooks(db),settings=await db.repository(P.STORES.settings).all(),tools=await db.repository(P.STORES.customTools).all(),tombs=await db.repository(P.STORES.tombstones).all();
-    return {version:native.version,stores,history,notebooks:notebooks.length,sourceLength:notebooks[0].blocks[0].source.length,theme:settings.find(x=>x.key==="theme")?.value,tools:tools.length,tombs:tombs.length};
+    const postUpgradeBackup=await P.buildBackup({db,appVersion:window.CalcAppVersion}),checked=await P.validateBackup(postUpgradeBackup);
+    return {version:native.version,stores,history,notebooks:notebooks.length,sourceLength:notebooks[0].blocks[0].source.length,theme:settings.find(x=>x.key==="theme")?.value,tools:tools.length,tombs:tombs.length,backupVersion:checked.backup.app.appVersion,backupDbVersion:checked.backup.app.dbVersion};
   });
   expect(migrated.version).toBe(5);
   expect(migrated.stores).toContain("chunks");
@@ -76,7 +95,40 @@ test("v4 → v5 migration preserves realistic existing data",async({page})=>{
   expect(migrated.theme).toBe("graphite");
   expect(migrated.tools).toBe(1);
   expect(migrated.tombs).toBe(1);
+  expect(migrated.backupVersion).toBe("1.0.0");
+  expect(migrated.backupDbVersion).toBe(5);
   expect(errors).toEqual([]);
+});
+
+test("pre-upgrade v4 backup restores into production v1.0.0",async({page})=>{
+  await openApp(page);
+  const result=await page.evaluate(async()=>{
+    const P=window.CalcPersistence,data={};
+    for(const s of P.DATA_STORES)data[s]=[];
+    data[P.STORES.history]=[{id:"legacy-h1",time:1700000000000,expression:"40+2",result:"42",revision:1}];
+    data[P.STORES.notebooks]=[{id:"legacy-backup-nb",revision:4,title:"Pre-upgrade notebook",updatedAt:44,blocks:[],versions:[]}];
+    data[P.STORES.settings]=[{key:"precision",value:15,updatedAt:4},{key:"theme",value:"graphite",updatedAt:4}];
+    data[P.STORES.customTools]=[{id:"legacy-backup-tool",revision:2,name:"Legacy backup tool",status:"archived",updatedAt:4}];
+    data[P.STORES.tombstones]=[{id:"worksheets:old-deleted",entityType:P.STORES.notebooks,entityId:"old-deleted",revision:2,deletedAt:4,recoverable:false,payload:null}];
+    const storeHashes={},counts={};let totalItems=0;
+    for(const s of P.DATA_STORES){storeHashes[s]=await P.hashValue(data[s]);counts[s]=data[s].length;totalItems+=data[s].length;}
+    const payloadHash=await P.hashValue({storeHashes,counts,totalItems});
+    const legacy={schema:P.BACKUP_SCHEMA,createdAt:"2026-09-22T00:00:00.000Z",app:{name:"Calc",dbVersion:4,appVersion:"0.9.0"},manifest:{stores:P.DATA_STORES.slice(),counts,storeHashes,payloadHash,hashMode:"store-manifest/v2",totalItems},data};
+    const checked=await P.validateBackup(legacy),name="calc-v1-legacy-backup-"+Date.now(),db=new P.CalcDatabase({name,version:P.DB_VERSION});
+    try{
+      await db.open();const plan=await P.planRestore(db,checked.backup,{mode:"replace"});await P.applyRestore(db,plan);
+      const restored=await db.allData(),post=await P.buildBackup({db,appVersion:window.CalcAppVersion}),postChecked=await P.validateBackup(post),preflight=await P.updatePreflight(db);
+      return {history:restored[P.STORES.history].length,notebooks:restored[P.STORES.notebooks].length,precision:restored[P.STORES.settings].find(x=>x.key==="precision")?.value,tools:restored[P.STORES.customTools].length,tombs:restored[P.STORES.tombstones].length,postVersion:postChecked.backup.app.appVersion,postDbVersion:postChecked.backup.app.dbVersion,preflightOk:preflight.ok};
+    }finally{await db.close().catch(()=>{});await new Promise(resolve=>{const r=indexedDB.deleteDatabase(name);r.onsuccess=r.onerror=r.onblocked=()=>resolve();});}
+  });
+  expect(result.history).toBe(1);
+  expect(result.notebooks).toBe(1);
+  expect(result.precision).toBe(15);
+  expect(result.tools).toBe(1);
+  expect(result.tombs).toBe(1);
+  expect(result.postVersion).toBe("1.0.0");
+  expect(result.postDbVersion).toBe(5);
+  expect(result.preflightOk).toBeTruthy();
 });
 
 test("large notebook persistence, streamed backup, restore matrix, and Trash survives notebook-only restore",async({page})=>{
@@ -91,7 +143,7 @@ test("large notebook persistence, streamed backup, restore matrix, and Trash sur
       const t0=performance.now(),first=await P.saveNotebookIncremental(db,notebook,null,{externalizeBytes:4096,chunkBytes:32768}),saveMs=performance.now()-t0;
       const hydrated=await P.loadNotebook(db,"large");
       const second=await P.saveNotebookIncremental(db,hydrated,1,{externalizeBytes:4096,chunkBytes:32768});
-      const backupArtifact=await P.buildBackupBlobFromDb({db,appVersion:"rc-soak"}),backupText=await backupArtifact.blob.text(),checked=await P.openBackup(backupText);
+      const backupArtifact=await P.buildBackupBlobFromDb({db,appVersion:window.CalcAppVersion}),backupText=await backupArtifact.blob.text(),checked=await P.openBackup(backupText);
       await P.deleteNotebookWithTombstone(db,"large",{revision:2,deviceId:"rc"});
       const trashBefore=await P.listTrash(db),plan=await P.planRestore(db,checked.backup,{mode:"replace",stores:[P.STORES.notebooks]});
       await P.applyRestore(db,plan);
@@ -152,11 +204,12 @@ test("offline PWA reload remains functional",async({page,context},testInfo)=>{
     const controller=navigator.serviceWorker.controller;if(!controller)throw new Error("No controlling service worker");
     return new Promise((resolve,reject)=>{
       const timer=setTimeout(()=>reject(new Error("SW version timeout")),5000);
-      navigator.serviceWorker.addEventListener("message",function handler(e){if(e.data&&e.data.type==="SW_VERSION"){clearTimeout(timer);navigator.serviceWorker.removeEventListener("message",handler);resolve(e.data.version);}});
+      navigator.serviceWorker.addEventListener("message",function handler(e){if(e.data&&e.data.type==="SW_VERSION"){clearTimeout(timer);navigator.serviceWorker.removeEventListener("message",handler);resolve(e.data);}});
       controller.postMessage({type:"GET_VERSION"});
     });
   });
-  expect(version).toBe("calc-shell-v22-rc1");
+  expect(version.version).toBe("calc-shell-v1.0.0");
+  expect(version.appVersion).toBe("1.0.0");
   await context.setOffline(true);
   try{
     await page.reload({waitUntil:"domcontentloaded"});
@@ -174,7 +227,7 @@ test("performance envelope remains bounded for repeated large persistence",async
       await db.open();const source="p".repeat(85000),blocks=Array.from({length:24},(_,i)=>({id:"p"+i,source:source+i,result:{serialized:null}})),doc={id:"perf",title:"Perf",revision:1,updatedAt:1,blocks,versions:[]};
       const heapBefore=performance.memory&&performance.memory.usedJSHeapSize||null,t0=performance.now();const first=await P.saveNotebookIncremental(db,doc,null,{externalizeBytes:4096,chunkBytes:32768}),saveMs=performance.now()-t0;
       const t1=performance.now();for(let i=0;i<5;i++)await P.loadNotebook(db,"perf");const loadMs=performance.now()-t1;
-      const t2=performance.now();const artifact=await P.buildBackupBlobFromDb({db,appVersion:"rc-perf"});const backupMs=performance.now()-t2;
+      const t2=performance.now();const artifact=await P.buildBackupBlobFromDb({db,appVersion:window.CalcAppVersion});const backupMs=performance.now()-t2;
       const heapAfter=performance.memory&&performance.memory.usedJSHeapSize||null;
       return {saveMs,loadMs,backupMs,bytes:artifact.blob.size,chunks:first.chunkRecords,heapGrowth:heapBefore!==null&&heapAfter!==null?heapAfter-heapBefore:null};
     }finally{await db.close().catch(()=>{});await new Promise(resolve=>{const r=indexedDB.deleteDatabase(name);r.onsuccess=r.onerror=r.onblocked=()=>resolve();});}
