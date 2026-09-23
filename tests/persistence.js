@@ -30,14 +30,16 @@ class MemoryDb{
     stores.forEach(s=>{
       wrappers[s]={
         clear:()=>({onsuccess:null,onerror:null,_op:"clear",store:s}),
-        put:(value)=>({onsuccess:null,onerror:null,_op:"put",store:s,value:value})
+        put:(value)=>({onsuccess:null,onerror:null,_op:"put",store:s,value:value}),
+        delete:(key)=>({onsuccess:null,onerror:null,_op:"delete",store:s,key:key})
       };
     });
     // Persistence.applyRestore expects IDB request callbacks. Simulate async requests.
     Object.values(wrappers).forEach(os=>{
-      const oldClear=os.clear,oldPut=os.put;
+      const oldClear=os.clear,oldPut=os.put,oldDelete=os.delete;
       os.clear=function(){const req=oldClear();queueMicrotask(()=>{if(req.onsuccess)req.onsuccess({target:{result:undefined}});});this._pending=(this._pending||[]).concat([req]);return req;};
       os.put=function(value){const req=oldPut(value);queueMicrotask(()=>{if(req.onsuccess)req.onsuccess({target:{result:true}});});this._pending=(this._pending||[]).concat([req]);return req;};
+      os.delete=function(key){const req=oldDelete(key);queueMicrotask(()=>{if(req.onsuccess)req.onsuccess({target:{result:undefined}});});this._pending=(this._pending||[]).concat([req]);return req;};
     });
     if(this.failTransactions)throw Object.assign(new Error("simulated atomic failure"),{code:"SIMULATED"});
     // Run fn once to preserve orchestration, then apply from request descriptors after resolution.
@@ -47,6 +49,7 @@ class MemoryDb{
       for(const op of ops){
         if(op._op==="clear")this.data[s].clear();
         if(op._op==="put"){const key=s===P.STORES.settings||s===P.STORES.meta?op.value.key:op.value.id;this.data[s].set(key,JSON.parse(JSON.stringify(op.value)));}
+        if(op._op==="delete")this.data[s].delete(op.key);
       }
     }
     return result;
@@ -66,7 +69,8 @@ class MemoryDb{
 
   eq(JSON.stringify(P.migrationPlan(0,3)),JSON.stringify(["create-core-stores","create-custom-tools","create-meta-journal"]),"full migration plan");
   eq(JSON.stringify(P.migrationPlan(2,3)),JSON.stringify(["create-meta-journal"]),"v2 to v3 migration plan");
-  eq(JSON.stringify(P.migrationPlan(3,3)),JSON.stringify([]),"no-op migration");
+  eq(JSON.stringify(P.migrationPlan(3,4)),JSON.stringify(["create-tombstones"]),"v3 to v4 migration plan");
+  eq(JSON.stringify(P.migrationPlan(4,4)),JSON.stringify([]),"no-op migration");
 
   const db=new MemoryDb({
     [P.STORES.history]:[{id:"h1",time:10,expression:"1+1",result:"2"}],
@@ -114,6 +118,11 @@ class MemoryDb{
 
   const replacePlan=await P.planRestore(db,incoming,{mode:"replace"});
   eq(replacePlan.summary.result[P.STORES.notebooks],2,"replace result count");
+
+  const selective=await P.planRestore(db,incoming,{mode:"replace",stores:[P.STORES.notebooks]});
+  eq(JSON.stringify(selective.selectedStores),JSON.stringify([P.STORES.notebooks]),"selective restore store list");
+  eq(selective.data[P.STORES.settings][0].value,12,"unselected settings remain local");
+  eq(selective.data[P.STORES.notebooks].length,2,"selected notebooks replaced");
 
   const staleDb=new MemoryDb({
     [P.STORES.history]:[{id:"h",time:1}],
@@ -165,6 +174,21 @@ class MemoryDb{
   eq(afterFail[P.STORES.history][0].id,"keep","failed atomic restore preserves original history");
   const recoveryBad=await P.recoveryReport(failingDb);
   assert(recoveryBad.needsAttention&&recoveryBad.failed.length===1,"failed restore journal reported");
+
+  const tombDb=new MemoryDb({
+    [P.STORES.history]:[],
+    [P.STORES.notebooks]:[{id:"dead",revision:4,title:"Delete me"}],
+    [P.STORES.settings]:[],
+    [P.STORES.customTools]:[],
+    [P.STORES.tombstones]:[]
+  });
+  const deleted=await P.deleteWithTombstone(tombDb,P.STORES.notebooks,"dead",{deviceId:"dev1"});
+  eq(deleted.revision,5,"tombstone revision increments");
+  eq((await tombDb.repository(P.STORES.notebooks).all()).length,0,"entity removed");
+  const tombs=await tombDb.repository(P.STORES.tombstones).all();
+  eq(tombs.length,1,"tombstone recorded");
+  eq(tombs[0].entityId,"dead","tombstone entity ID");
+  eq(tombs[0].deviceId,"dev1","tombstone device ID");
 
   const integrity=await P.integrityReport(db);
   assert(integrity.ok,"integrity report clean");
