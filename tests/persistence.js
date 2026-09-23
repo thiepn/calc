@@ -7,6 +7,12 @@ const P=global.CalcPersistence;
 function assert(c,m){if(!c)throw new Error(m||"Assertion failed");}
 function eq(a,b,m){if(a!==b)throw new Error((m||"Mismatch")+": expected "+b+", got "+a);}
 async function throwsCode(fn,code,m){let ok=false;try{await fn();}catch(e){ok=true;if(e.code!==code)throw new Error((m||"Wrong error")+": expected "+code+", got "+e.code+" / "+e.message);}if(!ok)throw new Error((m||"Expected error")+": "+code);}
+async function rehashBackupBundle(bundle){
+  bundle.manifest.storeHashes={};const counts={};let totalItems=0;
+  for(const s of P.DATA_STORES){bundle.manifest.storeHashes[s]=await P.hashValue(bundle.data[s]);counts[s]=bundle.data[s].length;totalItems+=bundle.data[s].length;}
+  bundle.manifest.counts=counts;bundle.manifest.totalItems=totalItems;bundle.manifest.hashMode="store-manifest/v2";
+  bundle.manifest.payloadHash=await P.hashValue({storeHashes:bundle.manifest.storeHashes,counts:counts,totalItems:totalItems});
+}
 
 class MemoryRepo{
   constructor(db,store){this.db=db;this.store=store;}
@@ -70,7 +76,8 @@ class MemoryDb{
   eq(JSON.stringify(P.migrationPlan(0,3)),JSON.stringify(["create-core-stores","create-custom-tools","create-meta-journal"]),"full migration plan");
   eq(JSON.stringify(P.migrationPlan(2,3)),JSON.stringify(["create-meta-journal"]),"v2 to v3 migration plan");
   eq(JSON.stringify(P.migrationPlan(3,4)),JSON.stringify(["create-tombstones"]),"v3 to v4 migration plan");
-  eq(JSON.stringify(P.migrationPlan(4,4)),JSON.stringify([]),"no-op migration");
+  eq(JSON.stringify(P.migrationPlan(4,5)),JSON.stringify(["create-payload-chunks"]),"v4 to v5 migration plan");
+  eq(JSON.stringify(P.migrationPlan(5,5)),JSON.stringify([]),"no-op migration");
 
   const db=new MemoryDb({
     [P.STORES.history]:[{id:"h1",time:10,expression:"1+1",result:"2"}],
@@ -109,9 +116,7 @@ class MemoryDb{
   incoming.data[P.STORES.notebooks][0]={id:"n1",revision:3,title:"Newer",updatedAt:30};
   incoming.data[P.STORES.notebooks].push({id:"n2",revision:1,title:"Imported",updatedAt:25});
   // Rehash modified bundle.
-  incoming.manifest.storeHashes={};
-  for(const s of P.DATA_STORES)incoming.manifest.storeHashes[s]=await P.hashValue(incoming.data[s]);
-  incoming.manifest.payloadHash=await P.hashValue({stores:incoming.data,storeHashes:incoming.manifest.storeHashes});
+  await rehashBackupBundle(incoming);
   const mergePlan=await P.planRestore(db,incoming,{mode:"merge",conflictPolicy:"newer"});
   eq(mergePlan.data[P.STORES.notebooks].length,2,"merge result count");
   eq(mergePlan.data[P.STORES.notebooks].find(x=>x.id==="n1").title,"Newer","newer revision wins");
@@ -137,9 +142,7 @@ class MemoryDb{
   // Equal revisions with different content can be conflict-copied.
   const conflictIncoming=JSON.parse(JSON.stringify(backup));
   conflictIncoming.data[P.STORES.notebooks][0]={id:"n1",revision:2,title:"Different",updatedAt:20};
-  conflictIncoming.manifest.storeHashes={};
-  for(const s of P.DATA_STORES)conflictIncoming.manifest.storeHashes[s]=await P.hashValue(conflictIncoming.data[s]);
-  conflictIncoming.manifest.payloadHash=await P.hashValue({stores:conflictIncoming.data,storeHashes:conflictIncoming.manifest.storeHashes});
+  await rehashBackupBundle(conflictIncoming);
   const conflictPlan=await P.planRestore(db,conflictIncoming,{mode:"merge",conflictPolicy:"conflict-copy"});
   assert(conflictPlan.data[P.STORES.notebooks].length===2,"conflict copy retained");
   assert(conflictPlan.conflicts.length===1,"conflict recorded");
