@@ -4,6 +4,7 @@
 const DB_NAME="calc-db";
 const DB_VERSION=3;
 const BACKUP_SCHEMA="calc.backup/v1";
+const ENCRYPTED_BACKUP_SCHEMA="calc.backup.encrypted/v1";
 const SYNC_SCHEMA="calc.sync/v1";
 const STORES=Object.freeze({
   history:"history",
@@ -50,6 +51,27 @@ async function sha256Text(text){
   return "fnv32x2-"+h1.toString(16).padStart(8,"0")+h2.toString(16).padStart(8,"0");
 }
 async function hashValue(v){return sha256Text(stableStringify(v));}
+function randomBytes(length){
+  if(!(global.crypto&&typeof global.crypto.getRandomValues==="function"))throw new BackupError("Secure random generator is unavailable");
+  const out=new Uint8Array(length);global.crypto.getRandomValues(out);return out;
+}
+function bytesToBase64(bytes){
+  if(typeof btoa==="function"){let s="";for(const b of bytes)s+=String.fromCharCode(b);return btoa(s);}
+  if(typeof Buffer!=="undefined")return Buffer.from(bytes).toString("base64");
+  throw new BackupError("Base64 encoder unavailable");
+}
+function base64ToBytes(text){
+  if(typeof atob==="function"){const s=atob(text),out=new Uint8Array(s.length);for(let i=0;i<s.length;i++)out[i]=s.charCodeAt(i);return out;}
+  if(typeof Buffer!=="undefined")return Uint8Array.from(Buffer.from(text,"base64"));
+  throw new BackupError("Base64 decoder unavailable");
+}
+async function deriveBackupKey(password,salt,iterations){
+  if(!(global.crypto&&global.crypto.subtle))throw new BackupError("Web Crypto is unavailable; encrypted backups cannot be used");
+  password=String(password||"");if(!password)throw new BackupError("Backup password is required");
+  const material=await global.crypto.subtle.importKey("raw",utf8Bytes(password),{name:"PBKDF2"},false,["deriveKey"]);
+  return global.crypto.subtle.deriveKey({name:"PBKDF2",hash:"SHA-256",salt:salt,iterations:iterations},material,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+}
+
 function now(){return Date.now();}
 function randomId(prefix){
   if(global.crypto&&typeof global.crypto.randomUUID==="function")return (prefix||"id")+"-"+global.crypto.randomUUID();
@@ -170,6 +192,27 @@ async function validateBackup(input){
   if(backup.manifest.payloadHash&&payloadHash!==backup.manifest.payloadHash)throw new IntegrityError("Backup payload hash mismatch",{expected:backup.manifest.payloadHash,actual:payloadHash});
   return {backup:backup,storeHashes:hashes,payloadHash:payloadHash};
 }
+async function encryptBackup(backupInput,password,options){
+  options=options||{};const checked=await validateBackup(backupInput),iterations=Math.max(1000,Number(options.iterations)||250000),salt=randomBytes(16),iv=randomBytes(12),key=await deriveBackupKey(password,salt,iterations);
+  const plaintext=stableStringify(checked.backup),plaintextHash=await sha256Text(plaintext),cipher=await global.crypto.subtle.encrypt({name:"AES-GCM",iv:iv},key,utf8Bytes(plaintext));
+  return {schema:ENCRYPTED_BACKUP_SCHEMA,createdAt:new Date().toISOString(),kdf:{name:"PBKDF2",hash:"SHA-256",iterations:iterations,salt:bytesToBase64(salt)},cipher:{name:"AES-GCM",iv:bytesToBase64(iv)},plaintextHash:plaintextHash,ciphertext:bytesToBase64(new Uint8Array(cipher))};
+}
+async function decryptBackup(encrypted,password){
+  if(typeof encrypted==="string"){try{encrypted=JSON.parse(encrypted);}catch(e){throw new BackupError("Invalid encrypted backup JSON: "+e.message);}}
+  if(!encrypted||encrypted.schema!==ENCRYPTED_BACKUP_SCHEMA)throw new BackupError("Unsupported encrypted backup schema");
+  const kdf=encrypted.kdf||{},cipher=encrypted.cipher||{};if(kdf.name!=="PBKDF2"||kdf.hash!=="SHA-256"||cipher.name!=="AES-GCM")throw new BackupError("Unsupported encrypted backup algorithm");
+  try{
+    const salt=base64ToBytes(kdf.salt),iv=base64ToBytes(cipher.iv),key=await deriveBackupKey(password,salt,Number(kdf.iterations)),bytes=base64ToBytes(encrypted.ciphertext);
+    const plainBuffer=await global.crypto.subtle.decrypt({name:"AES-GCM",iv:iv},key,bytes),plaintext=new TextDecoder().decode(plainBuffer);
+    const actualHash=await sha256Text(plaintext);if(encrypted.plaintextHash&&actualHash!==encrypted.plaintextHash)throw new IntegrityError("Decrypted backup plaintext hash mismatch");
+    const checked=await validateBackup(plaintext);return checked.backup;
+  }catch(e){if(e instanceof PersistenceError)throw e;throw new BackupError("Could not decrypt backup. The password may be incorrect or the file may be damaged.");}
+}
+async function openBackup(input,password){
+  let root=input;if(typeof input==="string"){if(utf8Bytes(input).byteLength>MAX_BACKUP_BYTES*2)throw new BackupError("Backup file is too large");try{root=JSON.parse(input);}catch(e){throw new BackupError("Invalid backup JSON: "+e.message);}}
+  if(root&&root.schema===ENCRYPTED_BACKUP_SCHEMA){const decrypted=await decryptBackup(root,password);return validateBackup(decrypted);}
+  return validateBackup(root);
+}
 function revisionOf(item){return Number(item&&item.revision)||Number(item&&item.updatedAt)||Number(item&&item.time)||0;}
 function mergeStore(current,incoming,store,policy){
   policy=policy||"newer";const map=new Map(),conflicts=[];
@@ -276,10 +319,10 @@ class SyncManager{
 }
 
 global.CalcPersistence={
-  VERSION:"1.0.0-persistence",DB_NAME:DB_NAME,DB_VERSION:DB_VERSION,BACKUP_SCHEMA:BACKUP_SCHEMA,SYNC_SCHEMA:SYNC_SCHEMA,STORES:STORES,DATA_STORES:DATA_STORES,
+  VERSION:"1.0.0-persistence",DB_NAME:DB_NAME,DB_VERSION:DB_VERSION,BACKUP_SCHEMA:BACKUP_SCHEMA,ENCRYPTED_BACKUP_SCHEMA:ENCRYPTED_BACKUP_SCHEMA,SYNC_SCHEMA:SYNC_SCHEMA,STORES:STORES,DATA_STORES:DATA_STORES,
   PersistenceError:PersistenceError,BackupError:BackupError,RestoreError:RestoreError,IntegrityError:IntegrityError,MigrationError:MigrationError,
   stableStringify:stableStringify,sha256Text:sha256Text,hashValue:hashValue,migrationPlan:migrationPlan,applyUpgrade:applyUpgrade,
-  Repository:Repository,CalcDatabase:CalcDatabase,buildBackup:buildBackup,validateBackup:validateBackup,mergeStore:mergeStore,planRestore:planRestore,applyRestore:applyRestore,
+  Repository:Repository,CalcDatabase:CalcDatabase,buildBackup:buildBackup,validateBackup:validateBackup,encryptBackup:encryptBackup,decryptBackup:decryptBackup,openBackup:openBackup,mergeStore:mergeStore,planRestore:planRestore,applyRestore:applyRestore,
   integrityReport:integrityReport,storageEstimate:storageEstimate,requestPersistentStorage:requestPersistentStorage,cleanupJournal:cleanupJournal,recoveryReport:recoveryReport,
   CrossTabCoordinator:CrossTabCoordinator,SyncAdapter:SyncAdapter,DisabledSyncAdapter:DisabledSyncAdapter,SyncManager:SyncManager
 };
