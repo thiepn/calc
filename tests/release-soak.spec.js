@@ -6,6 +6,7 @@ async function openApp(page){
   await page.goto("/index.html",{waitUntil:"domcontentloaded"});
   await expect(page.locator("#app")).toBeVisible();
   await expect(page.locator("#exactResult")).not.toHaveText("Calc could not initialize");
+  await expect.poll(()=>page.evaluate(()=>typeof document.querySelector("#angleBtn")?.onclick==="function"),{timeout:12000}).toBe(true);
   return errors;
 }
 async function deleteDb(page,name){
