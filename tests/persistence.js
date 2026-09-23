@@ -115,6 +115,16 @@ class MemoryDb{
   const replacePlan=await P.planRestore(db,incoming,{mode:"replace"});
   eq(replacePlan.summary.result[P.STORES.notebooks],2,"replace result count");
 
+  const staleDb=new MemoryDb({
+    [P.STORES.history]:[{id:"h",time:1}],
+    [P.STORES.notebooks]:[{id:"n",revision:1,title:"Local"}],
+    [P.STORES.settings]:[],
+    [P.STORES.customTools]:[]
+  });
+  const stalePlan=await P.planRestore(staleDb,backup,{mode:"merge"});
+  await staleDb.repository(P.STORES.notebooks).put({id:"n",revision:2,title:"Changed after preview"});
+  await throwsCode(()=>P.applyRestore(staleDb,stalePlan),"RESTORE_STALE_PLAN","stale restore plan rejected");
+
   // Equal revisions with different content can be conflict-copied.
   const conflictIncoming=JSON.parse(JSON.stringify(backup));
   conflictIncoming.data[P.STORES.notebooks][0]={id:"n1",revision:2,title:"Different",updatedAt:20};
