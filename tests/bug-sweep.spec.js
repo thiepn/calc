@@ -39,7 +39,8 @@ test("notebook read failure does not create replacement or recovery duplicates",
   const seeded=await page.evaluate(async()=>{
     const P=window.CalcPersistence,NB=window.CalcNotebook,db=new P.CalcDatabase();await db.open();
     const doc=NB.normalizeNotebook({schema:NB.SCHEMA,id:"read-failure-seed",title:"Keep me",revision:7,updatedAt:Date.now(),blocks:[NB.newBlock("text",{source:"persisted"})],versions:[],settings:{autoRun:false}});
-    await P.saveNotebookIncremental(db,doc,null);return doc.id;
+    await P.saveNotebookIncremental(db,doc,null);
+    return {id:doc.id,count:await db.repository(P.STORES.notebooks).count()};
   });
   await page.addInitScript(()=>{
     const original=IDBObjectStore.prototype.getAll;
@@ -54,8 +55,8 @@ test("notebook read failure does not create replacement or recovery duplicates",
     const count=await new Promise((resolve,reject)=>{const r=store.count();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
     const item=await new Promise((resolve,reject)=>{const r=store.get(id);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});db.close();
     return {count,exists:!!item};
-  },seeded);
-  expect(raw).toEqual({count:1,exists:true});
+  },seeded.id);
+  expect(raw).toEqual({count:seeded.count,exists:true});
   await expect(page.locator("#exactResult")).not.toHaveText("Calc could not initialize");
   expect(errors).toEqual([]);
 });
@@ -239,7 +240,10 @@ test("delete-last-notebook reports unsaved replacement when replacement persiste
   const errors=await openApp(page);
   await goView(page,"worksheet");
   await expect(page.locator("#worksheetList button")).toHaveCount(1);
-  await page.evaluate(()=>{window.CalcPersistence.saveNotebookIncremental=async()=>{throw new Error("forced replacement save failure");};});
+  await page.evaluate(()=>{
+    const P=window.CalcPersistence,original=P.saveNotebookIncremental;let calls=0;
+    P.saveNotebookIncremental=async function(...args){calls++;if(calls>=2)throw new Error("forced replacement save failure");return original.apply(this,args);};
+  });
   page.once("dialog",dialog=>dialog.accept());
   await page.locator("#deleteWorksheetBtn").click();
   await expect(page.locator("#toast")).toContainText("new blank notebook could not be saved");
@@ -609,6 +613,8 @@ test("custom builder close applies deferred cross-tab refresh",async({page})=>{
   await goView(page,"tools");
   await page.locator("#customToolBuilderBtn").click();
   await expect(page.locator("#customToolDialog")).toHaveJSProperty("open",true);
+  await page.locator("#customToolLibrary button").filter({hasText:"Deferred Refresh Guard"}).click();
+  await expect(page.locator("#customStatusBadge")).toContainText("active");
   await page.evaluate(async id=>{
     const CT=window.CalcCustomTools,P=window.CalcPersistence,db=new P.CalcDatabase();await db.open();
     const current=await db.repository(P.STORES.customTools).get(id),archived=CT.archive(current);
