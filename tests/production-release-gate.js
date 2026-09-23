@@ -61,7 +61,7 @@ assert(soakTests.includes("pre-upgrade v4 backup restores into production v1.0.0
 assert(soakTests.includes('expect(version.version).toBe("calc-shell-v1.0.0")'),"production service-worker handshake test missing");
 assert(pagesWorkflow.includes('workflows: ["Calc Release Soak"]'),"Pages is not gated by release soak");
 assert(pagesWorkflow.includes("github.event.workflow_run.head_sha"),"Pages does not deploy exact certified SHA");
-assert(pagesWorkflow.includes("github.event.workflow_run.head_sha == github.sha"),"Pages can deploy a stale successful soak");
+assert(pagesWorkflow.includes("Reject stale certified SHA")&&pagesWorkflow.includes("git rev-parse origin/main"),"Pages lacks explicit current-main stale-candidate check");
 
 assert(productionWorkflow.includes('workflows: ["Deploy Calc to GitHub Pages"]'),"production release is not gated by Pages");
 assert(productionWorkflow.includes("permissions:")&&productionWorkflow.includes("contents: write"),"production release lacks tag/release permission");
