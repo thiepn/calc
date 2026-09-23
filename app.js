@@ -1059,7 +1059,7 @@ function runWorksheet(showToast){
 function mutateBlock(id,action){
   var ws=state.activeWorksheet,i=ws.blocks.findIndex(function(b){return b.id===id;});if(i<0)return;
   try{
-    if(action==="ref"){var ref="{{block:"+id+"}}";navigator.clipboard&&navigator.clipboard.writeText(ref);toast("Copied "+ref);return;}
+    if(action==="ref"){var ref="{{block:"+id+"}}";copyText(ref);return;}
     if(action==="delete")ws=NB.removeBlock(ws,id);
     else if(action==="duplicate")ws=NB.duplicateBlock(ws,id);
     else if(action==="up"&&i>0)ws=NB.moveBlock(ws,id,i-1);
