@@ -15,6 +15,9 @@ const APP_VERSION="1.0.0";
 window.CalcAppVersion=APP_VERSION;
 const $=function(s,r){return (r||document).querySelector(s);};
 const $$=function(s,r){return Array.from((r||document).querySelectorAll(s));};
+const escapeHtml=function(value){return String(value===undefined||value===null?"":value).replace(/[&<>"']/g,function(ch){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch];});};
+const escapeAttr=escapeHtml;
+const safeDecodeURIComponent=function(value){try{return decodeURIComponent(String(value));}catch(e){return null;}};
 const uid=function(){return crypto.randomUUID?crypto.randomUUID():"id-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);};
 
 const VIEW_META={
@@ -599,7 +602,7 @@ function dataHistogram(){
   try{
     var ds=requireDataset(),name=$("#dataXSelect").value,col=ds.column(name),model=S.histogramModel(col.values),max=Math.max.apply(null,model.bins.map(function(b){return b.count;}));
     box.innerHTML="";box.classList.remove("muted","ws-error");
-    var title=document.createElement("div");title.innerHTML="<strong>Histogram · "+name+"</strong> · n="+model.n+" · "+model.bins.length+" bins";box.appendChild(title);
+    var title=document.createElement("div"),strong=document.createElement("strong");strong.textContent="Histogram · "+name;title.append(strong,document.createTextNode(" · n="+model.n+" · "+model.bins.length+" bins"));box.appendChild(title);
     var list=document.createElement("div");list.className="histogram-list";
     model.bins.forEach(function(bin){
       var row=document.createElement("div");row.className="histogram-row";
@@ -683,28 +686,33 @@ function setDistributionText(lines){
 
 function toolDefinitions(){return T.REGISTRY.list();}
 function renderToolList(){
-  var list=$("#toolList"),query=state.toolSearch||"",tools=query?T.REGISTRY.search(query):toolDefinitions();list.innerHTML="";
+  var list=$("#toolList"),query=state.toolSearch||"";list.innerHTML="";
   var search=document.createElement("input");search.type="search";search.className="tool-search";search.placeholder="Search tools";search.value=query;search.setAttribute("aria-label","Search tools");
-  search.oninput=function(){state.toolSearch=this.value;renderToolList();};list.appendChild(search);
-  var currentCategory=null;
-  tools.forEach(function(t){
-    if(t.category!==currentCategory){currentCategory=t.category;var h=document.createElement("div");h.className="tool-category";h.textContent=currentCategory;list.appendChild(h);}
-    var b=document.createElement("button");b.textContent=t.name;b.title=t.description;b.classList.toggle("active",t.id===state.selectedTool);b.onclick=function(){state.selectedTool=t.id;history.replaceState(null,"","#tools/"+encodeURIComponent(t.id));renderToolList();renderTool();};list.appendChild(b);
-  });
-  if(!tools.length){var none=document.createElement("div");none.className="hint";none.textContent="No matching tools.";list.appendChild(none);}
+  var results=document.createElement("div");results.className="tool-search-results";list.append(search,results);
+  function renderChoices(){
+    var q=state.toolSearch||"",tools=q?T.REGISTRY.search(q):toolDefinitions();results.innerHTML="";
+    var currentCategory=null;
+    tools.forEach(function(t){
+      if(t.category!==currentCategory){currentCategory=t.category;var h=document.createElement("div");h.className="tool-category";h.textContent=currentCategory;results.appendChild(h);}
+      var b=document.createElement("button");b.textContent=t.name;b.title=t.description;b.classList.toggle("active",t.id===state.selectedTool);b.onclick=function(){state.selectedTool=t.id;history.replaceState(null,"","#tools/"+encodeURIComponent(t.id));renderToolList();renderTool();};results.appendChild(b);
+    });
+    if(!tools.length){var none=document.createElement("div");none.className="hint";none.textContent="No matching tools.";results.appendChild(none);}
+  }
+  search.oninput=function(){state.toolSearch=this.value;renderChoices();};
+  renderChoices();
 }
 function fieldHtml(spec){
-  var id="toolInput-"+spec.id,value=spec.default===undefined?"":spec.default,label=spec.label||spec.id;
+  var id="toolInput-"+spec.id,value=spec.default===undefined?"":spec.default,label=spec.label||spec.id,safeId=escapeAttr(id),safeInputId=escapeAttr(spec.id),safeLabel=escapeHtml(label);
   if(spec.type==="select"){
-    return '<div class="field"><label for="'+id+'">'+label+'</label><select id="'+id+'" data-tool-input="'+spec.id+'">'+(spec.options||[]).map(function(o){var v=Array.isArray(o)?o[0]:o,l=Array.isArray(o)?o[1]:o;return '<option value="'+String(v).replace(/"/g,"&quot;")+'" '+(String(v)===String(value)?"selected":"")+'>'+l+'</option>';}).join("")+'</select></div>';
+    return '<div class="field"><label for="'+safeId+'">'+safeLabel+'</label><select id="'+safeId+'" data-tool-input="'+safeInputId+'">'+(spec.options||[]).map(function(o){var v=Array.isArray(o)?o[0]:o,l=Array.isArray(o)?o[1]:o;return '<option value="'+escapeAttr(v)+'" '+(String(v)===String(value)?"selected":"")+'>'+escapeHtml(l)+'</option>';}).join("")+'</select></div>';
   }
-  if(spec.type==="boolean")return '<label class="field tool-checkbox"><span>'+label+'</span><input id="'+id+'" data-tool-input="'+spec.id+'" type="checkbox" '+(value?"checked":"")+'></label>';
+  if(spec.type==="boolean")return '<label class="field tool-checkbox"><span>'+safeLabel+'</span><input id="'+safeId+'" data-tool-input="'+safeInputId+'" type="checkbox" '+(value?"checked":"")+'></label>';
   var type=spec.type==="date"?"date":spec.type==="number"||spec.type==="integer"||spec.type==="percent"?"number":"text",attrs="";
-  if(spec.min!==undefined)attrs+=' min="'+spec.min+'"';if(spec.max!==undefined)attrs+=' max="'+spec.max+'"';if(type==="number")attrs+=' step="any"';
-  return '<div class="field"><label for="'+id+'">'+label+'</label><input id="'+id+'" data-tool-input="'+spec.id+'" type="'+type+'" value="'+String(value).replace(/"/g,"&quot;")+'"'+attrs+'></div>';
+  if(spec.min!==undefined)attrs+=' min="'+escapeAttr(spec.min)+'"';if(spec.max!==undefined)attrs+=' max="'+escapeAttr(spec.max)+'"';if(type==="number")attrs+=' step="any"';
+  return '<div class="field"><label for="'+safeId+'">'+safeLabel+'</label><input id="'+safeId+'" data-tool-input="'+safeInputId+'" type="'+type+'" value="'+escapeAttr(value)+'"'+attrs+'></div>';
 }
 function toolFrame(t,body,buttonLabel){
-  return '<div class="tool-title">'+t.name+'</div><div class="tool-desc">'+t.description+'</div><div class="tool-meta">'+t.category+' · v'+t.version+'</div><div class="tool-form">'+body+'</div><div class="action-row"><button id="toolRun" class="primary-btn">'+(buttonLabel||"Calculate")+'</button></div><div id="toolResult" class="tool-result"><strong>Result</strong><span class="muted">Enter values and calculate.</span></div>';
+  return '<div class="tool-title">'+escapeHtml(t.name)+'</div><div class="tool-desc">'+escapeHtml(t.description)+'</div><div class="tool-meta">'+escapeHtml(t.category)+' · v'+escapeHtml(t.version)+'</div><div class="tool-form">'+body+'</div><div class="action-row"><button id="toolRun" class="primary-btn">'+escapeHtml(buttonLabel||"Calculate")+'</button></div><div id="toolResult" class="tool-result"><strong>Result</strong><span class="muted">Enter values and calculate.</span></div>';
 }
 function renderTool(){
   var t=T.REGISTRY.get(state.selectedTool)||T.REGISTRY.list()[0];if(!t)return;state.selectedTool=t.id;
@@ -736,7 +744,7 @@ function collectToolInputs(t){
   var raw={};t.inputs.forEach(function(spec){var el=$('[data-tool-input="'+spec.id+'"]');if(!el)return;raw[spec.id]=spec.type==="boolean"?el.checked:el.value;});return raw;
 }
 function renderToolResult(out){
-  var box=$("#toolResult");box.innerHTML="<strong>"+(out.title||"Result")+"</strong><pre></pre>";$("pre",box).textContent=out.display;
+  var box=$("#toolResult");box.innerHTML="";var heading=document.createElement("strong");heading.textContent=out.title||"Result";var pre=document.createElement("pre");pre.textContent=out.display;box.append(heading,pre);
   if(out.warnings&&out.warnings.length){var warnings=document.createElement("div");warnings.className="tool-warnings";warnings.textContent=out.warnings.join(" ");box.appendChild(warnings);}
   if(out.details&&Object.keys(out.details).length){var meta=document.createElement("div");meta.className="tool-result-meta";meta.textContent=Object.keys(out.details).filter(function(k){return typeof out.details[k]!=="object";}).map(function(k){return k+": "+out.details[k];}).join(" · ");if(meta.textContent)box.appendChild(meta);}
 }
@@ -887,7 +895,7 @@ async function loadCustomTools(){
   if(report.failed.length){console.warn("Custom tools not installed",report.failed);toast(report.failed.length+" custom tool"+(report.failed.length===1?"":"s")+" need validation");}
 }
 
-let worksheetSaveTimer=null,worksheetEvalTimer=null,worksheetCheckpointAt=0;
+let worksheetSaveTimer=null,worksheetEvalTimer=null,worksheetCheckpointAt=0,worksheetTitleEditCheckpointed=false;
 function createNotebook(){
   return NB.normalizeNotebook({schema:NB.SCHEMA,id:uid(),title:"Untitled notebook",createdAt:Date.now(),updatedAt:Date.now(),revision:1,blocks:[NB.newBlock("math")],versions:[],settings:{autoRun:true}});
 }
@@ -1472,7 +1480,9 @@ function bindEvents(){
   $$("[data-add-ws-block]").forEach(function(b){b.onclick=function(){addBlock(b.dataset.addWsBlock);};});$("#newWorksheetBtn").onclick=newWorksheet;$("#runWorksheetBtn").onclick=function(){runWorksheet(true);};
   $("#worksheetAutoRun").onchange=function(){if(!state.activeWorksheet)return;checkpointWorksheet("auto-run setting");state.activeWorksheet.settings.autoRun=this.checked;writeSessionRecovery();scheduleWorksheetSave();if(this.checked)runWorksheet(false);};
   $("#worksheetImportBtn").onclick=function(){$("#worksheetImportFile").click();};$("#worksheetImportFile").onchange=function(){if(this.files&&this.files[0])importNotebookFile(this.files[0]);this.value="";};$("#worksheetExportBtn").onclick=exportNotebookJson;$("#worksheetMarkdownBtn").onclick=exportNotebookMarkdown;$("#deleteWorksheetBtn").onclick=deleteActiveNotebook;
-  $("#worksheetTitle").addEventListener("change",function(){if(state.activeWorksheet){checkpointWorksheet("rename notebook");state.activeWorksheet.title=this.value||"Untitled notebook";state.activeWorksheet.updatedAt=Date.now();writeSessionRecovery();scheduleWorksheetSave();renderWorksheetList();renderWorksheetVersions();}});
+  $("#worksheetTitle").addEventListener("focus",function(){worksheetTitleEditCheckpointed=false;});
+  $("#worksheetTitle").addEventListener("input",function(){if(!state.activeWorksheet)return;if(!worksheetTitleEditCheckpointed){checkpointWorksheet("rename notebook");worksheetTitleEditCheckpointed=true;}state.activeWorksheet.title=this.value||"Untitled notebook";state.activeWorksheet.updatedAt=Date.now();writeSessionRecovery();scheduleWorksheetSave();renderWorksheetList();renderWorksheetVersions();});
+  $("#worksheetTitle").addEventListener("blur",function(){worksheetTitleEditCheckpointed=false;});
   $("#fullBackupBtn").onclick=downloadFullBackup;$("#shareBackupBtn").onclick=shareFullBackup;$("#restoreBackupBtn").onclick=function(){$("#restoreBackupFile").click();};
   $("#restoreBackupFile").onchange=function(){if(this.files&&this.files[0])chooseRestoreFile(this.files[0]);this.value="";};
   $("#restorePassword").onchange=openRestoreRaw;$("#restoreMode").onchange=recomputeRestorePlan;$("#restoreConflictPolicy").onchange=recomputeRestorePlan;$$("[data-restore-store]").forEach(function(el){el.onchange=recomputeRestorePlan;});$("#applyRestoreBtn").onclick=applyRestorePlan;
@@ -1491,9 +1501,9 @@ async function init(){
   try{state.history=(await dbAll(P.STORES.history)).sort(function(a,b){return b.time-a.time;});}catch(e){}
   await loadWorksheets();await recoverSessionNotebook();
   var initial=(location.hash||"").replace(/^#/,""),toolRoute=initial.match(/^tools\/(.+)$/);
-  if(toolRoute){var decoded=decodeURIComponent(toolRoute[1]);if(T.REGISTRY.get(decoded))state.selectedTool=decoded;initial="tools";}
+  if(toolRoute){var decoded=safeDecodeURIComponent(toolRoute[1]);if(decoded&&T.REGISTRY.get(decoded))state.selectedTool=decoded;initial="tools";}
   switchView(VIEW_META[initial]?initial:"calculate");if(initial==="tools"){renderToolList();renderTool();history.replaceState(null,"","#tools/"+encodeURIComponent(state.selectedTool));}
-  window.addEventListener("hashchange",function(){var raw=(location.hash||"").replace(/^#/,""),m=raw.match(/^tools\/(.+)$/),v=raw;if(m){var id=decodeURIComponent(m[1]);if(T.REGISTRY.get(id)){state.selectedTool=id;renderToolList();renderTool();}v="tools";}if(VIEW_META[v]&&v!==state.view)switchView(v);});
+  window.addEventListener("hashchange",function(){var raw=(location.hash||"").replace(/^#/,""),m=raw.match(/^tools\/(.+)$/),v=raw;if(m){var id=safeDecodeURIComponent(m[1]);if(id&&T.REGISTRY.get(id)){state.selectedTool=id;renderToolList();renderTool();}else history.replaceState(null,"","#tools/"+encodeURIComponent(state.selectedTool));v="tools";}if(VIEW_META[v]&&v!==state.view)switchView(v);});
   await P.cleanupJournal(persistenceDb).catch(function(){});await P.cleanupTrash(persistenceDb).catch(function(){});await refreshPersistenceSettings();
   await registerServiceWorker();
 }
