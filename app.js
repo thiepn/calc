@@ -885,7 +885,7 @@ function scheduleWorksheetEval(){
 }
 async function saveWorksheet(ws,immediate){
   ws.updatedAt=Date.now();
-  try{await dbPut("worksheets",JSON.parse(JSON.stringify(ws)));if(immediate)toast("Notebook saved");}
+  try{await dbPut("worksheets",JSON.parse(JSON.stringify(ws)));clearSessionRecovery(ws.id);if(immediate)toast("Notebook saved");}
   catch(e){toast("Could not save notebook: "+errorMessage(e));}
   renderWorksheetList();
 }
@@ -989,7 +989,7 @@ function renderWorksheetBlocks(){
 function editWorksheetBlock(id,patch,immediate){
   checkpointWorksheet("edit block");var ws=state.activeWorksheet,b=ws.blocks.find(function(x){return x.id===id;});if(!b)return;
   if(patch.source!==undefined)b.source=patch.source;if(patch.config!==undefined)b.config=patch.config;if(patch.title!==undefined)b.title=patch.title;b.updatedAt=Date.now();
-  replaceActiveWorksheet(NB.markDirty(ws,id));updateAllWorksheetResults();scheduleWorksheetSave();if(immediate)runWorksheet(false);else scheduleWorksheetEval();
+  replaceActiveWorksheet(NB.markDirty(ws,id));writeSessionRecovery();updateAllWorksheetResults();scheduleWorksheetSave();if(immediate)runWorksheet(false);else scheduleWorksheetEval();
 }
 function updateAllWorksheetResults(){state.activeWorksheet.blocks.forEach(updateBlockResult);renderWorksheetVersions();}
 function updateBlockResult(block){
@@ -1019,11 +1019,11 @@ function mutateBlock(id,action){
     else if(action==="duplicate")ws=NB.duplicateBlock(ws,id);
     else if(action==="up"&&i>0)ws=NB.moveBlock(ws,id,i-1);
     else if(action==="down"&&i<ws.blocks.length-1)ws=NB.moveBlock(ws,id,i+1);
-    replaceActiveWorksheet(ws);renderWorksheetBlocks();renderWorksheetVersions();scheduleWorksheetSave();scheduleWorksheetEval();
+    replaceActiveWorksheet(ws);writeSessionRecovery();renderWorksheetBlocks();renderWorksheetVersions();scheduleWorksheetSave();scheduleWorksheetEval();
   }catch(e){toast(errorMessage(e));}
 }
 function addBlock(type){
-  if(!state.activeWorksheet)return;try{var ws=NB.addBlock(state.activeWorksheet,type);replaceActiveWorksheet(ws);renderWorksheetBlocks();renderWorksheetVersions();scheduleWorksheetSave();var inputs=$$("[data-block='"+ws.blocks[ws.blocks.length-1].id+"'] textarea");if(inputs.length)inputs[0].focus();}catch(e){toast(errorMessage(e));}
+  if(!state.activeWorksheet)return;try{var ws=NB.addBlock(state.activeWorksheet,type);replaceActiveWorksheet(ws);writeSessionRecovery();renderWorksheetBlocks();renderWorksheetVersions();scheduleWorksheetSave();var inputs=$$("[data-block='"+ws.blocks[ws.blocks.length-1].id+"'] textarea");if(inputs.length)inputs[0].focus();}catch(e){toast(errorMessage(e));}
 }
 async function importNotebookFile(file){
   try{var text=await file.text(),nb=NB.importNotebook(text);state.worksheets.unshift(nb);state.activeWorksheet=nb;await saveWorksheet(nb,false);renderWorksheetArea();toast("Notebook imported");}catch(e){toast(errorMessage(e));}
@@ -1036,6 +1036,157 @@ function exportNotebookJson(){
 }
 function exportNotebookMarkdown(){
   try{var name=(state.activeWorksheet.title||"notebook").replace(/[^A-Za-z0-9._-]+/g,"-")+".md";downloadText(name,NB.markdownExport(state.activeWorksheet),"text/markdown");}catch(e){toast(errorMessage(e));}
+}
+
+
+function formatBytes(bytes){
+  bytes=Number(bytes)||0;if(bytes<1024)return bytes+" B";var units=["KB","MB","GB","TB"],v=bytes/1024,i=0;while(v>=1024&&i<units.length-1){v/=1024;i++;}return M.formatNumber(v,4)+" "+units[i];
+}
+function currentClientSettings(){return {theme:state.theme,angle:state.angle,precision:state.precision,deviceId:syncManager.deviceId};}
+async function flushPendingPersistence(){
+  clearTimeout(worksheetSaveTimer);clearTimeout(worksheetEvalTimer);
+  if(state.activeWorksheet)await saveWorksheet(state.activeWorksheet,false);
+  await persistSetting("theme",state.theme);await persistSetting("angle",state.angle);await persistSetting("precision",state.precision);await persistSetting("deviceId",syncManager.deviceId);
+}
+async function downloadFullBackup(){
+  try{
+    await flushPendingPersistence();
+    var backup=await P.buildBackup({db:persistenceDb,appVersion:"phase-11",clientSettings:currentClientSettings()});
+    var stamp=new Date().toISOString().replace(/[:.]/g,"-"),name="calc-"+stamp+".calcbackup.json";
+    downloadText(name,JSON.stringify(backup,null,2),"application/json");toast("Full backup downloaded");
+  }catch(e){toast(errorMessage(e));}
+}
+async function recomputeRestorePlan(){
+  if(!state.restoreBackup){$("#restorePreview").textContent="No backup selected.";$("#applyRestoreBtn").disabled=true;return;}
+  try{
+    var plan=await P.planRestore(persistenceDb,state.restoreBackup,{mode:$("#restoreMode").value,conflictPolicy:$("#restoreConflictPolicy").value});state.restorePlan=plan;
+    var lines=["Verified backup · "+plan.verifiedHash.slice(0,16)+"…","Mode: "+plan.mode];
+    P.DATA_STORES.forEach(function(s){lines.push(s+": "+plan.summary.current[s]+" local + "+plan.summary.incoming[s]+" backup → "+plan.summary.result[s]);});
+    if(plan.conflicts.length)lines.push("Conflict copies: "+plan.conflicts.length);
+    $("#restorePreview").textContent=lines.join("\n");$("#restorePreview").classList.remove("ws-error");$("#applyRestoreBtn").disabled=false;
+  }catch(e){state.restorePlan=null;$("#restorePreview").textContent=errorMessage(e);$("#restorePreview").classList.add("ws-error");$("#applyRestoreBtn").disabled=true;}
+}
+async function chooseRestoreFile(file){
+  try{
+    var textValue=await file.text(),checked=await P.validateBackup(textValue);state.restoreBackup=checked.backup;await recomputeRestorePlan();toast("Backup verified");
+  }catch(e){state.restoreBackup=null;state.restorePlan=null;$("#restorePreview").textContent=errorMessage(e);$("#restorePreview").classList.add("ws-error");$("#applyRestoreBtn").disabled=true;}
+}
+async function applyRestorePlan(){
+  if(!state.restorePlan)return;
+  var replace=state.restorePlan.mode==="replace",message=replace?"Replace all local Calc data with this backup?":"Merge this backup into local Calc data?";
+  if(!confirm(message))return;
+  try{
+    await flushPendingPersistence();await P.applyRestore(persistenceDb,state.restorePlan);
+    persistenceCoordinator.publish({entityType:"restore",entityId:"all",revision:Date.now(),action:"committed"});toast("Restore committed. Reloading…");
+    setTimeout(function(){location.reload();},150);
+  }catch(e){toast(errorMessage(e));await refreshRecoveryStatus();}
+}
+async function refreshStorageStatus(){
+  var box=$("#storageStatus");if(!box)return;
+  try{
+    var s=await P.storageEstimate();if(!s.supported){box.textContent="Storage estimate is not supported by this browser.";return;}
+    box.textContent="Usage "+formatBytes(s.usage)+" / "+formatBytes(s.quota)+(s.quota?" · "+M.formatNumber(s.ratio*100,4)+"%":"")+(s.persisted===null?"":" · persistent: "+(s.persisted?"yes":"no"));
+  }catch(e){box.textContent=errorMessage(e);}
+}
+async function runIntegrityCheck(){
+  var box=$("#integrityStatus");box.textContent="Checking…";box.classList.remove("ws-error");
+  try{
+    var r=await P.integrityReport(persistenceDb),lines=["DB schema v"+r.dbVersion,"Status: "+(r.ok?"OK":"issues found")];
+    P.DATA_STORES.forEach(function(s){lines.push(s+": "+r.counts[s]+" records · "+(r.hashes[s]||"no hash").slice(0,14)+"…");});
+    if(r.issues.length)r.issues.forEach(function(i){lines.push(i.store+": "+i.message);});
+    box.textContent=lines.join("\n");box.classList.toggle("ws-error",!r.ok);
+  }catch(e){box.textContent=errorMessage(e);box.classList.add("ws-error");}
+}
+async function refreshRecoveryStatus(){
+  var box=$("#recoveryStatus");if(!box)return;
+  try{
+    var r=await P.recoveryReport(persistenceDb);
+    if(!r.needsAttention)box.textContent="Recovery journal: clean.";
+    else box.textContent="Recovery journal needs attention · incomplete "+r.incomplete.length+" · failed "+r.failed.length+". Your data transaction was not silently accepted.";
+  }catch(e){box.textContent=errorMessage(e);}
+}
+function refreshSyncStatus(){
+  var box=$("#syncStatus");if(!box)return;var s=syncManager.status();
+  box.textContent="Sync: "+(s.enabled?"enabled":"disabled")+" · adapter: "+s.adapter+" · device "+s.deviceId;
+}
+async function refreshPersistenceSettings(){
+  await Promise.all([refreshStorageStatus(),refreshRecoveryStatus()]);refreshSyncStatus();updateUpdateUi();
+}
+async function requestPersistentStorageUi(){
+  try{var granted=await P.requestPersistentStorage();toast(granted?"Persistent storage granted":"Persistent storage was not granted");await refreshStorageStatus();}catch(e){toast(errorMessage(e));}
+}
+function writeSessionRecovery(){
+  if(!state.activeWorksheet)return;
+  try{sessionStorage.setItem("calc.notebook.recovery",JSON.stringify({savedAt:Date.now(),id:state.activeWorksheet.id,revision:state.activeWorksheet.revision,updatedAt:state.activeWorksheet.updatedAt,document:state.activeWorksheet}));}catch(e){}
+}
+function clearSessionRecovery(id){
+  try{var raw=sessionStorage.getItem("calc.notebook.recovery");if(!raw)return;var x=JSON.parse(raw);if(!id||x.id===id)sessionStorage.removeItem("calc.notebook.recovery");}catch(e){}
+}
+async function recoverSessionNotebook(){
+  var raw;try{raw=sessionStorage.getItem("calc.notebook.recovery");if(!raw)return;var snap=JSON.parse(raw),stored=state.worksheets.find(function(w){return w.id===snap.id;});
+    if(stored&&Number(stored.updatedAt)>=Number(snap.updatedAt)){clearSessionRecovery(snap.id);return;}
+    var rec=NB.recoveryNormalize(snap.document).document;rec.id=uid();rec.title=(rec.title||"Notebook")+" (recovered unsaved)";rec.revision=(rec.revision||1)+1;rec.updatedAt=Date.now();rec.recovery={safeMode:false,sessionRecovered:true,sourceId:snap.id};
+    state.worksheets.unshift(rec);await persistenceDb.repository(P.STORES.notebooks).put(rec);clearSessionRecovery(snap.id);toast("Recovered unsaved notebook as a copy");
+  }catch(e){console.warn("Session recovery failed",e);}
+}
+async function handleCrossTabMessage(message){
+  if(!message||!message.entityType)return;
+  try{
+    if(message.entityType===P.STORES.settings){
+      var item=await persistenceDb.repository(P.STORES.settings).get(message.entityId);if(!item)return;
+      if(item.key==="theme"&&item.value!==state.theme){state.settingsReady=false;state.theme=item.value;setTheme(item.value);state.settingsReady=true;}
+      if(item.key==="angle"&&item.value!==state.angle){state.angle=item.value;localStorage.setItem("calc.angle",state.angle);$("#angleBtn").textContent=state.angle;}
+      return;
+    }
+    if(message.entityType===P.STORES.notebooks){
+      if(message.action==="clear"){toast("Notebooks changed in another tab. Reload recommended.");return;}
+      var incoming=await persistenceDb.repository(P.STORES.notebooks).get(message.entityId);if(!incoming)return;
+      var idx=state.worksheets.findIndex(function(w){return w.id===incoming.id;}),active=state.activeWorksheet&&state.activeWorksheet.id===incoming.id;
+      if(active){
+        var hasLocal=state.activeWorksheet.blocks.some(function(b){return b.status==="dirty"||b.status==="stale";});
+        if(hasLocal){
+          var copy=JSON.parse(JSON.stringify(state.activeWorksheet));copy.id=uid();copy.title=(copy.title||"Notebook")+" (local conflict copy)";copy.revision=(copy.revision||1)+1;copy.updatedAt=Date.now();
+          await persistenceDb.repository(P.STORES.notebooks).put(copy);state.worksheets.unshift(copy);toast("Another tab changed this notebook; local edits were preserved as a conflict copy");
+        }
+        var normalized=NB.recoveryNormalize(incoming).document;if(idx>=0)state.worksheets[idx]=normalized;state.activeWorksheet=normalized;renderWorksheetArea();
+      }else{
+        var normalized2=NB.recoveryNormalize(incoming).document;if(idx>=0)state.worksheets[idx]=normalized2;else state.worksheets.unshift(normalized2);renderWorksheetList();
+      }
+      return;
+    }
+    if(message.entityType===P.STORES.customTools){
+      var dialog=$("#customToolDialog");if(dialog&&dialog.open){toast("Custom tools changed in another tab; close/reopen builder to refresh");}
+      else await loadCustomTools();return;
+    }
+    if(message.entityType===P.STORES.history&&state.view==="history"){state.history=(await dbAll(P.STORES.history)).sort(function(a,b){return b.time-a.time;});renderHistory();return;}
+    if(message.entityType==="restore"){toast("Data was restored in another tab. Reload recommended.");}
+  }catch(e){console.warn("Cross-tab update failed",e);}
+}
+function setupCrossTab(){
+  persistenceCoordinator.start();persistenceCoordinator.subscribe(handleCrossTabMessage);
+}
+function markUpdateReady(worker){
+  state.updateWaiting=worker||state.swRegistration&&state.swRegistration.waiting||null;$("#updateBtn").classList.toggle("hidden",!state.updateWaiting);$("#applyUpdateBtn").disabled=!state.updateWaiting;updateUpdateUi();
+}
+function updateUpdateUi(){
+  var box=$("#updateStatus");if(!box)return;
+  box.textContent=state.updateWaiting?"A new Calc shell is installed and waiting. Your current session stays on this version until you restart.":"Current app shell is active; no waiting update.";
+}
+async function registerServiceWorker(){
+  if(!("serviceWorker" in navigator))return;
+  try{
+    var reg=await navigator.serviceWorker.register("./sw.js");state.swRegistration=reg;if(reg.waiting)markUpdateReady(reg.waiting);
+    reg.addEventListener("updatefound",function(){var worker=reg.installing;if(!worker)return;worker.addEventListener("statechange",function(){if(worker.state==="installed"&&navigator.serviceWorker.controller)markUpdateReady(reg.waiting||worker);});});
+    navigator.serviceWorker.addEventListener("controllerchange",function(){if(state.reloadingForUpdate)location.reload();});
+    navigator.serviceWorker.addEventListener("message",function(e){var m=e.data||{};if(m.type==="SW_ACTIVATED"){var box=$("#updateStatus");if(box)box.textContent="App shell "+m.version+" activated.";};});
+  }catch(e){console.warn("Service worker registration failed",e);}
+}
+async function checkForUpdate(){
+  if(!state.swRegistration){await registerServiceWorker();}try{await state.swRegistration.update();toast("Update check complete");setTimeout(function(){if(state.swRegistration.waiting)markUpdateReady(state.swRegistration.waiting);else updateUpdateUi();},100);}catch(e){toast(errorMessage(e));}
+}
+async function applyAppUpdate(){
+  var worker=state.updateWaiting||state.swRegistration&&state.swRegistration.waiting;if(!worker){toast("No waiting update");return;}
+  try{await flushPendingPersistence();state.reloadingForUpdate=true;worker.postMessage({type:"SKIP_WAITING"});setTimeout(function(){if(state.reloadingForUpdate)location.reload();},1500);}catch(e){state.reloadingForUpdate=false;toast(errorMessage(e));}
 }
 
 async function renderHistory(){
