@@ -21,6 +21,7 @@ const manifest=JSON.parse(read("manifest.webmanifest"));
 const app=read("app.js"),persistence=read("persistence.js"),sw=read("sw.js");
 const changelog=read("CHANGELOG.md"),notes=read("RELEASE_NOTES.md"),phase=read("docs/release/IMPLEMENTATION_PHASE_14.md");
 const soakWorkflow=read(".github/workflows/release-soak.yml");
+const soakTests=read("tests/release-soak.spec.js");
 const pagesWorkflow=read(".github/workflows/pages.yml");
 const productionWorkflow=read(".github/workflows/production-release.yml");
 
@@ -53,6 +54,9 @@ assert(phase.includes("immutable Calc v1.0.0 production baseline"),"Phase 14 fre
 assert(phase.includes("pre-upgrade v4 backup"),"Phase 14 backup-before-upgrade requirement missing");
 
 assert(soakWorkflow.includes("tests/production-release-gate.js"),"production release gate is not part of release soak");
+assert(soakTests.includes("clean-device v1.0.0 install"),"clean-device production test missing");
+assert(soakTests.includes("pre-upgrade v4 backup restores into production v1.0.0"),"backup-before-upgrade compatibility test missing");
+assert(soakTests.includes('expect(version.version).toBe("calc-shell-v1.0.0")'),"production service-worker handshake test missing");
 assert(pagesWorkflow.includes('workflows: ["Calc Release Soak"]'),"Pages is not gated by release soak");
 assert(pagesWorkflow.includes("github.event.workflow_run.head_sha"),"Pages does not deploy exact certified SHA");
 
