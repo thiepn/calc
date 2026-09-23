@@ -38,14 +38,17 @@ class MemoryDb{
       wrappers[s]={
         clear:()=>({onsuccess:null,onerror:null,_op:"clear",store:s}),
         put:(value)=>({onsuccess:null,onerror:null,_op:"put",store:s,value:value}),
+        get:(key)=>({onsuccess:null,onerror:null,_op:"get",store:s,key:key}),
         delete:(key)=>({onsuccess:null,onerror:null,_op:"delete",store:s,key:key})
       };
     });
-    // Persistence.applyRestore expects IDB request callbacks. Simulate async requests.
+    // Persistence transaction helpers expect IDB request callbacks. Simulate async requests.
+    const memoryDb=this;
     Object.values(wrappers).forEach(os=>{
-      const oldClear=os.clear,oldPut=os.put,oldDelete=os.delete;
+      const oldClear=os.clear,oldPut=os.put,oldGet=os.get,oldDelete=os.delete;
       os.clear=function(){const req=oldClear();queueMicrotask(()=>{if(req.onsuccess)req.onsuccess({target:{result:undefined}});});this._pending=(this._pending||[]).concat([req]);return req;};
       os.put=function(value){const req=oldPut(value);queueMicrotask(()=>{if(req.onsuccess)req.onsuccess({target:{result:true}});});this._pending=(this._pending||[]).concat([req]);return req;};
+      os.get=function(key){const req=oldGet(key);queueMicrotask(()=>{const v=memoryDb.data[req.store].get(key),result=v===undefined?undefined:JSON.parse(JSON.stringify(v));if(req.onsuccess)req.onsuccess({target:{result:result}});});return req;};
       os.delete=function(key){const req=oldDelete(key);queueMicrotask(()=>{if(req.onsuccess)req.onsuccess({target:{result:undefined}});});this._pending=(this._pending||[]).concat([req]);return req;};
     });
     if(this.failTransactions)throw Object.assign(new Error("simulated atomic failure"),{code:"SIMULATED"});
