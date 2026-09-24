@@ -38,11 +38,13 @@ jobs:
           node --check persistence.js
           node --check cas.js
           node --check multivariable.js
+          node --check ode.js
           node --check app.js
           node --check sw.js
           node --check playwright.config.js
           node --check tests/cas.js
           node --check tests/multivariable.js
+          node --check tests/ode.js
           node --check tests/release-gate.js
           node --check tests/production-release-gate.js
           node --check tests/generate-release-artifacts.js
@@ -57,6 +59,7 @@ jobs:
           node tests/calculus.js
           node tests/cas.js
           node tests/multivariable.js
+          node tests/ode.js
           node tests/units.js
           node tests/linear-algebra.js
           node tests/statistics.js
