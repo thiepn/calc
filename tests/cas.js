@@ -64,6 +64,8 @@ assert(psFree.display.includes("a = 1:")&&psFree.display.includes("free: y"),"pa
 eq(CAS.runCommand("inequality(x^3-x>0, x)").display,"x ∈ (-1, 0) ∪ (1, ∞)","cubic inequality");
 eq(CAS.runCommand("inequality(x^4-1<=0, x)").display,"x ∈ [-1, 1]","quartic inequality");
 eq(CAS.runCommand("inequality((x+1)/(x-2)>=0, x)").display,"x ∈ (−∞, -1] ∪ (2, ∞)","rational inequality excludes pole");
+eq(CAS.runCommand("inequality((x^2-1)/(x-1)>=0, x)").display,"x ∈ [-1, 1) ∪ (1, ∞)","cancelled rational inequality preserves hole");
+eq(CAS.runCommand("inequality((x-1)/(x-1)>0, x)").display,"x ∈ (−∞, 1) ∪ (1, ∞)","cancelled identity inequality preserves excluded point");
 
 // Advanced symbolic integration remains verified before exposure.
 const ibp=CAS.integrateAdvanced("x*exp(x)","x");
