@@ -2,6 +2,28 @@
 
 All notable production changes to Calc are recorded here.
 
+## [2.2.0] — 2026-09-25
+
+### University Mathematics Workstation — Phase U3
+
+- Added the standalone `ode.js` differential-equations/dynamical-systems runtime and routed it through Calculate and Worksheet Math evaluation.
+- Added separable, exact, first-order linear, Bernoulli, and homogeneous second-order constant-coefficient symbolic ODE families.
+- Added local ODE Taylor-series IVP construction through repeated total differentiation.
+- Added adaptive Dormand–Prince RK45 scalar/system IVPs plus deterministic fixed-step RK4.
+- Added second-order state-reduction IVPs for damped/forced oscillator problems.
+- Added sampled trajectories, direction fields, 2D phase-portrait data, equilibrium solving, Jacobian linearization, and planar stability classification.
+- Added exact verified 2×2 matrix exponentials and linear flows.
+- Added forward Laplace tables, inverse rational transforms, and causal convolution evaluation.
+- Added explicit `ODE_CONVERGENCE` and `ODE_SINGULARITY` semantics.
+- Normalized evaluator domain failures inside U3 numerical workflows and prevented structured non-scalar U3 results from replacing scalar `ans`.
+- Added `odehelp()` and U3 command-palette templates.
+- Added `tests/ode.js`, Worksheet/browser regression coverage, primary-CI/release-soak enforcement, and `docs/math/ODE_DYNAMICAL_SYSTEMS_SEMANTICS.md`.
+
+### Compatibility
+
+- U1 CAS, U2 multivariable/vector calculus, ordinary calculus/algebra, units, linear algebra, statistics, graphing, tools, notebooks, persistence, backups, and PWA update semantics are retained.
+- U3 remains intentionally bounded: unsupported symbolic ODE families, stiff solvers, BVP/DAE/PDE systems, and non-hyperbolic nonlinear stability proofs fail explicitly instead of being guessed.
+
 ## [2.1.0] — 2026-09-24
 
 ### University Mathematics Workstation — Phase U2

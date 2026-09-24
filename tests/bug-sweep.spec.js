@@ -77,6 +77,30 @@ test("U2 multivariable and vector calculus executes through the Calculate UI",as
   expect(errors).toEqual([]);
 });
 
+test("U3 differential equations and dynamical systems execute through the Calculate UI",async({page})=>{
+  const errors=await openApp(page);
+  expect(await page.evaluate(()=>window.CalcODE&&window.CalcODE.VERSION)).toBe("2.2.0-u3");
+  const input=page.locator("#expressionInput");
+
+  await input.fill("linearode(1; 1; x; y)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("y =");
+
+  await input.fill("ivp(y; x; y; 0,1; 1)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("2.718");
+
+  await input.fill("stability(y,-x; x,y; 0,0)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("center (linearized)");
+
+  await input.fill("laplace(t^2; t; s)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("2 / s ^ 3");
+
+  expect(errors).toEqual([]);
+});
+
 test("notebook read failure does not create replacement or recovery duplicates",async({page})=>{
   const errors=await openApp(page);
   const seeded=await page.evaluate(async()=>{

@@ -5,6 +5,7 @@ require("../algebra.js");
 require("../calculus.js");
 require("../cas.js");
 require("../multivariable.js");
+require("../ode.js");
 require("../units.js");
 require("../linear-algebra.js");
 require("../statistics.js");
@@ -81,6 +82,21 @@ eq(nb.blocks[0].result.display,"[2, 4]","U2 gradient block result");
 assert(nb.blocks[1].result.display.includes("6.283"),"U2 line integral block result");
 assert(nb.blocks[2].result.display.includes("residual 0"),"U2 theorem block result");
 assert(!nb.blocks[0].dependencies.includes("gradat")&&!nb.blocks[1].dependencies.includes("lineint")&&!nb.blocks[2].dependencies.includes("green"),"U2 command names are not notebook dependencies");
+
+// U3 ODE/dynamical commands share the Worksheet Math evaluator.
+nb=doc([
+  block("u3a","math","linearode(1; 1; x; y)"),
+  block("u3b","math","ivp(y; x; y; 0,1; 1)"),
+  block("u3c","math","stability(y,-x; x,y; 0,0)"),
+  block("u3d","math","laplace(t^2; t; s)")
+]);
+run=N.evaluateNotebook(nb,{precision:12,angle:"RAD"});nb=run.document;
+eq(nb.blocks[0].status,"clean","U3 symbolic ODE block clean");
+assert(nb.blocks[0].result.display.startsWith("y ="),"U3 symbolic ODE result");
+assert(nb.blocks[1].result.display.includes("2.718"),"U3 adaptive IVP result");
+assert(nb.blocks[2].result.display.includes("center"),"U3 stability result");
+assert(nb.blocks[3].result.display.includes("s ^ 3"),"U3 Laplace result");
+assert(!nb.blocks[0].dependencies.includes("linearode")&&!nb.blocks[1].dependencies.includes("ivp")&&!nb.blocks[2].dependencies.includes("stability")&&!nb.blocks[3].dependencies.includes("laplace"),"U3 command names are not notebook dependencies");
 
 // Quantity assignment + typed reference preserves units.
 nb=doc([

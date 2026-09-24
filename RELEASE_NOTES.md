@@ -1,43 +1,55 @@
-# Calc v2.1.0
+# Calc v2.2.0
 
-Calc v2.1.0 adds **Phase U2 — Multivariable Calculus & Vector Analysis** to the University Mathematics Workstation.
+Calc v2.2.0 adds **Phase U3 — Differential Equations & Dynamical Systems** to the University Mathematics Workstation.
 
-## Multivariable calculus
+## Symbolic ODEs
 
-- Added evaluated gradients, Jacobians, and Hessians.
-- Added total differentials, normalized directional derivatives, implicit differentiation, and tangent planes.
-- Added multivariable Taylor expansions for 1–3 variables through total order 3.
-- Added multivariable limit handling with continuity certification and explicit path-disagreement witnesses.
-- Added critical-point solving, two-variable Hessian classification, and certified Lagrange systems.
+- Added certified separable ODE relations.
+- Added exact differential equations through the verified conservative-potential engine.
+- Added integrating-factor solutions for first-order linear ODEs.
+- Added Bernoulli transformations.
+- Added all three characteristic-root families for homogeneous second-order constant-coefficient ODEs.
+- Symbolic solution families are differentiated/substituted back into their defining equations before exposure where applicable.
 
-## Vector analysis
+## Initial-value problems
 
-- Added 2D/3D divergence and curl.
-- Added conservative-field testing and verified polynomial scalar-potential reconstruction.
-- Added vector line integrals, scalar line integrals, and arc length over parameterized curves.
-- Added adaptive rectangular double/triple integration.
-- Added parameterized surface area and oriented flux.
+- Added adaptive Dormand–Prince RK45 integration for scalar ODEs and arbitrary finite systems.
+- Added second-order IVPs through first-order state reduction, including damped/forced oscillator problems.
+- Added deterministic fixed-step RK4 for coursework and numerical comparison.
+- Added forward and backward integration.
+- Added explicit step/evaluation budgets, rejected-step tracking, singularity detection, and convergence-failure semantics.
 
-## Integral theorems
+## Dynamical systems
 
-U2 adds independent numerical verification tools for:
+- Added sampled trajectories and direction-field data.
+- Added 2D phase-portrait field + trajectory data.
+- Added equilibrium solving through existing certified system solvers.
+- Added exact Jacobian linearization.
+- Added node, spiral, saddle, repeated-node, center, and non-hyperbolic classification.
+- Hyperbolic equilibria receive the appropriate local stability conclusion; zero-real-part cases remain explicitly nonlinear-inconclusive.
 
-- Green's theorem on positively oriented rectangles;
-- Stokes' theorem on planar rectangles;
-- the divergence/Gauss theorem on axis-aligned rectangular boxes.
+## Linear systems
 
-Each theorem tool computes both sides independently and reports the residual.
+- Added verified exact 2×2 matrix exponentials across real, complex, and repeated/Jordan spectral branches.
+- Added exact 2D linear flows `exp(At)x0`.
 
-## Safety and correctness
+## Laplace & series methods
 
-- Numerical integration now fails explicitly with `INTEGRATION_CONVERGENCE` if the adaptive recursion budget is exhausted.
-- Path sampling can prove that a multivariable limit does not exist, but finite path agreement is never treated as a proof of existence.
-- Degenerate Hessian tests return `inconclusive`.
-- Unsupported nonlinear constraints, arbitrary theorem domains, and general multivariable symbolic limits remain explicit unsupported cases.
-- U2 is available in both Calculate and Worksheet Math blocks and is included in the offline PWA shell.
+- Added table-driven forward Laplace transforms.
+- Added inverse transforms for certified rational degree-1/2 families.
+- Added causal convolution evaluation.
+- Added ODE Taylor-series IVPs through repeated total differentiation along the flow.
+
+## Integration
+
+- U3 commands are available in Calculate and Worksheet Math blocks.
+- Added command-palette entries for linear ODEs, second-order ODEs, IVPs, forced oscillators, stability, phase portraits, Laplace transforms, and matrix exponentials.
+- Added `odehelp()`.
+- Added the U3 runtime to the offline PWA shell.
+- Non-scalar U3 results no longer overwrite the calculator's scalar `ans` variable.
 
 ## Certification
 
-v2.1.0 adds a dedicated deterministic U2 suite, Worksheet regression coverage, browser-level Calculate coverage, primary-CI enforcement, release-gate assertions, and the existing Chromium / Firefox / WebKit / mobile Chromium production soak.
+v2.2.0 adds a dedicated U3 deterministic suite, Worksheet regression coverage, browser-level Calculate coverage, primary-CI enforcement, release-gate assertions, and the full Chromium / Firefox / WebKit / mobile Chromium production soak.
 
-GitHub Pages deploys only the exact certified SHA, followed by live-site verification and a version-pinned GitHub release.
+Unsupported symbolic families, stiff-solver problems, arbitrary higher-dimensional symbolic matrix exponentials, BVPs, DAEs, PDEs, and non-hyperbolic nonlinear stability proofs remain explicit unsupported cases.

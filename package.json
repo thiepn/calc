@@ -1,7 +1,7 @@
 {
   "name": "calc-release-certification",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Development-only release certification tooling for Calc.",
   "scripts": {
     "test:release-gate": "node tests/release-gate.js",
