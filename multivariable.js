@@ -228,6 +228,16 @@ function multivariableLimit(source,vars,point){
   throw new UnsupportedMultivariableError("Limit is not certified by continuity and no path disagreement was proven",{pathEstimates:estimates});
 }
 
+function evaluateDerivativeObjectAtPoint(expressions,vars,point){
+  if(vars.length!==point.length)throw new MultivariableError("SHAPE_ERROR","Point dimension does not match variables");
+  function sub(e){return substitutePoint(e,vars,point);}
+  if(Array.isArray(expressions)&&Array.isArray(expressions[0]))return expressions.map(function(row){return row.map(sub);});
+  return expressions.map(sub);
+}
+function gradientAt(source,vars,point){return evaluateDerivativeObjectAtPoint(partials(asExpr(source),vars),vars,point);}
+function jacobianAt(sources,vars,point){return evaluateDerivativeObjectAtPoint(C.jacobian(sources,vars),vars,point);}
+function hessianAt(source,vars,point){return evaluateDerivativeObjectAtPoint(C.hessian(source,vars),vars,point);}
+
 /* Critical points and constrained optimization -------------------------- */
 function criticalPoints(source,vars){
   if(vars.length!==2)throw new UnsupportedMultivariableError("Critical-point solving is currently certified for two variables");
@@ -330,7 +340,8 @@ function adaptiveSimpsonFn(fn,a,b,options){
   function rec(l,r,fl,fm0,fr,S,depth,tol){
     var mid=(l+r)/2,lm=(l+mid)/2,rm=(mid+r)/2,flm=ev(lm),frm=ev(rm),
       left=(mid-l)*(fl+4*flm+fm0)/6,right=(r-mid)*(fm0+4*frm+fr)/6,delta=left+right-S;
-    if(depth<=0||Math.abs(delta)<=15*tol)return {value:left+right+delta/15,error:Math.abs(delta/15)};
+    if(Math.abs(delta)<=15*tol)return {value:left+right+delta/15,error:Math.abs(delta/15)};
+    if(depth<=0)throw new MultivariableError("INTEGRATION_CONVERGENCE","Adaptive integration did not converge within the U2 recursion limit",{interval:[l,r],errorEstimate:Math.abs(delta/15),tolerance:tol});
     var L=rec(l,mid,fl,flm,fm0,left,depth-1,tol/2),R=rec(mid,r,fm0,frm,fr,right,depth-1,tol/2);
     return {value:L.value+R.value,error:L.error+R.error};
   }
@@ -456,7 +467,28 @@ function parseSemicolon(raw,name){
 function runCommand(raw,options){
   raw=String(raw).trim();options=options||{};
 
-  var parts=parseSemicolon(raw,"totaldiff");
+  var parts=parseSemicolon(raw,"gradat");
+  if(parts){
+    if(parts.length!==3)throw new MultivariableError("ARITY_ERROR","gradat expects gradat(f; x,y,...; point)");
+    var gav=parseVarList(parts[1]),gar=gradientAt(parts[0],gav,splitArgs(parts[2]));
+    return commandResult(formatVector(gar),"gradient-at-point",{value:gar,metadata:{operation:"gradat",variables:gav}});
+  }
+
+  parts=parseSemicolon(raw,"jacobianat");
+  if(parts){
+    if(parts.length!==3)throw new MultivariableError("ARITY_ERROR","jacobianat expects jacobianat(f1,f2,...; x,y,...; point)");
+    var jav=parseVarList(parts[1]),jar=jacobianAt(splitArgs(parts[0]),jav,splitArgs(parts[2]));
+    return commandResult("["+jar.map(function(row){return formatVector(row);}).join(", ")+"]","jacobian-at-point",{value:jar,metadata:{operation:"jacobianat",variables:jav}});
+  }
+
+  parts=parseSemicolon(raw,"hessianat");
+  if(parts){
+    if(parts.length!==3)throw new MultivariableError("ARITY_ERROR","hessianat expects hessianat(f; x,y,...; point)");
+    var hav=parseVarList(parts[1]),har=hessianAt(parts[0],hav,splitArgs(parts[2]));
+    return commandResult("["+har.map(function(row){return formatVector(row);}).join(", ")+"]","hessian-at-point",{value:har,metadata:{operation:"hessianat",variables:hav}});
+  }
+
+  parts=parseSemicolon(raw,"totaldiff");
   if(parts){
     if(parts.length!==2)throw new MultivariableError("ARITY_ERROR","totaldiff expects totaldiff(expression; x,y,...)");
     var td=totalDifferential(parts[0],parseVarList(parts[1]));
@@ -514,8 +546,8 @@ function runCommand(raw,options){
 
   parts=parseSemicolon(raw,"lagrange");
   if(parts){
-    if(parts.length!==5)throw new MultivariableError("ARITY_ERROR","lagrange expects lagrange(f; g; target; x,y)");
-    var lvars=parseVarList(parts[4]),lg=lagrangeLinearConstraint(parts[0],parts[1],parts[2],lvars);
+    if(parts.length!==4)throw new MultivariableError("ARITY_ERROR","lagrange expects lagrange(f; g; target; x,y)");
+    var lvars=parseVarList(parts[3]),lg=lagrangeLinearConstraint(parts[0],parts[1],parts[2],lvars);
     return commandResult(lg.toString(),"lagrange",{value:lg.solution,metadata:{operation:"lagrange",variables:lvars}});
   }
 
@@ -635,7 +667,7 @@ function runCommand(raw,options){
   }
 
   if(/^mvhelp\s*\(\s*\)$/i.test(raw)){
-    return commandResult("U2: totaldiff · directional · implicitdiff · tangentplane · mtaylor · mlimit · critical · classify · lagrange · div · curl · potential · conservative · lineint · arclength · doubleint · tripleint · surfacearea · flux · green · stokes · gauss","multivariable-help",{metadata:{operation:"mvhelp"}});
+    return commandResult("U2: gradat · jacobianat · hessianat · totaldiff · directional · implicitdiff · tangentplane · mtaylor · mlimit · critical · classify · lagrange · div · curl · potential · conservative · lineint · arclength · scalarline · doubleint · tripleint · surfacearea · flux · green · stokes · gauss","multivariable-help",{metadata:{operation:"mvhelp"}});
   }
   return null;
 }
@@ -644,7 +676,7 @@ global.CalcMultivariable={
   VERSION:"2.1.0-u2",
   MultivariableError:MultivariableError,UnsupportedMultivariableError:UnsupportedMultivariableError,MultivariableLimitError:MultivariableLimitError,
   VectorField:VectorField,
-  totalDifferential:totalDifferential,directionalDerivative:directionalDerivative,implicitDerivative:implicitDerivative,tangentPlane:tangentPlane,multiTaylor:multiTaylor,multivariableLimit:multivariableLimit,
+  gradientAt:gradientAt,jacobianAt:jacobianAt,hessianAt:hessianAt,totalDifferential:totalDifferential,directionalDerivative:directionalDerivative,implicitDerivative:implicitDerivative,tangentPlane:tangentPlane,multiTaylor:multiTaylor,multivariableLimit:multivariableLimit,
   criticalPoints:criticalPoints,classifyCriticalPoint:classifyCriticalPoint,lagrangeLinearConstraint:lagrangeLinearConstraint,
   potential:potential,conservative:conservative,
   adaptiveSimpsonFn:adaptiveSimpsonFn,integrateAstNumeric:integrateAstNumeric,doubleIntegralNumeric:doubleIntegralNumeric,tripleIntegralNumeric:tripleIntegralNumeric,
