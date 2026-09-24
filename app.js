@@ -4,6 +4,7 @@ const M=window.CalcMath;
 const A=window.CalcAlgebra;
 const C=window.CalcCalculus;
 const CAS=window.CalcCAS;
+const MV=window.CalcMultivariable;
 const U=window.CalcUnits;
 const LA=window.CalcLinearAlgebra;
 const S=window.CalcStatistics;
@@ -12,7 +13,7 @@ const T=window.CalcTools;
 const CT=window.CalcCustomTools;
 const NB=window.CalcNotebook;
 const P=window.CalcPersistence;
-const APP_VERSION="2.0.0";
+const APP_VERSION="2.1.0";
 window.CalcAppVersion=APP_VERSION;
 const $=function(s,r){return (r||document).querySelector(s);};
 const $$=function(s,r){return Array.from((r||document).querySelectorAll(s));};
@@ -144,6 +145,8 @@ function backspaceExpression(){
 }
 function calcOptions(commit){return {angle:state.angle,precision:state.precision,complex:true,commit:commit};}
 function evaluateInput(raw,env,commit){
+  var multivariable=MV&&MV.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
+  if(multivariable)return multivariable;
   var advanced=CAS&&CAS.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
   if(advanced)return advanced;
   var calculus=C&&C.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
@@ -169,7 +172,7 @@ function setCalcResult(res,preview){
   $("#approxResult").textContent=res.approx||"";
   $("#calcStatus").textContent=preview?"Preview":(res.symbolic?"Symbolic":(res.quantity?"Quantity":(res.exact?"Exact":"Approximate")));
   var graphAction=$('[data-result-action="graph"]'),saveAction=$('[data-result-action="save"]'),op=res.metadata&&res.metadata.operation;
-  var graphBlocked=!!res.symbolic||!!res.quantity||["integral","nintegral","nderivative","root","limit"].indexOf(op)>=0;
+  var graphBlocked=!!res.symbolic||!!res.quantity||!!(res.metadata&&res.metadata.u2)||["integral","nintegral","nderivative","root","limit"].indexOf(op)>=0;
   if(graphAction)graphAction.disabled=graphBlocked;
   if(saveAction)saveAction.disabled=!!res.symbolic;
 }
@@ -1487,6 +1490,14 @@ const commands=[
   {id:"cas.parameterEquation",title:"CAS: Solve parameter equation",keywords:"cas symbolic parameter conditional equation",run:function(){switchView("calculate");$("#expressionInput").value="solve(a*x+b=0, x)";previewExpression();$("#expressionInput").focus();}},
   {id:"cas.parameterSystem",title:"CAS: Parameterized linear system",keywords:"cas symbolic parameter system cramer determinant",run:function(){switchView("calculate");$("#expressionInput").value="psystem(x,y; a*x+y=1; x+a*y=2)";previewExpression();$("#expressionInput").focus();}},
   {id:"cas.advancedIntegral",title:"CAS: Advanced symbolic integral",keywords:"cas symbolic integration by parts rational",run:function(){switchView("calculate");$("#expressionInput").value="integrate(x*exp(x), x)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u2.directional",title:"U2: Directional derivative",keywords:"multivariable directional gradient point vector",run:function(){switchView("calculate");$("#expressionInput").value="directional(x^2+y^2; x,y; 1,2; 3,4)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u2.tangent",title:"U2: Tangent plane",keywords:"multivariable tangent plane gradient surface",run:function(){switchView("calculate");$("#expressionInput").value="tangentplane(x^2+y^2; x,y; 1,2)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u2.limit",title:"U2: Multivariable limit",keywords:"multivariable limit paths continuity",run:function(){switchView("calculate");$("#expressionInput").value="mlimit((x^2+y^2)/(1+x^2+y^2); x,y; 0,0)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u2.critical",title:"U2: Critical points",keywords:"multivariable critical hessian optimization classify",run:function(){switchView("calculate");$("#expressionInput").value="critical(x^2+2*y^2-4*x+8*y; x,y)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u2.vector",title:"U2: Divergence / curl",keywords:"vector field divergence curl potential conservative",run:function(){switchView("calculate");$("#expressionInput").value="curl(-y,x,0; x,y,z)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u2.line",title:"U2: Line integral",keywords:"vector calculus line integral circulation curve",run:function(){switchView("calculate");$("#expressionInput").value="lineint(-y,x; x,y; cos(t),sin(t); t; 0,2*pi)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u2.surface",title:"U2: Surface flux",keywords:"vector calculus surface area flux parametric",run:function(){switchView("calculate");$("#expressionInput").value="flux(0,0,1; x,y,z; u,v,0; u,v; 0,1; 0,1)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u2.theorems",title:"U2: Integral theorem check",keywords:"green stokes divergence gauss theorem vector calculus",run:function(){switchView("calculate");$("#expressionInput").value="green(-y,x; x,y; 0,1; 0,1)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.diff",title:"Differentiate expression",keywords:"calculus derivative diff",run:function(){switchView("calculate");$("#expressionInput").value="diff(x^3 + sin(x), x)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.gradient",title:"Gradient",keywords:"calculus multivariable gradient partial",run:function(){switchView("calculate");$("#expressionInput").value="gradient(x^2+y^2, x, y)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.jacobian",title:"Jacobian",keywords:"calculus multivariable jacobian derivatives",run:function(){switchView("calculate");$("#expressionInput").value="jacobian(x^2+y; x*y, x, y)";previewExpression();$("#expressionInput").focus();}},

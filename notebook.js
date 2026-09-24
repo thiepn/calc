@@ -5,12 +5,13 @@ const M=global.CalcMath;
 const A=global.CalcAlgebra;
 const C=global.CalcCalculus;
 const CAS=global.CalcCAS;
+const MV=global.CalcMultivariable;
 const U=global.CalcUnits;
 const LA=global.CalcLinearAlgebra;
 const S=global.CalcStatistics;
 const G=global.CalcGraph;
 const T=global.CalcTools;
-if(!M||!A||!C||!U||!LA||!S||!G||!T)throw new Error("Calc notebook dependencies must load before CalcNotebook");
+if(!M||!A||!C||!CAS||!MV||!U||!LA||!S||!G||!T)throw new Error("Calc notebook dependencies must load before CalcNotebook");
 
 const SCHEMA="calc.notebook/v2";
 const MAX_BLOCKS=500;
@@ -96,7 +97,7 @@ function usedIdentifiers(source){
   const info=assignmentInfo(source),exclude=new Set((info.parameters||[]).concat(info.symbols)),out=[],tokens=String(info.rhs||"").match(/[A-Za-z_][A-Za-z0-9_]*/g)||[];
   for(const name of tokens){
     if(exclude.has(name))continue;
-    if(["simplify","expand","collect","factor","solve","system","psystem","inequality","substitute","assume","assuming","cashelp","diff","partial","gradient","jacobian","hessian","integrate","integral","nintegral","limit","taylor","nderivative","root"].includes(name))continue;
+    if(["simplify","expand","collect","factor","solve","system","psystem","inequality","substitute","assume","assuming","cashelp","diff","partial","gradient","jacobian","hessian","integrate","integral","nintegral","limit","taylor","nderivative","root","gradat","jacobianat","hessianat","totaldiff","directional","implicitdiff","tangentplane","mtaylor","mlimit","critical","classify","lagrange","div","curl","potential","conservative","lineint","arclength","scalarline","doubleint","tripleint","surfacearea","flux","green","stokes","gauss","mvhelp"].includes(name))continue;
     if(M.FUNCTION_REGISTRY&&Object.prototype.hasOwnProperty.call(M.FUNCTION_REGISTRY,name))continue;
     if(M.CONSTANT_REGISTRY&&Object.prototype.hasOwnProperty.call(M.CONSTANT_REGISTRY,name))continue;
     if(U.CONSTANT_REGISTRY&&Object.prototype.hasOwnProperty.call(U.CONSTANT_REGISTRY,name))continue;
@@ -172,7 +173,8 @@ function resolveConfigRefs(value,blockMap){
 }
 
 function evaluateMath(raw,env,options){
-  options=options||{};let advanced=CAS&&CAS.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(advanced)return advanced;
+  options=options||{};let multivariable=MV&&MV.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(multivariable)return multivariable;
+  let advanced=CAS&&CAS.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(advanced)return advanced;
   let calculus=C.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(calculus)return calculus;
   let symbolic=A.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(symbolic)return symbolic;
   const assignment=String(raw).match(/^\s*([A-Za-z_]\w*)\s*=\s*(?!=)(.+)$/s);

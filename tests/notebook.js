@@ -4,6 +4,7 @@ require("../math.js");
 require("../algebra.js");
 require("../calculus.js");
 require("../cas.js");
+require("../multivariable.js");
 require("../units.js");
 require("../linear-algebra.js");
 require("../statistics.js");
@@ -67,6 +68,19 @@ eq(nb.blocks[0].status,"clean","assumption-aware CAS block clean");
 eq(nb.blocks[0].result.display,"x assuming x>0","assumption-aware CAS block result");
 assert(nb.blocks[1].result.display.includes("a ≠ 0")&&nb.blocks[1].result.display.includes("a = 0 and b = 0"),"parameterized CAS block result");
 assert(!nb.blocks[0].dependencies.includes("assume")&&!nb.blocks[1].dependencies.includes("solve"),"CAS command names are not notebook dependencies");
+
+// U2 multivariable/vector commands share the Worksheet Math surface.
+nb=doc([
+  block("u2a","math","gradat(x^2+y^2; x,y; 1,2)"),
+  block("u2b","math","lineint(-y,x; x,y; cos(t),sin(t); t; 0,2*pi)"),
+  block("u2c","math","green(-y,x; x,y; 0,1; 0,1)")
+]);
+run=N.evaluateNotebook(nb,{precision:12,angle:"RAD"});nb=run.document;
+eq(nb.blocks[0].status,"clean","U2 gradient block clean");
+eq(nb.blocks[0].result.display,"[2, 4]","U2 gradient block result");
+assert(nb.blocks[1].result.display.includes("6.283"),"U2 line integral block result");
+assert(nb.blocks[2].result.display.includes("residual 0"),"U2 theorem block result");
+assert(!nb.blocks[0].dependencies.includes("gradat")&&!nb.blocks[1].dependencies.includes("lineint")&&!nb.blocks[2].dependencies.includes("green"),"U2 command names are not notebook dependencies");
 
 // Quantity assignment + typed reference preserves units.
 nb=doc([

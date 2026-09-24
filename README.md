@@ -2,9 +2,9 @@
 
 A local-first universal calculator PWA and mathematical workstation.
 
-**Current stable release: v2.0.0** · IndexedDB schema v5 · production channel.
+**Current stable release: v2.1.0** · IndexedDB schema v5 · production channel.
 
-v2.0.0 begins Calc's University Mathematics Workstation line with Phase U1: a conservative advanced CAS layer for assumptions, parameterized solving, stronger exact systems/inequalities, and verified symbolic integration.
+v2.1.0 adds Phase U2: certified multivariable calculus and vector analysis on top of the v2.0 advanced CAS foundation.
 
 ## Current implementation
 
@@ -12,7 +12,7 @@ Calc currently includes:
 
 - exact arbitrary-size Integer/Rational arithmetic;
 - finite Real and exact-capable Complex scalars;
-- symbolic algebra, advanced CAS/parameter solving, calculus and numerical methods;
+- symbolic algebra, advanced CAS/parameter solving, single- and multivariable calculus, vector analysis, and numerical methods;
 - first-class physical quantities, units, constants and engineering relations;
 - canonical Matrix/Vector/subspace objects and certified numerical decompositions;
 - typed Dataset/probability/inference/regression systems;
@@ -43,6 +43,31 @@ cashelp()
 ```
 
 U1 is intentionally certified rather than universal: unsupported symbolic forms return explicit errors instead of guessed algebra. Exact assumptions, solver families, integration rules, and limitations are documented in `docs/math/ADVANCED_CAS_SEMANTICS.md`.
+
+## Multivariable Calculus & Vector Analysis — v2.1 / U2
+
+U2 adds a separate certified multivariable/vector engine shared by Calculate and Worksheet Math blocks.
+
+Examples:
+
+```text
+gradat(x^2+y^2; x,y; 1,2)
+directional(x^2+y^2; x,y; 1,2; 3,4)
+implicitdiff(x^2+y^2-1; y; x)
+tangentplane(x^2+y^2; x,y; 1,2)
+mlimit(x*y/(x^2+y^2); x,y; 0,0)
+critical(x^2+2*y^2-4*x+8*y; x,y)
+lagrange(x^2+y^2; x+y; 1; x,y)
+curl(-y,x,0; x,y,z)
+lineint(-y,x; x,y; cos(t),sin(t); t; 0,2*pi)
+surfacearea(u,v,0; u,v; 0,1; 0,1)
+green(-y,x; x,y; 0,1; 0,1)
+stokes(-y,x,0; x,y,z; 0,1; 0,1; 0)
+gauss(x,y,z; x,y,z; 0,1; 0,1; 0,1)
+mvhelp()
+```
+
+The theorem tools intentionally certify rectangular/planar/box domains rather than pretending to solve arbitrary geometry. Full syntax, numerical semantics, supported domains, and explicit boundaries are documented in `docs/math/MULTIVARIABLE_VECTOR_SEMANTICS.md`.
 
 ## Tools V2
 

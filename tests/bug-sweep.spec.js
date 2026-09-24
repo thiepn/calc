@@ -57,6 +57,26 @@ test("U1 advanced CAS executes through the Calculate UI",async({page})=>{
   expect(errors).toEqual([]);
 });
 
+test("U2 multivariable and vector calculus executes through the Calculate UI",async({page})=>{
+  const errors=await openApp(page);
+  expect(await page.evaluate(()=>window.CalcMultivariable&&window.CalcMultivariable.VERSION)).toBe("2.1.0-u2");
+  const input=page.locator("#expressionInput");
+
+  await input.fill("gradat(x^2+y^2; x,y; 1,2)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toHaveText("[2, 4]");
+
+  await input.fill("lineint(-y,x; x,y; cos(t),sin(t); t; 0,2*pi)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("6.283");
+
+  await input.fill("green(-y,x; x,y; 0,1; 0,1)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("residual 0");
+
+  expect(errors).toEqual([]);
+});
+
 test("notebook read failure does not create replacement or recovery duplicates",async({page})=>{
   const errors=await openApp(page);
   const seeded=await page.evaluate(async()=>{
