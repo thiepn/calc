@@ -38,6 +38,10 @@ eq(cv.classification,"convex","semidefinite convexity");
 cv=O.convexity("x^2-y^2",["x","y"]);
 eq(cv.classification,"indefinite","indefinite quadratic");
 
+cv=O.convexity("3*x-2*y+7",["x","y"]);
+eq(cv.classification,"affine/flat (convex and concave)","affine zero-Hessian classification");
+eq(cv.matrixClass,"zero","zero Hessian class");
+
 // Pointwise Hessian information must not be mislabeled as global/local convexity proof.
 cv=O.convexity("x^4+y^2",["x","y"],["0","0"]);
 eq(cv.classification,"positive semidefinite Hessian at point","pointwise curvature wording");
