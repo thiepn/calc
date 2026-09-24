@@ -94,6 +94,8 @@ const il2=O.inverseLaplace("s/(s^2+4)","s","t");
 for(const t of [0,0.4,1])approx(evalExpr(il2,{t}),Math.cos(2*t),1e-10,"inverse Laplace oscillatory");
 const il3=O.inverseLaplace("1/(s^2-1)","s","t");
 for(const t of [0.2,0.8])approx(evalExpr(il3,{t}),Math.sinh(t),1e-10,"inverse Laplace real poles");
+const il4=O.inverseLaplace("(s+1)/(s^2+2*s+5)","s","t");
+for(const t of [0,0.2,0.8])approx(evalExpr(il4,{t}),Math.exp(-t)*Math.cos(2*t),1e-10,"inverse Laplace shifted quadratic");
 
 // Convolution theorem primitive.
 const conv=O.convolutionAt("1","t","t","2",{absTol:1e-11,relTol:1e-11});
@@ -104,6 +106,9 @@ throwsCode(()=>O.convolutionAt("1","1","t","-1",{}),"INVALID_TIME","negative Lap
 const iv=O.solveScalarIVP("y","x","y","0","1","1",{absTol:1e-11,relTol:1e-10});
 approx(iv.value,Math.E,2e-9,"adaptive scalar IVP");
 assert(iv.result.steps>0&&iv.result.rejectedSteps>=0,"RK45 metadata");
+
+const logistic=O.solveScalarIVP("y*(1-y)","t","y","0","0.2","5",{absTol:1e-11,relTol:1e-10});
+approx(logistic.value,1/(1+4*Math.exp(-5)),5e-9,"nonlinear logistic IVP");
 
 // Backward integration.
 const back=O.solveScalarIVP("y","x","y","1",String(Math.E),"0",{absTol:1e-11,relTol:1e-10});
@@ -159,6 +164,9 @@ const center=O.classifyLinearization2("y","-x","x","y","0","0");
 eq(center.classification,"center (linearized)","center classification");
 eq(center.stability,"nonlinear stability inconclusive","center nonlinear caution");
 throwsCode(()=>O.classifyLinearization2("y","-x","x","y","1","0"),"NOT_EQUILIBRIUM","non-equilibrium rejected");
+const nonhyper=O.classifyLinearization2("x^2","-y","x","y","0","0");
+eq(nonhyper.classification,"non-hyperbolic","non-hyperbolic classification");
+eq(nonhyper.stability,"inconclusive","non-hyperbolic stability caution");
 
 // Direction fields skip singular grid samples instead of inventing vectors.
 const df=O.directionField("y-x","x","y",[-1,1],[-1,1],[5,5]);
