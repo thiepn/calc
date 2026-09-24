@@ -87,6 +87,13 @@ for(const [x,y] of [[-2,1],[0.5,3]]){
 assert(MV.conservative(new MV.VectorField(["y","x"],["x","y"])).conservative,"conservative field");
 assert(!MV.conservative(new MV.VectorField(["-y","x"],["x","y"])).conservative,"non-conservative field");
 
+const pot3=MV.potential(new MV.VectorField(["2*x*y+z","x^2+2*y","x"],["x","y","z"]));
+for(const env of [{x:1,y:2,z:3},{x:-0.5,y:1.2,z:-2}]){
+  approx(evalSym(C.differentiate(pot3,"x"),env),2*env.x*env.y+env.z,1e-10,"3D potential x");
+  approx(evalSym(C.differentiate(pot3,"y"),env),env.x*env.x+2*env.y,1e-10,"3D potential y");
+  approx(evalSym(C.differentiate(pot3,"z"),env),env.x,1e-10,"3D potential z");
+}
+
 // Curve calculus.
 const circle=MV.parametricCurve(["cos(t)","sin(t)"],"t");
 const circleField=new MV.VectorField(["-y","x"],["x","y"]);
