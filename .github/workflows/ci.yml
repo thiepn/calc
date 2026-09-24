@@ -40,6 +40,7 @@ jobs:
           node --check cas.js
           node --check multivariable.js
           node --check ode.js
+          node --check optimization.js
           node --check calculus-worker.js
           node --check units.js
           node --check linear-algebra.js
@@ -61,6 +62,7 @@ jobs:
           node --check tests/cas.js
           node --check tests/multivariable.js
           node --check tests/ode.js
+          node --check tests/optimization.js
           node --check tests/units.js
           node --check tests/linear-algebra.js
           node --check tests/statistics.js
@@ -92,6 +94,8 @@ jobs:
         run: node tests/multivariable.js
       - name: Differential Equations & Dynamical Systems U3 certification
         run: node tests/ode.js
+      - name: Optimization & Mathematical Programming U4 certification
+        run: node tests/optimization.js
       - name: Units quantities constants and engineering certification
         run: node tests/units.js
       - name: Linear Algebra V2 certification

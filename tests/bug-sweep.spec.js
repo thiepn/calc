@@ -101,6 +101,30 @@ test("U3 differential equations and dynamical systems execute through the Calcul
   expect(errors).toEqual([]);
 });
 
+test("U4 optimization and mathematical programming execute through the Calculate UI",async({page})=>{
+  const errors=await openApp(page);
+  expect(await page.evaluate(()=>window.CalcOptimization&&window.CalcOptimization.VERSION)).toBe("2.3.0-u4");
+  const input=page.locator("#expressionInput");
+
+  await input.fill("convexity(x^2+2*y^2; x,y)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("strictly convex");
+
+  await input.fill("optmin((x-1)^2+(y+2)^2; x,y; 3,3; bfgs)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("global strict optimum");
+
+  await input.fill("lpmax(3,2; 1,1|1,0|0,1; 4,2,3)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("objective = 10");
+
+  await input.fill("quadprog(x^2+y^2; x,y; x+y-1; -x,-y)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("f = 0.5");
+
+  expect(errors).toEqual([]);
+});
+
 test("notebook read failure does not create replacement or recovery duplicates",async({page})=>{
   const errors=await openApp(page);
   const seeded=await page.evaluate(async()=>{

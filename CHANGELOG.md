@@ -2,6 +2,28 @@
 
 All notable production changes to Calc are recorded here.
 
+## [2.3.0] — 2026-09-25
+
+### University Mathematics Workstation — Phase U4
+
+- Added the standalone `optimization.js` runtime and routed it through Calculate and Worksheet Math evaluation.
+- Added global constant-Hessian convexity/concavity certification and pointwise Hessian-curvature analysis.
+- Added BFGS, Newton, and gradient-descent local optimization with Armijo line search.
+- Added second-order verification so gradient convergence at a saddle is rejected instead of labeled a minimum/maximum.
+- Added projected-gradient box-constrained minimization/maximization.
+- Added KKT verification for equality and `h(x)<=0` inequality constraints.
+- Added exact Rational primal simplex for certified standard-form LPs with Bland-style pivoting.
+- Added primal–dual LP certificate verification and exact unboundedness detection.
+- Added active-set convex quadratic programming with exact KKT systems, multiplier checks, and KKT re-verification.
+- Added `goldenmin(...)` / `goldenmax(...)` bounded 1D search.
+- Added `opthelp()`, U4 command-palette templates, offline caching, Worksheet coverage, browser regression tests, and release-gate enforcement.
+- Added `tests/optimization.js` and `docs/math/OPTIMIZATION_SEMANTICS.md`.
+
+### Compatibility
+
+- U1 CAS, U2 multivariable/vector calculus, U3 differential equations/dynamics, and all earlier calculator subsystems remain intact.
+- Unsupported global/nonlinear/mixed-integer/phase-I/interior-point formulations fail explicitly rather than being presented as certified solutions.
+
 ## [2.2.0] — 2026-09-25
 
 ### University Mathematics Workstation — Phase U3

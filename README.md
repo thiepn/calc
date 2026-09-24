@@ -2,9 +2,9 @@
 
 A local-first universal calculator PWA and mathematical workstation.
 
-**Current stable release: v2.2.0** · IndexedDB schema v5 · production channel.
+**Current stable release: v2.3.0** · IndexedDB schema v5 · production channel.
 
-v2.2.0 adds Phase U3: differential equations and dynamical systems on top of the U1 advanced CAS and U2 multivariable/vector foundation.
+v2.3.0 adds Phase U4: optimization and mathematical programming on top of the U1–U3 university-mathematics foundation.
 
 ## Current implementation
 
@@ -12,7 +12,7 @@ Calc currently includes:
 
 - exact arbitrary-size Integer/Rational arithmetic;
 - finite Real and exact-capable Complex scalars;
-- symbolic algebra, advanced CAS/parameter solving, single- and multivariable calculus, vector analysis, differential equations, dynamical systems, and numerical methods;
+- symbolic algebra, advanced CAS/parameter solving, single- and multivariable calculus, vector analysis, differential equations, dynamical systems, optimization, mathematical programming, and numerical methods;
 - first-class physical quantities, units, constants and engineering relations;
 - canonical Matrix/Vector/subspace objects and certified numerical decompositions;
 - typed Dataset/probability/inference/regression systems;
@@ -104,6 +104,34 @@ odehelp()
 ```
 
 Adaptive IVPs use Dormand–Prince RK45 with explicit convergence and singularity semantics. Hyperbolic planar equilibria receive local stability classifications, while non-hyperbolic cases remain explicitly inconclusive. Full syntax and certification boundaries are documented in `docs/math/ODE_DYNAMICAL_SYSTEMS_SEMANTICS.md`.
+
+## Optimization & Mathematical Programming — v2.3 / U4
+
+U4 adds a certified optimization layer shared by Calculate and Worksheet Math blocks.
+
+Examples:
+
+```text
+convexity(x^2+2*y^2; x,y)
+convexity(x^4+y^2; x,y; 0,0)
+
+goldenmin((x-2)^2+1; x; -5,5)
+optmin((1-x)^2+100*(y-x^2)^2; x,y; -1.2,1; bfgs)
+optmax(-(x-1)^2-(y-2)^2+5; x,y; 0,0; bfgs)
+boxmin((x-3)^2+(y+1)^2; x,y; 0,-2; 2,2; 1,0)
+
+kktcheck(x^2+y^2; x,y; x+y-1; -x,-y; 0.5,0.5; -1; 0,0)
+
+lpmax(3,2; 1,1|1,0|0,1; 4,2,3)
+lpmin(-1,-2; 1,0|0,1; 3,4)
+
+quadprog(x^2+y^2; x,y; x+y-1; -x,-y)
+opthelp()
+```
+
+Numerical stationary points are checked against second-order curvature before Calc labels them as extrema. Standard-form LPs use exact Rational simplex arithmetic plus primal–dual certificate verification. Convex QPs use exact active-set KKT systems and re-check every candidate.
+
+Full syntax, guarantees, and explicit unsupported boundaries are documented in `docs/math/OPTIMIZATION_SEMANTICS.md`.
 
 ## Tools V2
 
