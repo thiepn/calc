@@ -2,9 +2,9 @@
 
 A local-first universal calculator PWA and mathematical workstation.
 
-**Current stable release: v2.1.0** · IndexedDB schema v5 · production channel.
+**Current stable release: v2.2.0** · IndexedDB schema v5 · production channel.
 
-v2.1.0 adds Phase U2: certified multivariable calculus and vector analysis on top of the v2.0 advanced CAS foundation.
+v2.2.0 adds Phase U3: differential equations and dynamical systems on top of the U1 advanced CAS and U2 multivariable/vector foundation.
 
 ## Current implementation
 
@@ -12,7 +12,7 @@ Calc currently includes:
 
 - exact arbitrary-size Integer/Rational arithmetic;
 - finite Real and exact-capable Complex scalars;
-- symbolic algebra, advanced CAS/parameter solving, single- and multivariable calculus, vector analysis, and numerical methods;
+- symbolic algebra, advanced CAS/parameter solving, single- and multivariable calculus, vector analysis, differential equations, dynamical systems, and numerical methods;
 - first-class physical quantities, units, constants and engineering relations;
 - canonical Matrix/Vector/subspace objects and certified numerical decompositions;
 - typed Dataset/probability/inference/regression systems;
@@ -68,6 +68,42 @@ mvhelp()
 ```
 
 The theorem tools intentionally certify rectangular/planar/box domains rather than pretending to solve arbitrary geometry. Full syntax, numerical semantics, supported domains, and explicit boundaries are documented in `docs/math/MULTIVARIABLE_VECTOR_SEMANTICS.md`.
+
+## Differential Equations & Dynamical Systems — v2.2 / U3
+
+U3 adds a separate certified ODE/dynamics engine shared by Calculate and Worksheet Math blocks.
+
+Examples:
+
+```text
+separable(x; y; x; y)
+exactode(2*x*y; x^2+2*y; x; y)
+linearode(1; 1; x; y)
+bernoulli(1; 1; 2; x; y)
+ode2hom(1; 0; 4; x; y)
+seriesivp(x+y; x; y; 0,1; 5)
+
+ivp(y; x; y; 0,1; 1)
+ivp2(sin(x)-y; x; y; v; 0,0,0; pi)
+ivpsystem(y,-x; t; x,y; 0; 1,0; pi/2)
+rk4(y; x; y; 0; 1; 1; 100)
+
+equilibria(x-y,x+y; x,y)
+linearize(y,-x; x,y; 0,0)
+stability(-x-y,x-y; x,y; 0,0)
+directionfield(y-x; x,y; -2,2; -2,2; 9,9)
+phase2(y,-x; x,y; -2,2; -2,2; 9,9; 1,0; 0,2*pi; 41)
+
+matrixexp2(0,-1,1,0; t)
+linearflow2(0,-1,1,0; 1,0; t)
+
+laplace(t^2+3*sin(2*t); t; s)
+invlaplace(s/(s^2+4); s; t)
+convolution(1; t; t; 2)
+odehelp()
+```
+
+Adaptive IVPs use Dormand–Prince RK45 with explicit convergence and singularity semantics. Hyperbolic planar equilibria receive local stability classifications, while non-hyperbolic cases remain explicitly inconclusive. Full syntax and certification boundaries are documented in `docs/math/ODE_DYNAMICAL_SYSTEMS_SEMANTICS.md`.
 
 ## Tools V2
 
