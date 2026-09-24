@@ -116,8 +116,10 @@ approx(rk4.state[0],Math.E,2e-9,"RK4 exponential");
 // Explicit convergence and singularity semantics.
 const hard=O.compileSystem(["y"],"x",["y"]);
 throwsCode(()=>O.rk45System(hard,0,[1],10,{maxSteps:1,absTol:1e-14,relTol:1e-14}),"ODE_CONVERGENCE","RK45 step budget");
-const singular=O.compileSystem(["1/(x-0.5)"],"x",["y"]);
-throwsCode(()=>O.rk45System(singular,0,[0],1,{absTol:1e-10,relTol:1e-9}),"ODE_SINGULARITY","singular RHS");
+const singular=O.compileSystem(["1/(x-x)"],"x",["y"]);
+throwsCode(()=>O.rk45System(singular,0,[0],1,{absTol:1e-10,relTol:1e-9}),"ODE_SINGULARITY","immediately singular RHS");
+const pole=O.compileSystem(["1/(x-0.5)"],"x",["y"]);
+throwsCode(()=>O.rk45System(pole,0,[0],1,{absTol:1e-10,relTol:1e-9}),"ODE_CONVERGENCE","un-crossable pole produces convergence failure");
 
 // Second-order IVP y''=-y gives sin(x).
 const iv2=O.solveSecondOrderIVP("-y","x","y","v","0","0","1","pi/2",{absTol:1e-11,relTol:1e-10});
