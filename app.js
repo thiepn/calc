@@ -8,6 +8,7 @@ const MV=window.CalcMultivariable;
 const ODE=window.CalcODE;
 const U=window.CalcUnits;
 const LA=window.CalcLinearAlgebra;
+const OPT=window.CalcOptimization;
 const S=window.CalcStatistics;
 const G=window.CalcGraph;
 const T=window.CalcTools;
@@ -146,6 +147,8 @@ function backspaceExpression(){
 }
 function calcOptions(commit){return {angle:state.angle,precision:state.precision,complex:true,commit:commit};}
 function evaluateInput(raw,env,commit){
+  var optimization=OPT&&OPT.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
+  if(optimization)return optimization;
   var ode=ODE&&ODE.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
   if(ode)return ode;
   var multivariable=MV&&MV.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
@@ -175,7 +178,7 @@ function setCalcResult(res,preview){
   $("#approxResult").textContent=res.approx||"";
   $("#calcStatus").textContent=preview?"Preview":(res.symbolic?"Symbolic":(res.quantity?"Quantity":(res.exact?"Exact":"Approximate")));
   var graphAction=$('[data-result-action="graph"]'),saveAction=$('[data-result-action="save"]'),op=res.metadata&&res.metadata.operation;
-  var graphBlocked=!!res.symbolic||!!res.quantity||!!(res.metadata&&(res.metadata.u2||res.metadata.u3))||["integral","nintegral","nderivative","root","limit"].indexOf(op)>=0;
+  var graphBlocked=!!res.symbolic||!!res.quantity||!!(res.metadata&&(res.metadata.u2||res.metadata.u3||res.metadata.u4))||["integral","nintegral","nderivative","root","limit"].indexOf(op)>=0;
   if(graphAction)graphAction.disabled=graphBlocked;
   if(saveAction)saveAction.disabled=!!res.symbolic;
 }
@@ -1510,6 +1513,12 @@ const commands=[
   {id:"u3.phase",title:"U3: Phase portrait data",keywords:"dynamical systems phase portrait trajectory vector field",run:function(){switchView("calculate");$("#expressionInput").value="phase2(y,-x; x,y; -2,2; -2,2; 9,9; 1,0; 0,2*pi; 41)";previewExpression();$("#expressionInput").focus();}},
   {id:"u3.laplace",title:"U3: Laplace transform",keywords:"ode laplace inverse transform convolution",run:function(){switchView("calculate");$("#expressionInput").value="laplace(t^2+3*sin(2*t); t; s)";previewExpression();$("#expressionInput").focus();}},
   {id:"u3.matrixexp",title:"U3: 2×2 matrix exponential",keywords:"ode system matrix exponential linear flow dynamics",run:function(){switchView("calculate");$("#expressionInput").value="matrixexp2(0,-1,1,0; t)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u4.convexity",title:"U4: Convexity certificate",keywords:"optimization convexity hessian positive definite quadratic",run:function(){switchView("calculate");$("#expressionInput").value="convexity(x^2+2*y^2; x,y)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u4.local",title:"U4: Local nonlinear optimization",keywords:"optimization bfgs newton gradient descent local minimum",run:function(){switchView("calculate");$("#expressionInput").value="optmin((1-x)^2+100*(y-x^2)^2; x,y; -1.2,1; bfgs)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u4.box",title:"U4: Box-constrained optimization",keywords:"optimization projected gradient bounds box constrained",run:function(){switchView("calculate");$("#expressionInput").value="boxmin((x-3)^2+(y+1)^2; x,y; 0,-2; 2,2; 1,0)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u4.kkt",title:"U4: KKT checker",keywords:"optimization kkt stationarity complementarity constraints multipliers",run:function(){switchView("calculate");$("#expressionInput").value="kktcheck(x^2+y^2; x,y; x+y-1; -x,-y; 0.5,0.5; -1; 0,0)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u4.lp",title:"U4: Linear program",keywords:"optimization linear programming simplex exact rational duality",run:function(){switchView("calculate");$("#expressionInput").value="lpmax(3,2; 1,1|1,0|0,1; 4,2,3)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u4.qp",title:"U4: Convex quadratic program",keywords:"optimization quadratic programming active set kkt convex",run:function(){switchView("calculate");$("#expressionInput").value="quadprog(x^2+y^2; x,y; x+y-1; -x,-y)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.diff",title:"Differentiate expression",keywords:"calculus derivative diff",run:function(){switchView("calculate");$("#expressionInput").value="diff(x^3 + sin(x), x)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.gradient",title:"Gradient",keywords:"calculus multivariable gradient partial",run:function(){switchView("calculate");$("#expressionInput").value="gradient(x^2+y^2, x, y)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.jacobian",title:"Jacobian",keywords:"calculus multivariable jacobian derivatives",run:function(){switchView("calculate");$("#expressionInput").value="jacobian(x^2+y; x*y, x, y)";previewExpression();$("#expressionInput").focus();}},
