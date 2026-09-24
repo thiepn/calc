@@ -664,12 +664,14 @@ function mergeCritical(entries){
 }
 function advancedInequality(source,variable){
   var rel=splitRelation(source,["<=",">=","<",">"]);if(!rel)throw new CASError("INEQUALITY_ERROR","Expected <, <=, >, or >=");
-  var left=M.parseExpression(rel.left),right=M.parseExpression(rel.right),diff=A.simplifyAst(bin("-",left,right)),all=varsOf(diff);
-  variable=variable||((all.length===1)?all[0]:null);if(!variable)throw new CASError("VARIABLE_REQUIRED","Inequality variable is ambiguous");
-  if(all.some(function(v){return v!==variable;}))throw new UnsupportedCASError("U1 inequality solving does not branch on symbolic parameters",{variables:all});
+  var left=M.parseExpression(rel.left),right=M.parseExpression(rel.right),rawDiff=bin("-",left,right),original=new A.SymbolicExpression(rawDiff),diff=A.simplifyAst(rawDiff),all=varsOf(diff);
+  variable=variable||((all.length===1)?all[0]:null);if(!variable){
+    var originalVars=original.variables();variable=originalVars.length===1?originalVars[0]:null;
+  }
+  if(!variable)throw new CASError("VARIABLE_REQUIRED","Inequality variable is ambiguous");
+  var domainVars=original.variables();if(domainVars.some(function(v){return v!==variable;}))throw new UnsupportedCASError("U1 inequality solving does not branch on symbolic parameters",{variables:domainVars});
   var rf=A.RationalFunction.fromAst(diff,variable),entries=[];
   entries=entries.concat(rootEntries(rf.numerator,variable,"zero"),rootEntries(rf.denominator,variable,"pole"));
-  var original=new A.SymbolicExpression(diff);
   original.restrictions.forEach(function(r){
     if(r.relation!=="!="||r.expression.variables().some(function(v){return v!==variable;}))return;
     try{
