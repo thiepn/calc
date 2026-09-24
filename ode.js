@@ -83,6 +83,11 @@ function substitute(sourceOrExpr,mapping){
   return new A.SymbolicExpression(simplify(A.substituteAst(e.ast,parsed)),{restrictions:e.restrictions});
 }
 function exactConstant(source){
+  if(source instanceof M.Rational)return source;
+  if(typeof source==="number"){
+    if(!Number.isFinite(source))throw new ODEError("FINITE_REQUIRED","Expected a finite constant");
+    return M.Rational.fromDecimal(String(source));
+  }
   var e=asExpr(source);
   if(e.variables().length)throw new ODEError("CONSTANT_REQUIRED","Expected a constant expression",{source:String(source)});
   var v=M.evaluateAst(e.ast,{}, {complex:false,angle:"RAD"},0);
