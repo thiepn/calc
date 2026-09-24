@@ -72,7 +72,7 @@ assert(opt.secondOrder.constantHessian,"Newton quadratic global certificate");
 opt=O.optimizeLocal("x^4+y^4",["x","y"],["1","-1"],"gradient","min",{maxIterations:3000});
 approx(opt.point[0],0,2e-6,"gradient quartic x");
 approx(opt.point[1],0,2e-6,"gradient quartic y");
-eq(opt.secondOrder.matrixClass,"positive semidefinite","quartic second-order inconclusive but nonnegative");
+eq(opt.secondOrder.matrixClass,"zero","quartic zero-Hessian second-order inconclusive");
 
 opt=O.optimizeLocal("-(x-1)^2-(y-2)^2+5",["x","y"],["0","0"],"bfgs","max",{});
 approx(opt.point[0],1,1e-8,"maximum x");
