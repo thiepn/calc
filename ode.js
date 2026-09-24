@@ -106,7 +106,9 @@ function exactSign(v){
 }
 function factorial(n){var f=1n;for(var i=2n;i<=BigInt(n);i++)f*=i;return f;}
 function evalExpression(e,env){
-  var v=M.evaluateAst(asExpr(e).ast,env||{}, {complex:false,angle:"RAD"},0),n=M.toNumber(v);
+  var v,n;
+  try{v=M.evaluateAst(asExpr(e).ast,env||{}, {complex:false,angle:"RAD"},0);n=M.toNumber(v);}
+  catch(err){throw new ODESingularityError("ODE expression is undefined or non-finite",{env:env,cause:err.code||err.message});}
   if(!Number.isFinite(n))throw new ODESingularityError("ODE expression produced a non-finite value",{env:env});
   return n;
 }
