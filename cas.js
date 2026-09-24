@@ -832,14 +832,15 @@ function pSystemCommand(raw){
 }
 function inequalityCommand(raw,options){
   var body=parseCall(raw,"inequality");if(body===null)return null;
-  try{
-    var basic=A.runCommand(raw,options);if(basic)return basic;
-  }catch(e){
-    if(!(e instanceof A.UnsupportedSymbolicError))throw e;
-  }
   var args=splitArgs(body);if(args.length<1||args.length>2)throw new CASError("ARITY_ERROR","inequality expects expression and optional variable");
-  var solved=advancedInequality(args[0],args[1]||undefined);
-  return commandResult(solved.variable+" ∈ "+solved.toString(),"interval-union",{value:solved,metadata:{operation:"inequality",advanced:true}});
+  try{
+    var solved=advancedInequality(args[0],args[1]||undefined);
+    return commandResult(solved.variable+" ∈ "+solved.toString(),"interval-union",{value:solved,metadata:{operation:"inequality",advanced:true}});
+  }catch(e){
+    if(!(e instanceof UnsupportedCASError)&&!(e instanceof A.UnsupportedSymbolicError))throw e;
+  }
+  var basic=A.runCommand(raw,options);if(basic)return basic;
+  return null;
 }
 function integrateCommand(raw,options){
   var body=parseCall(raw,"integrate");if(body===null)return null;
