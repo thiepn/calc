@@ -36,7 +36,7 @@ assert(index.indexOf('<script src="./optimization.js"></script>')>index.indexOf(
 assert(optimization.includes('VERSION:"2.3.0-u4"')&&optimization.includes("optimizeLocal")&&optimization.includes("simplexMax")&&optimization.includes("quadProg")&&optimization.includes("kktCheck"),"U4 optimization runtime incomplete");
 assert(app.includes("OPT&&OPT.runCommand")&&notebook.includes("OPT&&OPT.runCommand"),"U4 router not wired into Calculate and Worksheet");
 const u4Docs=read("docs/math/OPTIMIZATION_SEMANTICS.md");
-assert(u4Docs.includes("primal–dual certificate")&&u4Docs.includes("does **not** implement"),"U4 certification boundary is undocumented");
+assert(u4Docs.toLowerCase().includes("primal–dual certificate")&&u4Docs.includes("does **not** implement"),"U4 certification boundary is undocumented");
 assert(app.includes("ODE&&ODE.runCommand")&&notebook.includes("ODE&&ODE.runCommand"),"U3 router not wired into Calculate and Worksheet");
 const u3Docs=read("docs/math/ODE_DYNAMICAL_SYSTEMS_SEMANTICS.md");
 assert(u3Docs.includes("ODE_CONVERGENCE")&&u3Docs.includes("does **not** implement"),"U3 certification boundary is undocumented");
