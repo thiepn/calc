@@ -150,6 +150,27 @@ function solveLinearFirstOrder(P,Q,x,y){
   if(!verified)throw new UnsupportedODEError("Linear first-order solution failed residual verification");
   return new SymbolicODESolution("linear-first-order",y,x,solution,y+" = "+solution.toString(),{integratingFactor:mu,verified:true});
 }
+
+function solveExactFirstOrder(Msource,Nsource,x,y){
+  x=requireVar(x,"x variable");y=requireVar(y,"y variable");
+  var field=new MV.VectorField([Msource,Nsource],[x,y]),curl=field.curl();
+  if(!zeroAst(curl.ast))throw new ODEError("NOT_EXACT","Differential equation is not exact",{curl:curl.toString()});
+  var potential;
+  try{potential=MV.potential(field);}catch(e){
+    if(e instanceof MV.UnsupportedMultivariableError)throw new UnsupportedODEError("Exact equation is certified, but its potential is outside the current polynomial reconstruction rules",{cause:e.message});
+    throw e;
+  }
+  return new SymbolicODESolution("exact-first-order",y,x,potential,potential.toString()+" = C",{potential:potential,verified:true});
+}
+function solveBernoulli(P,Q,nSource,x,y){
+  x=requireVar(x,"independent variable");y=requireVar(y,"dependent variable");
+  var n=exactConstant(nSource);
+  if(M.isZero(n)||M.isZero(M.sub(n,rat(1))))throw new ODEError("DEGENERATE_BERNOULLI","For n = 0 or 1, use linearode(...)");
+  var oneMinus=M.sub(rat(1),n),p=expr(bin("*",lit(oneMinus),asExpr(P).ast)),q=expr(bin("*",lit(oneMinus),asExpr(Q).ast)),
+    transformed=solveLinearFirstOrder(p,q,x,"u"),power=lit(oneMinus),left=expr(bin("^",id(y),power));
+  return new SymbolicODESolution("bernoulli-implicit",y,x,null,left.toString()+" = "+transformed.expression.toString(),{power:oneMinus,transformed:transformed.expression,verified:true});
+}
+
 function solveSecondOrderHomogeneous(aSource,bSource,cSource,x,y){
   x=requireVar(x,"independent variable");y=requireVar(y,"dependent variable");
   var a=exactConstant(aSource),b=exactConstant(bSource),c=exactConstant(cSource);
@@ -434,17 +455,41 @@ function classifyLinearization2(f,g,x,y,x0Source,y0Source){
 }
 function directionField(rhs,x,y,xBounds,yBounds,grid){
   x=requireVar(x,"independent variable");y=requireVar(y,"dependent variable");
+  var rhsExpr=asExpr(rhs),allowed=new Set([x,y]);if(rhsExpr.variables().some(function(v){return !allowed.has(v);}))throw new UnsupportedODEError("Direction-field RHS may depend only on "+x+" and "+y);
   var xb=xBounds.map(numberConstant),yb=yBounds.map(numberConstant),nx=Number(grid[0]),ny=Number(grid[1]);
   if(xb.length!==2||yb.length!==2||!Number.isInteger(nx)||!Number.isInteger(ny)||nx<2||ny<2||nx>100||ny>100)throw new ODEError("INVALID_GRID","Direction-field grid must be nx,ny with each dimension 2–100");
-  var e=asExpr(rhs),points=[];
+  var points=[];
   for(var i=0;i<nx;i++)for(var j=0;j<ny;j++){
     var xv=xb[0]+(xb[1]-xb[0])*i/(nx-1),yv=yb[0]+(yb[1]-yb[0])*j/(ny-1);
     try{
-      var slope=evalExpression(e,{[x]:xv,[y]:yv}),norm=Math.sqrt(1+slope*slope);
+      var slope=evalExpression(rhsExpr,{[x]:xv,[y]:yv}),norm=Math.sqrt(1+slope*slope);
       points.push({x:xv,y:yv,slope:slope,dx:1/norm,dy:slope/norm});
     }catch(err){if(!(err instanceof ODESingularityError))throw err;}
   }
   return {points:points,xBounds:xb,yBounds:yb,grid:[nx,ny],toString:function(){return points.length+" finite direction samples on "+nx+"×"+ny+" grid";}};
+}
+
+
+function phasePortrait2(f,g,x,y,xBounds,yBounds,grid,initial,timeBounds,samples,options){
+  x=requireVar(x,"state variable");y=requireVar(y,"state variable");
+  var xb=xBounds.map(numberConstant),yb=yBounds.map(numberConstant),nx=Number(grid[0]),ny=Number(grid[1]);
+  if(xb.length!==2||yb.length!==2||!Number.isInteger(nx)||!Number.isInteger(ny)||nx<2||ny<2||nx>80||ny>80)throw new ODEError("INVALID_GRID","Phase portrait grid dimensions must be 2–80");
+  var fe=asExpr(f),ge=asExpr(g),allowed=new Set([x,y]);
+  [fe,ge].forEach(function(e){if(e.variables().some(function(v){return !allowed.has(v);}))throw new UnsupportedODEError("Autonomous phase field may depend only on "+x+" and "+y);});
+  var vectors=[];
+  for(var i=0;i<nx;i++)for(var j=0;j<ny;j++){
+    var xv=xb[0]+(xb[1]-xb[0])*i/(nx-1),yv=yb[0]+(yb[1]-yb[0])*j/(ny-1);
+    try{
+      var dx=evalExpression(fe,{[x]:xv,[y]:yv}),dy=evalExpression(ge,{[x]:xv,[y]:yv}),norm=Math.hypot(dx,dy);
+      if(norm>0)vectors.push({x:xv,y:yv,dx:dx/norm,dy:dy/norm,speed:norm});else vectors.push({x:xv,y:yv,dx:0,dy:0,speed:0});
+    }catch(e){if(!(e instanceof ODESingularityError))throw e;}
+  }
+  var trajectory=null;
+  if(initial&&timeBounds){
+    if(initial.length!==2||timeBounds.length!==2)throw new ODEError("SHAPE_ERROR","Phase trajectory needs x0,y0 and t0,t1");
+    trajectory=sampleTrajectory([f,g],"t",[x,y],timeBounds[0],initial,timeBounds[1],samples||101,options);
+  }
+  return {vectors:vectors,trajectory:trajectory,xBounds:xb,yBounds:yb,grid:[nx,ny],toString:function(){return vectors.length+" vector samples"+(trajectory?"; trajectory "+trajectory.points.length+" points":"");}};
 }
 
 /* 2x2 matrix exponential and linear flow -------------------------------- */
@@ -498,6 +543,20 @@ function runCommand(raw,options){
     if(p.length!==4)throw new ODEError("ARITY_ERROR","linearode expects linearode(P; Q; x; y) for y' + P(x)y = Q(x)");
     var lin=solveLinearFirstOrder(p[0],p[1],p[2],p[3]);
     return commandResult(lin.toString(),"ode-symbolic",{value:lin.expression,metadata:{operation:"linearode",family:lin.kind,verified:true}});
+  }
+
+  p=parseSemicolon(raw,"exactode");
+  if(p){
+    if(p.length!==4)throw new ODEError("ARITY_ERROR","exactode expects exactode(M; N; x; y) for M dx + N dy = 0");
+    var ex=solveExactFirstOrder(p[0],p[1],p[2],p[3]);
+    return commandResult(ex.toString(),"ode-symbolic",{value:ex.expression,metadata:{operation:"exactode",family:ex.kind,verified:true}});
+  }
+
+  p=parseSemicolon(raw,"bernoulli");
+  if(p){
+    if(p.length!==5)throw new ODEError("ARITY_ERROR","bernoulli expects bernoulli(P; Q; n; x; y) for y' + P y = Q y^n");
+    var be=solveBernoulli(p[0],p[1],p[2],p[3],p[4]);
+    return commandResult(be.toString(),"ode-symbolic",{value:be,metadata:{operation:"bernoulli",family:be.kind,verified:true}});
   }
 
   p=parseSemicolon(raw,"ode2hom");
@@ -608,6 +667,15 @@ function runCommand(raw,options){
     return commandResult(field.toString(),"direction-field",{value:field,exact:false,symbolic:false,metadata:{operation:"directionfield",samples:field.points.length,grid:field.grid}});
   }
 
+  p=parseSemicolon(raw,"phase2");
+  if(p){
+    if(p.length!==8)throw new ODEError("ARITY_ERROR","phase2 expects phase2(f,g; x,y; xmin,xmax; ymin,ymax; nx,ny; x0,y0; t0,t1; samples)");
+    var pc=splitArgs(p[0]),pv=parseVarList(p[1]),pxb=splitArgs(p[2]),pyb=splitArgs(p[3]),pg=splitArgs(p[4]),pi=splitArgs(p[5]),pt=splitArgs(p[6]);
+    if(pc.length!==2||pv.length!==2||pxb.length!==2||pyb.length!==2||pg.length!==2||pi.length!==2||pt.length!==2)throw new ODEError("SHAPE_ERROR","Invalid phase2 dimensions");
+    var phase=phasePortrait2(pc[0],pc[1],pv[0],pv[1],pxb,pyb,pg,pi,pt,p[7],options);
+    return commandResult(phase.toString(),"phase-portrait",{value:phase,exact:false,symbolic:false,metadata:{operation:"phase2",vectors:phase.vectors.length,trajectorySamples:phase.trajectory.points.length}});
+  }
+
   p=parseSemicolon(raw,"matrixexp2");
   if(p){
     if(p.length!==2)throw new ODEError("ARITY_ERROR","matrixexp2 expects matrixexp2(a,b,c,d; t)");
@@ -625,7 +693,7 @@ function runCommand(raw,options){
   }
 
   if(/^odehelp\s*\(\s*\)$/i.test(raw)){
-    return commandResult("U3: separable · linearode · ode2hom · seriesivp · laplace · invlaplace · convolution · ivp · ivp2 · ivpsystem · rk4 · trajectory · equilibria · linearize · stability · directionfield · matrixexp2 · linearflow2","ode-help",{metadata:{operation:"odehelp"}});
+    return commandResult("U3: separable · linearode · exactode · bernoulli · ode2hom · seriesivp · laplace · invlaplace · convolution · ivp · ivp2 · ivpsystem · rk4 · trajectory · equilibria · linearize · stability · directionfield · phase2 · matrixexp2 · linearflow2","ode-help",{metadata:{operation:"odehelp"}});
   }
   return null;
 }
@@ -634,10 +702,10 @@ global.CalcODE={
   VERSION:"2.2.0-u3",
   ODEError:ODEError,UnsupportedODEError:UnsupportedODEError,ODEConvergenceError:ODEConvergenceError,ODESingularityError:ODESingularityError,
   SymbolicODESolution:SymbolicODESolution,
-  solveSeparable:solveSeparable,solveLinearFirstOrder:solveLinearFirstOrder,solveSecondOrderHomogeneous:solveSecondOrderHomogeneous,odeTaylorSeries:odeTaylorSeries,
+  solveSeparable:solveSeparable,solveLinearFirstOrder:solveLinearFirstOrder,solveExactFirstOrder:solveExactFirstOrder,solveBernoulli:solveBernoulli,solveSecondOrderHomogeneous:solveSecondOrderHomogeneous,odeTaylorSeries:odeTaylorSeries,
   laplaceTransform:laplaceTransform,inverseLaplace:inverseLaplace,convolutionAt:convolutionAt,
   compileSystem:compileSystem,rk4System:rk4System,rk45System:rk45System,solveScalarIVP:solveScalarIVP,solveSecondOrderIVP:solveSecondOrderIVP,solveSystemIVP:solveSystemIVP,sampleTrajectory:sampleTrajectory,
-  equilibria2:equilibria2,jacobianAt2:jacobianAt2,classifyLinearization2:classifyLinearization2,directionField:directionField,
+  equilibria2:equilibria2,jacobianAt2:jacobianAt2,classifyLinearization2:classifyLinearization2,directionField:directionField,phasePortrait2:phasePortrait2,
   matrixExponential2:matrixExponential2,linearFlow2:linearFlow2,
   runCommand:runCommand
 };
