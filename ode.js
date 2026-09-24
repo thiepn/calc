@@ -150,11 +150,11 @@ function solveLinearFirstOrder(P,Q,x,y){
   // Verify the symbolic family by differentiating with C1 treated as a constant with respect to x.
   var dydx=C.differentiate(solution,x),residual=expr(bin("-",bin("+",cloneAst(dydx.ast),bin("*",cloneAst(p.ast),cloneAst(solution.ast))),cloneAst(q.ast)));
   var check=substitute(residual,{C1:"1.23456789"});
-  var verified=true;
+  var verified=true,usable=0;
   for(var sx of [-1,-0.25,0.5,1.5]){
-    try{if(Math.abs(evalExpression(check,{[x]:sx}))>1e-7){verified=false;break;}}catch(e){}
+    try{usable++;if(Math.abs(evalExpression(check,{[x]:sx}))>1e-7){verified=false;break;}}catch(e){}
   }
-  if(!verified)throw new UnsupportedODEError("Linear first-order solution failed residual verification");
+  if(!verified||usable<2)throw new UnsupportedODEError("Linear first-order solution failed residual verification");
   return new SymbolicODESolution("linear-first-order",y,x,solution,y+" = "+solution.toString(),{integratingFactor:mu,verified:true});
 }
 
