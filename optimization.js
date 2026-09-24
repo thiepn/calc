@@ -164,7 +164,8 @@ function hessianConstant(hessian,vars){
 function classifyEigenvalues(values,tol){
   tol=tol||1e-9;
   var allPos=values.every(function(v){return v>tol;}),allNeg=values.every(function(v){return v<-tol;}),
-    allNonNeg=values.every(function(v){return v>=-tol;}),allNonPos=values.every(function(v){return v<=tol;});
+    allNonNeg=values.every(function(v){return v>=-tol;}),allNonPos=values.every(function(v){return v<=tol;}),allZero=values.every(function(v){return Math.abs(v)<=tol;});
+  if(allZero)return {matrixClass:"zero",curvature:"affine/flat (convex and concave)"};
   if(allPos)return {matrixClass:"positive definite",curvature:"strictly convex"};
   if(allNeg)return {matrixClass:"negative definite",curvature:"strictly concave"};
   if(allNonNeg)return {matrixClass:"positive semidefinite",curvature:"convex"};
