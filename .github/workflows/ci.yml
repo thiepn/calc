@@ -38,6 +38,7 @@ jobs:
           node --check algebra.js
           node --check calculus.js
           node --check cas.js
+          node --check multivariable.js
           node --check calculus-worker.js
           node --check units.js
           node --check linear-algebra.js
@@ -57,6 +58,7 @@ jobs:
           node --check tests/algebra.js
           node --check tests/calculus.js
           node --check tests/cas.js
+          node --check tests/multivariable.js
           node --check tests/units.js
           node --check tests/linear-algebra.js
           node --check tests/statistics.js
@@ -84,6 +86,8 @@ jobs:
         run: node tests/calculus.js
       - name: Advanced CAS U1 certification
         run: node tests/cas.js
+      - name: Multivariable Calculus & Vector Analysis U2 certification
+        run: node tests/multivariable.js
       - name: Units quantities constants and engineering certification
         run: node tests/units.js
       - name: Linear Algebra V2 certification
