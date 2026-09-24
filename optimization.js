@@ -211,12 +211,13 @@ function secondOrderStatus(model,point){
     status;
   if(cls.matrixClass==="positive definite")status=constant?"global strict optimum (quadratic certificate)":"strict local optimum";
   else if(cls.matrixClass==="positive semidefinite")status=constant?"global optimum set/candidate (convex quadratic certificate)":"stationary candidate; second-order test inconclusive";
+  else if(cls.matrixClass==="zero")status=constant?"global optimum set (constant-objective certificate)":"stationary candidate; zero Hessian makes the second-order test inconclusive";
   else status="stationary point has a negative-curvature direction";
   return {hessian:H,eigenvalues:eig,matrixClass:cls.matrixClass,status:status,constantHessian:constant};
 }
 function finishLocalResult(model,vars,x,f,g,iter,method,sense,history){
   var so=secondOrderStatus(model,x);
-  if(so.matrixClass!=="positive definite"&&so.matrixClass!=="positive semidefinite")
+  if(so.matrixClass!=="positive definite"&&so.matrixClass!=="positive semidefinite"&&so.matrixClass!=="zero")
     throw new OptimizationError("WRONG_STATIONARY_POINT","Solver converged to a stationary point that fails the second-order minimum condition for the transformed objective",{point:x,eigenvalues:so.eigenvalues,sense:sense||"min"});
   var objective=model.sense*f,gn=norm(g),label=so.status;
   if(sense==="max")label=label.replace(/minimum/g,"maximum").replace(/optimum/g,"optimum");
