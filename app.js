@@ -5,6 +5,7 @@ const A=window.CalcAlgebra;
 const C=window.CalcCalculus;
 const CAS=window.CalcCAS;
 const MV=window.CalcMultivariable;
+const ODE=window.CalcODE;
 const U=window.CalcUnits;
 const LA=window.CalcLinearAlgebra;
 const S=window.CalcStatistics;
@@ -145,6 +146,8 @@ function backspaceExpression(){
 }
 function calcOptions(commit){return {angle:state.angle,precision:state.precision,complex:true,commit:commit};}
 function evaluateInput(raw,env,commit){
+  var ode=ODE&&ODE.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
+  if(ode)return ode;
   var multivariable=MV&&MV.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
   if(multivariable)return multivariable;
   var advanced=CAS&&CAS.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
@@ -172,7 +175,7 @@ function setCalcResult(res,preview){
   $("#approxResult").textContent=res.approx||"";
   $("#calcStatus").textContent=preview?"Preview":(res.symbolic?"Symbolic":(res.quantity?"Quantity":(res.exact?"Exact":"Approximate")));
   var graphAction=$('[data-result-action="graph"]'),saveAction=$('[data-result-action="save"]'),op=res.metadata&&res.metadata.operation;
-  var graphBlocked=!!res.symbolic||!!res.quantity||!!(res.metadata&&res.metadata.u2)||["integral","nintegral","nderivative","root","limit"].indexOf(op)>=0;
+  var graphBlocked=!!res.symbolic||!!res.quantity||!!(res.metadata&&(res.metadata.u2||res.metadata.u3))||["integral","nintegral","nderivative","root","limit"].indexOf(op)>=0;
   if(graphAction)graphAction.disabled=graphBlocked;
   if(saveAction)saveAction.disabled=!!res.symbolic;
 }
@@ -190,8 +193,9 @@ async function evaluateCurrent(){
   var input=$("#expressionInput"),raw=input.value.trim();if(!raw)return;
   try{
     var res=evaluateInput(raw,state.env,true);
-    if(!res.functionDefinition&&!res.symbolic){state.env.ans=res.value;state.lastResult=res;}
-    else if(res.symbolic)state.lastResult=null;
+    var scalarAns=res.value instanceof M.Rational||res.value instanceof M.Complex||typeof res.value==="number"||(U&&res.value instanceof U.Quantity);
+    if(!res.functionDefinition&&!res.symbolic&&scalarAns){state.env.ans=res.value;state.lastResult=res;}
+    else if(res.symbolic||!scalarAns)state.lastResult=null;
     setCalcResult(res,false);
     if(!res.functionDefinition)await addHistory(raw,res);
   }catch(e){
@@ -1498,6 +1502,14 @@ const commands=[
   {id:"u2.line",title:"U2: Line integral",keywords:"vector calculus line integral circulation curve",run:function(){switchView("calculate");$("#expressionInput").value="lineint(-y,x; x,y; cos(t),sin(t); t; 0,2*pi)";previewExpression();$("#expressionInput").focus();}},
   {id:"u2.surface",title:"U2: Surface flux",keywords:"vector calculus surface area flux parametric",run:function(){switchView("calculate");$("#expressionInput").value="flux(0,0,1; x,y,z; u,v,0; u,v; 0,1; 0,1)";previewExpression();$("#expressionInput").focus();}},
   {id:"u2.theorems",title:"U2: Integral theorem check",keywords:"green stokes divergence gauss theorem vector calculus",run:function(){switchView("calculate");$("#expressionInput").value="green(-y,x; x,y; 0,1; 0,1)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u3.linearode",title:"U3: First-order linear ODE",keywords:"ode differential equation integrating factor linear",run:function(){switchView("calculate");$("#expressionInput").value="linearode(1; 1; x; y)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u3.ode2",title:"U3: Second-order homogeneous ODE",keywords:"ode second order characteristic roots oscillator",run:function(){switchView("calculate");$("#expressionInput").value="ode2hom(1; 0; 4; x; y)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u3.ivp",title:"U3: Adaptive IVP",keywords:"ode numerical ivp dormand prince rk45",run:function(){switchView("calculate");$("#expressionInput").value="ivp(y; x; y; 0,1; 1)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u3.forced",title:"U3: Forced oscillator IVP",keywords:"ode oscillator forced damped second order ivp",run:function(){switchView("calculate");$("#expressionInput").value="ivp2(sin(x)-y; x; y; v; 0,0,0; pi)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u3.stability",title:"U3: Equilibrium stability",keywords:"dynamical systems equilibrium jacobian stability node spiral saddle center",run:function(){switchView("calculate");$("#expressionInput").value="stability(-x-y,x-y; x,y; 0,0)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u3.phase",title:"U3: Phase portrait data",keywords:"dynamical systems phase portrait trajectory vector field",run:function(){switchView("calculate");$("#expressionInput").value="phase2(y,-x; x,y; -2,2; -2,2; 9,9; 1,0; 0,2*pi; 41)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u3.laplace",title:"U3: Laplace transform",keywords:"ode laplace inverse transform convolution",run:function(){switchView("calculate");$("#expressionInput").value="laplace(t^2+3*sin(2*t); t; s)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u3.matrixexp",title:"U3: 2×2 matrix exponential",keywords:"ode system matrix exponential linear flow dynamics",run:function(){switchView("calculate");$("#expressionInput").value="matrixexp2(0,-1,1,0; t)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.diff",title:"Differentiate expression",keywords:"calculus derivative diff",run:function(){switchView("calculate");$("#expressionInput").value="diff(x^3 + sin(x), x)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.gradient",title:"Gradient",keywords:"calculus multivariable gradient partial",run:function(){switchView("calculate");$("#expressionInput").value="gradient(x^2+y^2, x, y)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.jacobian",title:"Jacobian",keywords:"calculus multivariable jacobian derivatives",run:function(){switchView("calculate");$("#expressionInput").value="jacobian(x^2+y; x*y, x, y)";previewExpression();$("#expressionInput").focus();}},
