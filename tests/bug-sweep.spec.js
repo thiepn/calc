@@ -35,6 +35,28 @@ test("all primary workspaces navigate without runtime errors",async({page})=>{
   expect(errors).toEqual([]);
 });
 
+test("U1 advanced CAS executes through the Calculate UI",async({page})=>{
+  const errors=await openApp(page);
+  expect(await page.evaluate(()=>window.CalcCAS&&window.CalcCAS.VERSION)).toBe("2.0.0-u1");
+  const input=page.locator("#expressionInput");
+
+  await input.fill("assume(x>0; simplify(sqrt(x^2)))");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toHaveText("x");
+  await expect(page.locator("#calcStatus")).toHaveText("Symbolic");
+
+  await input.fill("solve(a*x+b=0, x)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("a ≠ 0");
+  await expect(page.locator("#exactResult")).toContainText("a = 0 and b = 0");
+
+  await input.fill("inequality((x-1)/(x-1)>0, x)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toHaveText("x ∈ (−∞, 1) ∪ (1, ∞)");
+
+  expect(errors).toEqual([]);
+});
+
 test("notebook read failure does not create replacement or recovery duplicates",async({page})=>{
   const errors=await openApp(page);
   const seeded=await page.evaluate(async()=>{
