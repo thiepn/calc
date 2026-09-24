@@ -8,6 +8,7 @@ require("../multivariable.js");
 require("../ode.js");
 require("../units.js");
 require("../linear-algebra.js");
+require("../optimization.js");
 require("../statistics.js");
 require("../graph.js");
 require("../tools.js");
@@ -97,6 +98,21 @@ assert(nb.blocks[1].result.display.includes("2.718"),"U3 adaptive IVP result");
 assert(nb.blocks[2].result.display.includes("center"),"U3 stability result");
 assert(nb.blocks[3].result.display.includes("s ^ 3"),"U3 Laplace result");
 assert(!nb.blocks[0].dependencies.includes("linearode")&&!nb.blocks[1].dependencies.includes("ivp")&&!nb.blocks[2].dependencies.includes("stability")&&!nb.blocks[3].dependencies.includes("laplace"),"U3 command names are not notebook dependencies");
+
+// U4 optimization commands share the Worksheet Math evaluator.
+nb=doc([
+  block("u4a","math","convexity(x^2+2*y^2; x,y)"),
+  block("u4b","math","optmin((x-1)^2+(y+2)^2; x,y; 3,3; bfgs)"),
+  block("u4c","math","lpmax(3,2; 1,1|1,0|0,1; 4,2,3)"),
+  block("u4d","math","quadprog(x^2+y^2; x,y; x+y-1; -x,-y)")
+]);
+run=N.evaluateNotebook(nb,{precision:12,angle:"RAD"});nb=run.document;
+eq(nb.blocks[0].status,"clean","U4 convexity block clean");
+assert(nb.blocks[0].result.display.includes("strictly convex"),"U4 convexity result");
+assert(nb.blocks[1].result.display.includes("optimum"),"U4 local optimization result");
+assert(nb.blocks[2].result.display.includes("objective = 10"),"U4 LP result");
+assert(nb.blocks[3].result.display.includes("f = 0.5"),"U4 QP result");
+assert(!nb.blocks[0].dependencies.includes("convexity")&&!nb.blocks[1].dependencies.includes("optmin")&&!nb.blocks[2].dependencies.includes("lpmax")&&!nb.blocks[3].dependencies.includes("quadprog"),"U4 command names are not notebook dependencies");
 
 // Quantity assignment + typed reference preserves units.
 nb=doc([
