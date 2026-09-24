@@ -2,6 +2,30 @@
 
 All notable production changes to Calc are recorded here.
 
+## [2.1.0] — 2026-09-24
+
+### University Mathematics Workstation — Phase U2
+
+- Added the standalone `multivariable.js` runtime and routed it through Calculate and Worksheet Math evaluation ahead of U1 CAS.
+- Added point-evaluated gradients, Jacobians, and Hessians.
+- Added total differentials, normalized directional derivatives, implicit differentiation, and tangent-plane construction.
+- Added multivariable Taylor expansion for 1–3 variables through total order 3.
+- Added continuity-certified multivariable limits and explicit path-based nonexistence witnesses.
+- Added exact critical-point solving for certified two-variable systems, Hessian classification, and linearized Lagrange systems.
+- Added 2D/3D divergence, curl, conservative-field checks, and verified polynomial scalar-potential reconstruction.
+- Added parameterized curve calculus: vector/scalar line integrals and arc length.
+- Added adaptive rectangular double/triple integration with explicit non-convergence errors.
+- Added parameterized surface area and oriented flux.
+- Added Green, Stokes, and divergence/Gauss theorem verification on certified rectangular/box domains.
+- Added `mvhelp()`, U2 command-palette templates, Worksheet coverage, browser-level U2 regression tests, and offline PWA caching.
+- Added `tests/multivariable.js` and `docs/math/MULTIVARIABLE_VECTOR_SEMANTICS.md`.
+- Extended primary CI and release-soak gating so U2 cannot be dropped silently.
+
+### Compatibility
+
+- U1 CAS, ordinary calculus/algebra, units, linear algebra, statistics, graphing, tools, notebooks, persistence, backups, and PWA update semantics are retained.
+- U2 remains intentionally bounded: arbitrary theorem domains, nonlinear constrained systems, general multivariable limit proofs, and general surface integration are reported as unsupported rather than approximated deceptively.
+
 ## [2.0.0] — 2026-09-23
 
 ### University Mathematics Workstation — Phase U1
