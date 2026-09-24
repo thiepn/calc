@@ -311,8 +311,10 @@ function potential(field){
   var F=field instanceof VectorField?field:new VectorField(field.components,field.variables),vars=F.variables,phi=integratePolynomialWithParameters(F.components[0],vars[0]);
   for(var i=1;i<vars.length;i++){
     var have=derivativeExpr(phi,vars[i]),missing=new A.SymbolicExpression(simplify(bin("-",cloneAst(F.components[i].ast),cloneAst(have.ast))));
-    var bad=missing.variables().filter(function(v){return vars.slice(0,i).indexOf(v)>=0;});
-    if(bad.length)throw new UnsupportedMultivariableError("Field is not conservative under the polynomial potential test",{component:i,residual:missing.toString()});
+    var bad=vars.slice(0,i).filter(function(v){
+      try{return !zeroAst(derivativeExpr(missing,v).ast);}catch(e){return true;}
+    });
+    if(bad.length)throw new UnsupportedMultivariableError("Field is not conservative under the polynomial potential test",{component:i,residual:missing.toString(),dependentOn:bad});
     if(!zeroAst(missing.ast)){
       var correction=integratePolynomialWithParameters(missing,vars[i]);
       phi=new A.SymbolicExpression(simplify(bin("+",cloneAst(phi.ast),cloneAst(correction.ast))));
