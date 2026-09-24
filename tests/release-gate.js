@@ -10,13 +10,13 @@ const exists=p=>fs.existsSync(path.join(root,p));
 const required=[
   "index.html","styles.css","app.js","cas.js","persistence.js","notebook.js","sw.js","manifest.webmanifest",
   "package.json","release.json","playwright.config.js","tests/cas.js","tests/release-soak.spec.js","docs/math/ADVANCED_CAS_SEMANTICS.md",
-  ".github/workflows/release-soak.yml",".github/workflows/pages.yml","docs/release/IMPLEMENTATION_PHASE_13.md"
+  ".github/workflows/ci.yml",".github/workflows/release-soak.yml",".github/workflows/pages.yml","docs/release/IMPLEMENTATION_PHASE_13.md"
 ];
 required.forEach(p=>assert(exists(p),"Missing RC artifact: "+p));
 
 const index=read("index.html"),styles=read("styles.css"),sw=read("sw.js"),persistence=read("persistence.js"),app=read("app.js"),notebook=read("notebook.js"),cas=read("cas.js");
 const pkg=JSON.parse(read("package.json")),manifest=JSON.parse(read("manifest.webmanifest")),release=JSON.parse(read("release.json"));
-const releaseWorkflow=read(".github/workflows/release-soak.yml"),pagesWorkflow=read(".github/workflows/pages.yml");
+const ciWorkflow=read(".github/workflows/ci.yml"),releaseWorkflow=read(".github/workflows/release-soak.yml"),pagesWorkflow=read(".github/workflows/pages.yml");
 const soak=read("tests/release-soak.spec.js"),phase=read("docs/release/IMPLEMENTATION_PHASE_13.md");
 
 assert(pkg.private===true,"Release tooling package must remain private");
@@ -52,6 +52,7 @@ assert(manifest.start_url==="./"&&manifest.scope==="./","PWA start_url/scope mus
 assert(manifest.display==="standalone","PWA must remain standalone");
 assert(index.includes("maximum-scale=1")&&index.includes("user-scalable=no"),"Installed PWA zoom lock regressed");
 
+assert(ciWorkflow.includes("node --check cas.js")&&ciWorkflow.includes("node --check tests/cas.js")&&ciWorkflow.includes("node tests/cas.js"),"Primary CI does not certify U1 CAS");
 assert(releaseWorkflow.includes("Calc Release Soak"),"Release soak workflow name missing");
 ["chromium","firefox","webkit","mobile-chromium"].forEach(name=>assert(releaseWorkflow.includes(name),"Browser/device matrix missing "+name));
 assert(releaseWorkflow.includes("tests/release-gate.js")&&releaseWorkflow.includes("release-soak.spec.js"),"RC gate stages missing");
