@@ -1,55 +1,54 @@
-# Calc v2.2.0
+# Calc v2.3.0
 
-Calc v2.2.0 adds **Phase U3 — Differential Equations & Dynamical Systems** to the University Mathematics Workstation.
+Calc v2.3.0 adds **Phase U4 — Optimization & Mathematical Programming** to the University Mathematics Workstation.
 
-## Symbolic ODEs
+## Convexity & curvature
 
-- Added certified separable ODE relations.
-- Added exact differential equations through the verified conservative-potential engine.
-- Added integrating-factor solutions for first-order linear ODEs.
-- Added Bernoulli transformations.
-- Added all three characteristic-root families for homogeneous second-order constant-coefficient ODEs.
-- Symbolic solution families are differentiated/substituted back into their defining equations before exposure where applicable.
+- Added constant-Hessian global convexity/concavity certification for quadratic and affine objectives.
+- Added pointwise Hessian-curvature analysis without overstating pointwise semidefiniteness as a convexity proof.
+- Added explicit affine/zero-Hessian classification.
 
-## Initial-value problems
+## Nonlinear optimization
 
-- Added adaptive Dormand–Prince RK45 integration for scalar ODEs and arbitrary finite systems.
-- Added second-order IVPs through first-order state reduction, including damped/forced oscillator problems.
-- Added deterministic fixed-step RK4 for coursework and numerical comparison.
-- Added forward and backward integration.
-- Added explicit step/evaluation budgets, rejected-step tracking, singularity detection, and convergence-failure semantics.
+- Added BFGS with Armijo backtracking and inverse-Hessian reset safeguards.
+- Added Newton optimization with exact symbolic Hessians and descent fallback.
+- Added gradient descent with Armijo backtracking.
+- Added minimization and maximization workflows.
+- Added second-order verification after first-order convergence so saddles are not mislabeled as extrema.
+- Added global quadratic optimum labeling when a constant positive-definite/semidefinite Hessian provides the certificate.
 
-## Dynamical systems
+## Bound constraints & KKT
 
-- Added sampled trajectories and direction-field data.
-- Added 2D phase-portrait field + trajectory data.
-- Added equilibrium solving through existing certified system solvers.
-- Added exact Jacobian linearization.
-- Added node, spiral, saddle, repeated-node, center, and non-hyperbolic classification.
-- Hyperbolic equilibria receive the appropriate local stability conclusion; zero-real-part cases remain explicitly nonlinear-inconclusive.
+- Added projected-gradient box minimization/maximization.
+- Added projected-gradient first-order convergence checks.
+- Added a general KKT checker for equality and `h(x)<=0` inequality constraints:
+  stationarity, primal feasibility, dual feasibility, and complementary slackness.
 
-## Linear systems
+## Linear programming
 
-- Added verified exact 2×2 matrix exponentials across real, complex, and repeated/Jordan spectral branches.
-- Added exact 2D linear flows `exp(At)x0`.
+- Added exact Rational primal simplex for `Ax<=b, x>=0` with nonnegative RHS.
+- Added Bland-style pivot selection/tie breaking.
+- Added exact unboundedness detection.
+- Added primal feasibility, reduced-cost, dual feasibility, and strong-duality certificate checks before results are exposed.
+- Added both `lpmax(...)` and transformed `lpmin(...)`.
 
-## Laplace & series methods
+## Convex quadratic programming
 
-- Added table-driven forward Laplace transforms.
-- Added inverse transforms for certified rational degree-1/2 families.
-- Added causal convolution evaluation.
-- Added ODE Taylor-series IVPs through repeated total differentiation along the flow.
+- Added exact active-set enumeration for convex quadratic objectives with affine equality/inequality constraints.
+- Added exact KKT linear-system solving.
+- Added active multiplier sign checks and full KKT re-verification.
+- Added strict-convexity/uniqueness metadata.
+- Nonconvex QPs are rejected explicitly.
 
 ## Integration
 
-- U3 commands are available in Calculate and Worksheet Math blocks.
-- Added command-palette entries for linear ODEs, second-order ODEs, IVPs, forced oscillators, stability, phase portraits, Laplace transforms, and matrix exponentials.
-- Added `odehelp()`.
-- Added the U3 runtime to the offline PWA shell.
-- Non-scalar U3 results no longer overwrite the calculator's scalar `ans` variable.
+- U4 commands are available in Calculate and Worksheet Math blocks.
+- Added command-palette entries for convexity, local optimization, box constraints, KKT checks, LPs, and QPs.
+- Added `opthelp()`.
+- Added the U4 runtime to the offline PWA shell.
 
 ## Certification
 
-v2.2.0 adds a dedicated U3 deterministic suite, Worksheet regression coverage, browser-level Calculate coverage, primary-CI enforcement, release-gate assertions, and the full Chromium / Firefox / WebKit / mobile Chromium production soak.
+v2.3.0 adds a dedicated U4 deterministic suite, Worksheet regression coverage, browser-level Calculate coverage, primary-CI enforcement, release-gate assertions, and the full Chromium / Firefox / WebKit / mobile Chromium production soak.
 
-Unsupported symbolic families, stiff-solver problems, arbitrary higher-dimensional symbolic matrix exponentials, BVPs, DAEs, PDEs, and non-hyperbolic nonlinear stability proofs remain explicit unsupported cases.
+U4 intentionally does not implement mixed-integer programming, a full Phase-I simplex, general nonlinear constrained optimization, interior-point methods, semidefinite programming, or universal global nonlinear optimization.
