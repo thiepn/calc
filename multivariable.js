@@ -566,7 +566,7 @@ function runCommand(raw,options){
 
   parts=parseSemicolon(raw,"scalarline");
   if(parts){
-    if(parts.length!==6)throw new MultivariableError("ARITY_ERROR","scalarline expects scalarline(f; variables; curve; parameter; a,b)");
+    if(parts.length!==5)throw new MultivariableError("ARITY_ERROR","scalarline expects scalarline(f; variables; curve; parameter; a,b)");
     var slv=parseVarList(parts[1]),slc=parametricCurve(splitArgs(parts[2]),parts[3]),slb=splitArgs(parts[4]);
     if(slb.length!==2)throw new MultivariableError("ARITY_ERROR","Scalar line-integral bounds require a,b");
     var sl=scalarLineIntegral(parts[0],slv,slc,slb[0],slb[1],options);
@@ -591,7 +591,7 @@ function runCommand(raw,options){
 
   parts=parseSemicolon(raw,"surfacearea");
   if(parts){
-    if(parts.length!==5)throw new MultivariableError("ARITY_ERROR","surfacearea expects surfacearea(rx,ry,rz; u,v; u0,u1; v0,v1)");
+    if(parts.length!==4)throw new MultivariableError("ARITY_ERROR","surfacearea expects surfacearea(rx,ry,rz; u,v; u0,u1; v0,v1)");
     var uv=parseVarList(parts[1]),ub=splitArgs(parts[2]),vb=splitArgs(parts[3]);
     if(uv.length!==2||ub.length!==2||vb.length!==2)throw new MultivariableError("SHAPE_ERROR","Surface area needs u,v and two bound pairs");
     var sa=surfaceArea(parametricSurface(splitArgs(parts[0]),uv[0],uv[1]),ub[0],ub[1],vb[0],vb[1],options);
@@ -600,7 +600,7 @@ function runCommand(raw,options){
 
   parts=parseSemicolon(raw,"flux");
   if(parts){
-    if(parts.length!==7)throw new MultivariableError("ARITY_ERROR","flux expects flux(Fx,Fy,Fz; x,y,z; rx,ry,rz; u,v; u0,u1; v0,v1)");
+    if(parts.length!==6)throw new MultivariableError("ARITY_ERROR","flux expects flux(Fx,Fy,Fz; x,y,z; rx,ry,rz; u,v; u0,u1; v0,v1)");
     var fvars=parseVarList(parts[1]),svars=parseVarList(parts[3]),fb1=splitArgs(parts[4]),fb2=splitArgs(parts[5]);
     if(fvars.length!==3||svars.length!==2||fb1.length!==2||fb2.length!==2)throw new MultivariableError("SHAPE_ERROR","Flux needs a 3D field, u,v, and two bound pairs");
     var sf=new VectorField(splitArgs(parts[0]),fvars),surf=parametricSurface(splitArgs(parts[2]),svars[0],svars[1]),fl=surfaceFlux(sf,surf,fb1[0],fb1[1],fb2[0],fb2[1],options);
@@ -609,7 +609,7 @@ function runCommand(raw,options){
 
   parts=parseSemicolon(raw,"green");
   if(parts){
-    if(parts.length!==5)throw new MultivariableError("ARITY_ERROR","green expects green(P,Q; x,y; x0,x1; y0,y1)");
+    if(parts.length!==4)throw new MultivariableError("ARITY_ERROR","green expects green(P,Q; x,y; x0,x1; y0,y1)");
     var gv=parseVarList(parts[1]),gb1=splitArgs(parts[2]),gb2=splitArgs(parts[3]);
     if(gv.length!==2||gb1.length!==2||gb2.length!==2)throw new MultivariableError("SHAPE_ERROR","Green verification requires x,y and two bound pairs");
     var gc=splitArgs(parts[0]);if(gc.length!==2)throw new MultivariableError("SHAPE_ERROR","Green verification requires P,Q");
@@ -619,7 +619,7 @@ function runCommand(raw,options){
 
   parts=parseSemicolon(raw,"stokes");
   if(parts){
-    if(parts.length!==6)throw new MultivariableError("ARITY_ERROR","stokes expects stokes(Fx,Fy,Fz; x,y,z; x0,x1; y0,y1; z0)");
+    if(parts.length!==5)throw new MultivariableError("ARITY_ERROR","stokes expects stokes(Fx,Fy,Fz; x,y,z; x0,x1; y0,y1; z0)");
     var stv=parseVarList(parts[1]),stx=splitArgs(parts[2]),sty=splitArgs(parts[3]);if(stv.length!==3||stx.length!==2||sty.length!==2)throw new MultivariableError("SHAPE_ERROR","Stokes rectangle requires a 3D field and x/y bound pairs");
     var st=stokesPlane(new VectorField(splitArgs(parts[0]),stv),stx[0],stx[1],sty[0],sty[1],parts[4],options);
     return commandResult(st.toString(),"stokes-theorem",{value:st,exact:false,symbolic:false,metadata:{operation:"stokes",residual:st.residual}});
@@ -627,7 +627,7 @@ function runCommand(raw,options){
 
   parts=parseSemicolon(raw,"gauss");
   if(parts){
-    if(parts.length!==6)throw new MultivariableError("ARITY_ERROR","gauss expects gauss(Fx,Fy,Fz; x,y,z; x0,x1; y0,y1; z0,z1)");
+    if(parts.length!==5)throw new MultivariableError("ARITY_ERROR","gauss expects gauss(Fx,Fy,Fz; x,y,z; x0,x1; y0,y1; z0,z1)");
     var gav=parseVarList(parts[1]),bx=splitArgs(parts[2]),by=splitArgs(parts[3]),bz=splitArgs(parts[4]);
     if(gav.length!==3||bx.length!==2||by.length!==2||bz.length!==2)throw new MultivariableError("SHAPE_ERROR","Gauss verification requires a 3D field and three bound pairs");
     var ga=divergenceTheorem(new VectorField(splitArgs(parts[0]),gav),[bx,by,bz],options);
