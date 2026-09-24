@@ -180,9 +180,10 @@ function convexity(source,vars,point){
     env=pointEnv(vars,point.map(parseNumber));
   }
   var numeric=H.map(function(row){return row.map(function(x){return evalExpr(x,env);});}),eig=symmetricEigenvalues(numeric),cls=classifyEigenvalues(eig,1e-9),
-    scope=globalCertificate?"global quadratic certificate":"Hessian at supplied point";
-  return {classification:cls.curvature,matrixClass:cls.matrixClass,eigenvalues:eig,hessian:H,numericHessian:numeric,global:globalCertificate,
-    toString:function(){return scope+": "+cls.curvature+" ("+cls.matrixClass+"); eigenvalues = ["+eig.map(function(v){return M.formatNumber(v,8);}).join(", ")+"]";}};
+    classification=globalCertificate?cls.curvature:cls.matrixClass+" Hessian at point",
+    scope=globalCertificate?"global quadratic certificate":"pointwise curvature";
+  return {classification:classification,matrixClass:cls.matrixClass,eigenvalues:eig,hessian:H,numericHessian:numeric,global:globalCertificate,
+    toString:function(){return scope+": "+classification+"; eigenvalues = ["+eig.map(function(v){return M.formatNumber(v,8);}).join(", ")+"]";}};
 }
 
 /* One-dimensional bounded search --------------------------------------- */
@@ -203,6 +204,25 @@ function goldenSection(source,variable,aSource,bSource,sense,options){
 }
 
 /* Local unconstrained numerical optimization ---------------------------- */
+
+function secondOrderStatus(model,point){
+  var H=model.hessian(point),eig=symmetricEigenvalues(H),cls=classifyEigenvalues(eig,1e-8),constant=hessianConstant(model.hessianExpr,model.vars),
+    status;
+  if(cls.matrixClass==="positive definite")status=constant?"global strict optimum (quadratic certificate)":"strict local optimum";
+  else if(cls.matrixClass==="positive semidefinite")status=constant?"global optimum set/candidate (convex quadratic certificate)":"stationary candidate; second-order test inconclusive";
+  else status="stationary point has a negative-curvature direction";
+  return {hessian:H,eigenvalues:eig,matrixClass:cls.matrixClass,status:status,constantHessian:constant};
+}
+function finishLocalResult(model,vars,x,f,g,iter,method,sense,history){
+  var so=secondOrderStatus(model,x);
+  if(so.matrixClass!=="positive definite"&&so.matrixClass!=="positive semidefinite")
+    throw new OptimizationError("WRONG_STATIONARY_POINT","Solver converged to a stationary point that fails the second-order minimum condition for the transformed objective",{point:x,eigenvalues:so.eigenvalues,sense:sense||"min"});
+  var objective=model.sense*f,gn=norm(g),label=so.status;
+  if(sense==="max")label=label.replace(/minimum/g,"maximum").replace(/optimum/g,"optimum");
+  return {point:x,objective:objective,gradientNorm:gn,iterations:iter,evaluations:model.evaluations,method:method,sense:sense||"min",history:history,converged:true,secondOrder:so,
+    toString:function(){return label+": "+formatPoint(vars,x,10)+"; f = "+M.formatNumber(objective,12)+"; ||grad|| = "+M.formatNumber(gn,4);}};
+}
+
 function armijo(model,x,f,g,p,options){
   var c1=options.armijo||1e-4,shrink=options.shrink||0.5,max=options.maxLineSearch||50,descent=dot(g,p);
   if(!(descent<0))return null;
@@ -224,10 +244,7 @@ function optimizeLocal(source,vars,initial,method,sense,options){
   for(var iter=0;iter<options.maxIterations;iter++){
     var gn=norm(g);
     history.push({iteration:iter,point:x.slice(),objective:model.sense*f,gradientNorm:gn});
-    if(gn<=options.gradTol){
-      return {point:x,objective:model.sense*f,gradientNorm:gn,iterations:iter,evaluations:model.evaluations,method:method,sense:sense||"min",history:history,converged:true,
-        toString:function(){return formatPoint(vars,x,10)+"; f = "+M.formatNumber(this.objective,12)+"; ||grad|| = "+M.formatNumber(gn,4);}};
-    }
+    if(gn<=options.gradTol)return finishLocalResult(model,vars,x,f,g,iter,method,sense,history);
     var p;
     if(method==="gradient")p=g.map(function(v){return -v;});
     else if(method==="newton"){
@@ -257,6 +274,36 @@ function optimizeLocal(source,vars,initial,method,sense,options){
     x=xNew;f=fNew;g=gNew;
   }
   throw new OptimizationConvergenceError("Optimization exceeded its iteration budget",{iterations:options.maxIterations,point:x,gradientNorm:norm(g),method:method});
+}
+
+
+/* Bound-constrained projected gradient ---------------------------------- */
+function projectBox(x,lower,upper){return x.map(function(v,i){return Math.min(upper[i],Math.max(lower[i],v));});}
+function boxOptimize(source,vars,lowerSources,upperSources,initialSources,sense,options){
+  options=Object.assign({gradTol:1e-8,stepTol:1e-12,maxIterations:2000,maxLineSearch:60,armijo:1e-4,shrink:0.5},options||{});
+  if(lowerSources.length!==vars.length||upperSources.length!==vars.length||initialSources.length!==vars.length)throw new OptimizationError("SHAPE_ERROR","Box bounds, initial point, and variables must have matching dimensions");
+  var lower=lowerSources.map(parseNumber),upper=upperSources.map(parseNumber);
+  for(var i=0;i<vars.length;i++)if(!(upper[i]>lower[i]))throw new OptimizationError("INVALID_BOUNDS","Each upper bound must exceed its lower bound",{index:i});
+  var model=new ObjectiveModel(source,vars,sense),x=projectBox(initialSources.map(parseNumber),lower,upper),f=model.value(x),history=[];
+  for(var iter=0;iter<options.maxIterations;iter++){
+    var g=model.gradient(x),unitTrial=projectBox(addVec(x,g,-1),lower,upper),mapping=addVec(x,unitTrial,-1),pg=norm(mapping);
+    history.push({iteration:iter,point:x.slice(),objective:model.sense*f,projectedGradientNorm:pg});
+    if(pg<=options.gradTol){
+      return {point:x,objective:model.sense*f,projectedGradientNorm:pg,iterations:iter,evaluations:model.evaluations,method:"projected-gradient",sense:sense||"min",lower:lower,upper:upper,history:history,converged:true,
+        toString:function(){return "box KKT candidate: "+formatPoint(vars,x,10)+"; f = "+M.formatNumber(this.objective,12)+"; projected gradient = "+M.formatNumber(pg,4);}};
+    }
+    var alpha=1,accepted=null;
+    for(var ls=0;ls<options.maxLineSearch;ls++){
+      var trial=projectBox(addVec(x,g,-alpha),lower,upper),d=addVec(trial,x,-1);
+      if(norm(d)<=options.stepTol*Math.max(1,norm(x))){alpha*=options.shrink;continue;}
+      var fv;try{fv=model.value(trial);}catch(e){alpha*=options.shrink;continue;}
+      if(fv<=f+options.armijo*dot(g,d)){accepted={point:trial,value:fv,step:d};break;}
+      alpha*=options.shrink;
+    }
+    if(!accepted)throw new OptimizationConvergenceError("Projected-gradient line search could not find a feasible descent step",{iteration:iter,point:x});
+    x=accepted.point;f=accepted.value;
+  }
+  throw new OptimizationConvergenceError("Projected-gradient optimization exceeded its iteration budget",{iterations:options.maxIterations,point:x});
 }
 
 /* KKT checker ----------------------------------------------------------- */
@@ -335,7 +382,14 @@ function simplexMax(c,Arows,b,options){
   }
   if(primal.some(function(x){return M.toNumber(x)<-1e-9;}))throw new OptimizationError("LP_CERTIFICATE_FAILED","Simplex result contains a negative primal variable");
   if(reduced.some(function(x){return M.toNumber(x)<-1e-9;}))throw new OptimizationError("LP_CERTIFICATE_FAILED","Simplex result failed reduced-cost optimality verification");
-  return {primal:primal,slacks:slacks,objective:objective,basis:basis,reducedCosts:reduced,dual:dual,iterations:iterations,tableau:T,method:"primal-simplex-bland",
+  if(dual.some(function(y){return M.toNumber(y)<-1e-9;}))throw new OptimizationError("LP_CERTIFICATE_FAILED","Simplex dual certificate contains a negative multiplier");
+  for(var j=0;j<n;j++){
+    var aty=rat(0);for(var i=0;i<m;i++)aty=M.add(aty,M.mul(Arows[i][j],dual[i]));
+    if(M.toNumber(M.sub(c[j],aty))>1e-9)throw new OptimizationError("LP_CERTIFICATE_FAILED","Simplex dual certificate violates A^T y >= c",{column:j});
+  }
+  var dualObj=rat(0);for(var i=0;i<m;i++)dualObj=M.add(dualObj,M.mul(b[i],dual[i]));
+  if(Math.abs(M.toNumber(M.sub(dualObj,objective)))>1e-9)throw new OptimizationError("LP_CERTIFICATE_FAILED","Primal and dual objectives do not match",{primal:M.formatValue(objective),dual:M.formatValue(dualObj)});
+  return {primal:primal,slacks:slacks,objective:objective,basis:basis,reducedCosts:reduced,dual:dual,dualObjective:dualObj,iterations:iterations,tableau:T,method:"primal-simplex-bland",
     toString:function(){return "x = ["+primal.map(function(x){return M.formatValue(x);}).join(", ")+"]; objective = "+M.formatValue(objective);}};
 }
 function standardLP(cSource,rowsSource,bSource,sense){
@@ -436,14 +490,28 @@ function runCommand(raw,options){
   if(p){
     if(p.length<3||p.length>4)throw new OptimizationError("ARITY_ERROR","optmin expects optmin(f; x,y,...; initial; optional method)");
     var ov=parseVars(p[1]),oi=splitArgs(p[2]),om=optimizeLocal(p[0],ov,oi,p[3]||"bfgs","min",options);
-    return commandResult(om.toString(),"local-minimum",{value:om.objective,exact:false,symbolic:false,metadata:{operation:"optmin",point:om.point,gradientNorm:om.gradientNorm,iterations:om.iterations,method:om.method}});
+    return commandResult(om.toString(),"local-minimum",{value:om.objective,exact:false,symbolic:false,metadata:{operation:"optmin",point:om.point,gradientNorm:om.gradientNorm,iterations:om.iterations,method:om.method,secondOrder:om.secondOrder.status,eigenvalues:om.secondOrder.eigenvalues}});
   }
 
   p=parseSemicolon(raw,"optmax");
   if(p){
     if(p.length<3||p.length>4)throw new OptimizationError("ARITY_ERROR","optmax expects optmax(f; x,y,...; initial; optional method)");
     var xv=parseVars(p[1]),xi=splitArgs(p[2]),xm=optimizeLocal(p[0],xv,xi,p[3]||"bfgs","max",options);
-    return commandResult(xm.toString(),"local-maximum",{value:xm.objective,exact:false,symbolic:false,metadata:{operation:"optmax",point:xm.point,gradientNorm:xm.gradientNorm,iterations:xm.iterations,method:xm.method}});
+    return commandResult(xm.toString(),"local-maximum",{value:xm.objective,exact:false,symbolic:false,metadata:{operation:"optmax",point:xm.point,gradientNorm:xm.gradientNorm,iterations:xm.iterations,method:xm.method,secondOrder:xm.secondOrder.status,eigenvalues:xm.secondOrder.eigenvalues}});
+  }
+
+  p=parseSemicolon(raw,"boxmin");
+  if(p){
+    if(p.length!==5)throw new OptimizationError("ARITY_ERROR","boxmin expects boxmin(f; vars; lower; upper; initial)");
+    var bv=parseVars(p[1]),bl=splitArgs(p[2]),bu=splitArgs(p[3]),bi=splitArgs(p[4]),br=boxOptimize(p[0],bv,bl,bu,bi,"min",options);
+    return commandResult(br.toString(),"box-optimization",{value:br.objective,exact:false,symbolic:false,metadata:{operation:"boxmin",point:br.point,projectedGradientNorm:br.projectedGradientNorm,iterations:br.iterations,method:br.method}});
+  }
+
+  p=parseSemicolon(raw,"boxmax");
+  if(p){
+    if(p.length!==5)throw new OptimizationError("ARITY_ERROR","boxmax expects boxmax(f; vars; lower; upper; initial)");
+    var bxv=parseVars(p[1]),bxl=splitArgs(p[2]),bxu=splitArgs(p[3]),bxi=splitArgs(p[4]),bxr=boxOptimize(p[0],bxv,bxl,bxu,bxi,"max",options);
+    return commandResult(bxr.toString(),"box-optimization",{value:bxr.objective,exact:false,symbolic:false,metadata:{operation:"boxmax",point:bxr.point,projectedGradientNorm:bxr.projectedGradientNorm,iterations:bxr.iterations,method:bxr.method}});
   }
 
   p=parseSemicolon(raw,"kktcheck");
@@ -476,7 +544,7 @@ function runCommand(raw,options){
   }
 
   if(/^opthelp\s*\(\s*\)$/i.test(raw)){
-    return commandResult("U4: convexity · goldenmin · goldenmax · optmin · optmax · kktcheck · lpmax · lpmin · quadprog","optimization-help",{metadata:{operation:"opthelp"}});
+    return commandResult("U4: convexity · goldenmin · goldenmax · optmin · optmax · boxmin · boxmax · kktcheck · lpmax · lpmin · quadprog","optimization-help",{metadata:{operation:"opthelp"}});
   }
   return null;
 }
@@ -485,7 +553,7 @@ global.CalcOptimization={
   VERSION:"2.3.0-u4",
   OptimizationError:OptimizationError,UnsupportedOptimizationError:UnsupportedOptimizationError,OptimizationConvergenceError:OptimizationConvergenceError,UnboundedProblemError:UnboundedProblemError,InfeasibleProblemError:InfeasibleProblemError,
   ObjectiveModel:ObjectiveModel,
-  convexity:convexity,goldenSection:goldenSection,optimizeLocal:optimizeLocal,kktCheck:kktCheck,
+  convexity:convexity,goldenSection:goldenSection,optimizeLocal:optimizeLocal,boxOptimize:boxOptimize,kktCheck:kktCheck,
   simplexMax:simplexMax,standardLP:standardLP,quadProg:quadProg,
   solveNumeric:solveNumeric,
   runCommand:runCommand
