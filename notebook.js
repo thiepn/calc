@@ -4,6 +4,7 @@
 const M=global.CalcMath;
 const A=global.CalcAlgebra;
 const C=global.CalcCalculus;
+const CAS=global.CalcCAS;
 const U=global.CalcUnits;
 const LA=global.CalcLinearAlgebra;
 const S=global.CalcStatistics;
@@ -95,7 +96,7 @@ function usedIdentifiers(source){
   const info=assignmentInfo(source),exclude=new Set((info.parameters||[]).concat(info.symbols)),out=[],tokens=String(info.rhs||"").match(/[A-Za-z_][A-Za-z0-9_]*/g)||[];
   for(const name of tokens){
     if(exclude.has(name))continue;
-    if(["simplify","expand","collect","factor","solve","system","inequality","substitute","diff","partial","gradient","jacobian","hessian","integrate","integral","nintegral","limit","taylor","nderivative","root"].includes(name))continue;
+    if(["simplify","expand","collect","factor","solve","system","psystem","inequality","substitute","assume","assuming","cashelp","diff","partial","gradient","jacobian","hessian","integrate","integral","nintegral","limit","taylor","nderivative","root"].includes(name))continue;
     if(M.FUNCTION_REGISTRY&&Object.prototype.hasOwnProperty.call(M.FUNCTION_REGISTRY,name))continue;
     if(M.CONSTANT_REGISTRY&&Object.prototype.hasOwnProperty.call(M.CONSTANT_REGISTRY,name))continue;
     if(U.CONSTANT_REGISTRY&&Object.prototype.hasOwnProperty.call(U.CONSTANT_REGISTRY,name))continue;
@@ -171,7 +172,8 @@ function resolveConfigRefs(value,blockMap){
 }
 
 function evaluateMath(raw,env,options){
-  options=options||{};let calculus=C.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(calculus)return calculus;
+  options=options||{};let advanced=CAS&&CAS.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(advanced)return advanced;
+  let calculus=C.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(calculus)return calculus;
   let symbolic=A.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(symbolic)return symbolic;
   const assignment=String(raw).match(/^\s*([A-Za-z_]\w*)\s*=\s*(?!=)(.+)$/s);
   if(assignment){const quantity=U.tryEvaluate(assignment[2],env,{angle:options.angle||"RAD",precision:options.precision||12,commit:false});if(quantity&&quantity.quantity){env[assignment[1]]=quantity.value;return Object.assign({},quantity,{display:assignment[1]+" = "+quantity.display,assignment:assignment[1]});}}

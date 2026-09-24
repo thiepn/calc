@@ -36,9 +36,11 @@ jobs:
       - name: Syntax
         run: |
           node --check persistence.js
+          node --check cas.js
           node --check app.js
           node --check sw.js
           node --check playwright.config.js
+          node --check tests/cas.js
           node --check tests/release-gate.js
           node --check tests/production-release-gate.js
           node --check tests/generate-release-artifacts.js
@@ -51,6 +53,7 @@ jobs:
           node tests/core-fuzz.js
           node tests/algebra.js
           node tests/calculus.js
+          node tests/cas.js
           node tests/units.js
           node tests/linear-algebra.js
           node tests/statistics.js

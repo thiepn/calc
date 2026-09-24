@@ -1,35 +1,36 @@
-# Calc v1.0.1
+# Calc v2.0.0
 
-Calc v1.0.1 is a bug-fix and resilience release on top of the v1.0.0 production baseline.
+Calc v2.0.0 begins the **University Mathematics Workstation** line with Phase U1: Advanced CAS & Symbolic Mathematics.
 
-## Fixed
+## Advanced CAS
 
-- Dynamic custom-tool metadata and CSV column names are rendered as text rather than executable HTML.
-- Malformed Tool deep links no longer crash initialization.
-- Tool search remains focused through continuous typing and keeps its layout.
-- Notebook title edits are recovery-safe before blur; reference copying handles unavailable clipboard APIs safely.
-- Unsafe imported notebook block IDs are rejected, and notebook import size is bounded.
-- Rapid notebook edits advance optimistic persistence revisions.
-- Notebook read failures do not fabricate replacement/recovery copies.
-- Remote notebook updates preserve local dirty edits as visible, persisted conflict copies.
-- Backup and controlled update flows abort rather than proceeding with unsaved notebook/settings state.
-- localStorage denial is non-fatal; Settings read/write degradation does not overwrite unknown persisted state.
-- Corrupt persisted Custom Tools are quarantined without breaking startup.
-- Custom-tool aliases remain correct through dynamic registration/removal.
-- Custom-tool lifecycle changes are persistence-first, failed writes leave runtime state intact, revision conflicts reconcile to the newer persisted original, and local edits become Draft conflict copies.
-- Cross-tab Custom Tool archive/update events rebuild the runtime from persisted truth, safely defer while the builder is open, refresh the editor on close, and retain last-known-good state if refresh fails.
-- History save/clear failures are reported truthfully and do not create a false deleted state.
-- Phone-sized Worksheet layouts retain notebook switching, import/export, delete, and version-management controls.
-- Responsive CSS escape corruption was removed so phone-sized graph/tools/data/worksheet rules parse correctly.
-- Notebook import, version restore, and delete paths are persistence-truthful and preserve the newest edits in Trash.
-- Duplicate Data headers receive deterministic unique names instead of ambiguous column lookup.
-- Custom Tool Archive/Export operate on current editor values, including unsaved visible changes.
-- Per-notebook autosave timers prevent edits in one notebook from cancelling or saving another after a fast switch.
-- Session recovery keeps multiple unsaved notebooks and backup/update retries failed non-active saves before proceeding.
-- Notebook writes are serialized per document; slow overlapping saves preserve the newest recovery snapshot and do not create false conflict copies.
+- Added a dedicated `CalcCAS` layer without replacing the exact v1 numerical/algebra/calculus kernels.
+- Added local assumption contexts with sign-aware simplification, domain pruning, finite-root filtering, and contradiction detection.
+- Added conditional solving for parameterized linear and quadratic equations.
+- Added exact even-polynomial substitution for certified biquadratic-style equations.
+- Added elementary exponential, logarithmic, sine, cosine, and tangent equation families with integer-parameter solutions where applicable.
+- Added limited exact nonlinear 2×2 substitution systems.
+- Added `psystem(...)` for square parameterized linear systems with symbolic determinant/Cramer solutions and singular-branch analysis.
+- Extended inequality solving to certified higher-degree polynomial and rational sign charts.
+- Extended symbolic integration to polynomial × exp/sin/cos integration-by-parts families and low-degree rational functions.
+- Every new symbolic antiderivative is verified before exposure.
+
+## Integration
+
+- Advanced CAS commands are available in both Calculate and Worksheet Math blocks.
+- Added command-palette entries for assumptions, parameter equations, parameterized systems, and advanced symbolic integration.
+- Added `cashelp()` as a compact syntax reference.
+- Added the CAS runtime to the offline PWA shell.
+
+## Correctness
+
+- Fixed symbolic pretty-printing so denominator products and right-hand subtraction groups retain required parentheses.
+- Unsupported symbolic cases remain explicit; U1 does not pretend to be a universal CAS.
+- The original algebra and calculus suites remain passing.
+- Added a dedicated U1 deterministic CAS certification suite covering assumptions, parameter branches, trig families, nonlinear systems, rational inequalities, advanced integration, and unsupported boundaries.
 
 ## Certification
 
-v1.0.1 is certified by the complete deterministic mathematics/product suite plus the expanded runtime bug sweep and production soak on Chromium, Firefox, WebKit, and mobile Chromium. The browser suite includes degraded-storage startup, navigation, malformed routes, rendering safety, registry-wide tool execution, Data workflows, notebook and Custom Tool conflicts, backup safety, IndexedDB migration, large-data persistence, corruption recovery, and offline PWA operation.
+v2.0.0 is gated by the full existing deterministic mathematics/product suite plus the new U1 CAS suite, static release checks, and the cross-browser production soak on Chromium, Firefox, WebKit, and mobile Chromium.
 
-GitHub Pages deploys only the exact certified SHA. The production release workflow verifies the live version, generates SHA-256 release artifacts, and creates v1.0.1 only for that deployed commit.
+GitHub Pages deploys only the exact certified SHA. The production release workflow verifies the live v2.0.0 metadata before creating the immutable release tag.

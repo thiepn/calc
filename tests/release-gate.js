@@ -8,13 +8,13 @@ const read=p=>fs.readFileSync(path.join(root,p),"utf8");
 const exists=p=>fs.existsSync(path.join(root,p));
 
 const required=[
-  "index.html","styles.css","app.js","persistence.js","notebook.js","sw.js","manifest.webmanifest",
-  "package.json","release.json","playwright.config.js","tests/release-soak.spec.js",
+  "index.html","styles.css","app.js","cas.js","persistence.js","notebook.js","sw.js","manifest.webmanifest",
+  "package.json","release.json","playwright.config.js","tests/cas.js","tests/release-soak.spec.js","docs/math/ADVANCED_CAS_SEMANTICS.md",
   ".github/workflows/release-soak.yml",".github/workflows/pages.yml","docs/release/IMPLEMENTATION_PHASE_13.md"
 ];
 required.forEach(p=>assert(exists(p),"Missing RC artifact: "+p));
 
-const index=read("index.html"),styles=read("styles.css"),sw=read("sw.js"),persistence=read("persistence.js"),app=read("app.js");
+const index=read("index.html"),styles=read("styles.css"),sw=read("sw.js"),persistence=read("persistence.js"),app=read("app.js"),notebook=read("notebook.js"),cas=read("cas.js");
 const pkg=JSON.parse(read("package.json")),manifest=JSON.parse(read("manifest.webmanifest")),release=JSON.parse(read("release.json"));
 const releaseWorkflow=read(".github/workflows/release-soak.yml"),pagesWorkflow=read(".github/workflows/pages.yml");
 const soak=read("tests/release-soak.spec.js"),phase=read("docs/release/IMPLEMENTATION_PHASE_13.md");
@@ -26,6 +26,11 @@ assert(persistence.includes("saveNotebookIncremental")&&persistence.includes("ch
 assert(persistence.includes("buildBackupBlobFromDb"),"Chunked backup builder missing");
 assert(persistence.includes("restoreTombstone")&&persistence.includes("trashChunkRefs"),"Trash recovery engine missing");
 assert(app.includes("P.updatePreflight")&&app.includes("P.resilienceDiagnostics"),"Persistence preflight/diagnostics not wired");
+assert(index.indexOf('<script src="./cas.js"></script>')>index.indexOf('<script src="./calculus.js"></script>')&&index.indexOf('<script src="./cas.js"></script>')<index.indexOf('<script src="./app.js"></script>'),"CAS runtime load order is invalid");
+assert(cas.includes('VERSION:"2.0.0-u1"')&&cas.includes("solveAdvancedEquation")&&cas.includes("integrateAdvanced"),"U1 CAS runtime incomplete");
+assert(app.includes("CAS&&CAS.runCommand")&&notebook.includes("CAS&&CAS.runCommand"),"CAS router not wired into Calculate and Worksheet");
+const casDocs=read("docs/math/ADVANCED_CAS_SEMANTICS.md");
+assert(casDocs.includes("verified before exposure")&&casDocs.includes("does **not** implement"),"U1 CAS certification boundary is undocumented");
 assert(app.includes("state.persistedRevisions.worksheets.set(rec.id,rec.revision||0)"),"Recovered notebook writes must register persisted revision");
 const badSelectorCollections=app.split("\n").filter(line=>(/(^|[^$])\$\([^;]*\)\.(?:forEach|map|filter|some|every|reduce|find|findIndex)\b/).test(line));
 assert(badSelectorCollections.length===0,"Single-element $() selector used with collection operation: "+badSelectorCollections.join(" | "));
@@ -64,6 +69,7 @@ assert(pagesWorkflow.includes("workflow_run.conclusion == 'success'"),"Pages dep
 
 const budgets={
   "app.js":200*1024,
+  "cas.js":80*1024,
   "persistence.js":110*1024,
   "styles.css":110*1024,
   "index.html":90*1024

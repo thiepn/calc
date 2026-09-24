@@ -56,22 +56,24 @@ function precedence(n){
   if(n.type==="postfix")return 40;
   return 50;
 }
-function printAst(n,parentPrec,side){
-  parentPrec=parentPrec||0;side=side||"";
+function printAst(n,parentPrec,side,parentOp){
+  parentPrec=parentPrec||0;side=side||"";parentOp=parentOp||"";
   if(!n)return "";
   var out,p=precedence(n);
   if(n.type==="literal")out=M.formatValue(n.value);
   else if(n.type==="identifier")out=n.name;
   else if(n.type==="call")out=n.name+"("+n.args.map(function(a){return printAst(a,0);}).join(", ")+")";
-  else if(n.type==="unary")out=n.op+printAst(n.arg,p,"right");
-  else if(n.type==="postfix")out=printAst(n.arg,p,"left")+n.op;
+  else if(n.type==="unary")out=n.op+printAst(n.arg,p,"right",n.op);
+  else if(n.type==="postfix")out=printAst(n.arg,p,"left",n.op)+n.op;
   else if(n.type==="binary"){
-    var left=printAst(n.left,n.op==="^"?p+1:p,"left"),right=printAst(n.right,n.op==="^"?p-1:p,"right");
-    if(n.op==="+"&&n.right.type==="unary"&&n.right.op==="-")out=left+" - "+printAst(n.right.arg,p,"right");
-    else if(n.op==="-"&&n.right.type==="unary"&&n.right.op==="-")out=left+" + "+printAst(n.right.arg,p,"right");
+    var left=printAst(n.left,n.op==="^"?p+1:p,"left",n.op),right=printAst(n.right,n.op==="^"?p-1:p,"right",n.op);
+    if(n.op==="+"&&n.right.type==="unary"&&n.right.op==="-")out=left+" - "+printAst(n.right.arg,p,"right",n.op);
+    else if(n.op==="-"&&n.right.type==="unary"&&n.right.op==="-")out=left+" + "+printAst(n.right.arg,p,"right",n.op);
     else out=left+" "+n.op+" "+right;
   }else out="?";
-  var need=p<parentPrec||(side==="right"&&(n.type==="binary"&&(n.op==="-"||n.op==="/")));
+  var rightSubtract=side==="right"&&parentOp==="-"&&n.type==="binary"&&(n.op==="+"||n.op==="-");
+  var denominatorProduct=side==="right"&&parentOp==="/"&&n.type==="binary"&&(n.op==="*"||n.op==="/");
+  var need=p<parentPrec||rightSubtract||denominatorProduct;
   return need?"("+out+")":out;
 }
 
