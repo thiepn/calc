@@ -8,13 +8,13 @@ const read=p=>fs.readFileSync(path.join(root,p),"utf8");
 const exists=p=>fs.existsSync(path.join(root,p));
 
 const required=[
-  "index.html","styles.css","app.js","cas.js","multivariable.js","ode.js","persistence.js","notebook.js","sw.js","manifest.webmanifest",
-  "package.json","release.json","playwright.config.js","tests/cas.js","tests/multivariable.js","tests/ode.js","tests/release-soak.spec.js","docs/math/ADVANCED_CAS_SEMANTICS.md","docs/math/MULTIVARIABLE_VECTOR_SEMANTICS.md","docs/math/ODE_DYNAMICAL_SYSTEMS_SEMANTICS.md",
+  "index.html","styles.css","app.js","cas.js","multivariable.js","ode.js","optimization.js","persistence.js","notebook.js","sw.js","manifest.webmanifest",
+  "package.json","release.json","playwright.config.js","tests/cas.js","tests/multivariable.js","tests/ode.js","tests/optimization.js","tests/release-soak.spec.js","docs/math/ADVANCED_CAS_SEMANTICS.md","docs/math/MULTIVARIABLE_VECTOR_SEMANTICS.md","docs/math/ODE_DYNAMICAL_SYSTEMS_SEMANTICS.md","docs/math/OPTIMIZATION_SEMANTICS.md",
   ".github/workflows/ci.yml",".github/workflows/release-soak.yml",".github/workflows/pages.yml","docs/release/IMPLEMENTATION_PHASE_13.md"
 ];
 required.forEach(p=>assert(exists(p),"Missing RC artifact: "+p));
 
-const index=read("index.html"),styles=read("styles.css"),sw=read("sw.js"),persistence=read("persistence.js"),app=read("app.js"),notebook=read("notebook.js"),cas=read("cas.js"),multivariable=read("multivariable.js"),ode=read("ode.js");
+const index=read("index.html"),styles=read("styles.css"),sw=read("sw.js"),persistence=read("persistence.js"),app=read("app.js"),notebook=read("notebook.js"),cas=read("cas.js"),multivariable=read("multivariable.js"),ode=read("ode.js"),optimization=read("optimization.js");
 const pkg=JSON.parse(read("package.json")),manifest=JSON.parse(read("manifest.webmanifest")),release=JSON.parse(read("release.json"));
 const ciWorkflow=read(".github/workflows/ci.yml"),releaseWorkflow=read(".github/workflows/release-soak.yml"),pagesWorkflow=read(".github/workflows/pages.yml");
 const soak=read("tests/release-soak.spec.js"),phase=read("docs/release/IMPLEMENTATION_PHASE_13.md");
@@ -32,6 +32,11 @@ assert(index.indexOf('<script src="./multivariable.js"></script>')>index.indexOf
 assert(multivariable.includes('VERSION:"2.1.0-u2"')&&multivariable.includes("multivariableLimit")&&multivariable.includes("greenTheorem")&&multivariable.includes("divergenceTheorem"),"U2 multivariable runtime incomplete");
 assert(index.indexOf('<script src="./ode.js"></script>')>index.indexOf('<script src="./multivariable.js"></script>')&&index.indexOf('<script src="./ode.js"></script>')<index.indexOf('<script src="./app.js"></script>'),"U3 runtime load order is invalid");
 assert(ode.includes('VERSION:"2.2.0-u3"')&&ode.includes("rk45System")&&ode.includes("classifyLinearization2")&&ode.includes("matrixExponential2")&&ode.includes("laplaceTransform"),"U3 ODE runtime incomplete");
+assert(index.indexOf('<script src="./optimization.js"></script>')>index.indexOf('<script src="./linear-algebra.js"></script>')&&index.indexOf('<script src="./optimization.js"></script>')<index.indexOf('<script src="./app.js"></script>'),"U4 runtime load order is invalid");
+assert(optimization.includes('VERSION:"2.3.0-u4"')&&optimization.includes("optimizeLocal")&&optimization.includes("simplexMax")&&optimization.includes("quadProg")&&optimization.includes("kktCheck"),"U4 optimization runtime incomplete");
+assert(app.includes("OPT&&OPT.runCommand")&&notebook.includes("OPT&&OPT.runCommand"),"U4 router not wired into Calculate and Worksheet");
+const u4Docs=read("docs/math/OPTIMIZATION_SEMANTICS.md");
+assert(u4Docs.includes("primal–dual certificate")&&u4Docs.includes("does **not** implement"),"U4 certification boundary is undocumented");
 assert(app.includes("ODE&&ODE.runCommand")&&notebook.includes("ODE&&ODE.runCommand"),"U3 router not wired into Calculate and Worksheet");
 const u3Docs=read("docs/math/ODE_DYNAMICAL_SYSTEMS_SEMANTICS.md");
 assert(u3Docs.includes("ODE_CONVERGENCE")&&u3Docs.includes("does **not** implement"),"U3 certification boundary is undocumented");
@@ -65,8 +70,10 @@ assert(index.includes("maximum-scale=1")&&index.includes("user-scalable=no"),"In
 assert(ciWorkflow.includes("node --check cas.js")&&ciWorkflow.includes("node --check tests/cas.js")&&ciWorkflow.includes("node tests/cas.js"),"Primary CI does not certify U1 CAS");
 assert(ciWorkflow.includes("node --check multivariable.js")&&ciWorkflow.includes("node --check tests/multivariable.js")&&ciWorkflow.includes("node tests/multivariable.js"),"Primary CI does not certify U2 multivariable mathematics");
 assert(ciWorkflow.includes("node --check ode.js")&&ciWorkflow.includes("node --check tests/ode.js")&&ciWorkflow.includes("node tests/ode.js"),"Primary CI does not certify U3 differential equations");
+assert(ciWorkflow.includes("node --check optimization.js")&&ciWorkflow.includes("node --check tests/optimization.js")&&ciWorkflow.includes("node tests/optimization.js"),"Primary CI does not certify U4 optimization");
 assert(releaseWorkflow.includes("node --check multivariable.js")&&releaseWorkflow.includes("node tests/multivariable.js"),"Release soak does not certify U2 multivariable mathematics");
 assert(releaseWorkflow.includes("node --check ode.js")&&releaseWorkflow.includes("node tests/ode.js"),"Release soak does not certify U3 differential equations");
+assert(releaseWorkflow.includes("node --check optimization.js")&&releaseWorkflow.includes("node tests/optimization.js"),"Release soak does not certify U4 optimization");
 assert(releaseWorkflow.includes("Calc Release Soak"),"Release soak workflow name missing");
 ["chromium","firefox","webkit","mobile-chromium"].forEach(name=>assert(releaseWorkflow.includes(name),"Browser/device matrix missing "+name));
 assert(releaseWorkflow.includes("tests/release-gate.js")&&releaseWorkflow.includes("release-soak.spec.js"),"RC gate stages missing");
@@ -87,6 +94,7 @@ const budgets={
   "cas.js":80*1024,
   "multivariable.js":120*1024,
   "ode.js":120*1024,
+  "optimization.js":120*1024,
   "persistence.js":110*1024,
   "styles.css":110*1024,
   "index.html":90*1024
