@@ -155,6 +155,47 @@ test("U5 advanced linear algebra executes through Calculate and Matrix workspace
   expect(errors).toEqual([]);
 });
 
+test("U6 numerical mathematics executes through the Calculate UI",async({page})=>{
+  const errors=await openApp(page);
+  expect(await page.evaluate(()=>window.CalcNumerical&&window.CalcNumerical.VERSION)).toBe("2.5.0-u6");
+  const input=page.locator("#expressionInput");
+
+  await input.fill("floatinfo(1)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("2.22044604925031308e-16");
+
+  await input.fill("interp(0,1,2; 0,1,4; 1.5)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("2.25");
+
+  await input.fill("quad(x^4; x; 0; 1; 10; simpson)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("I ≈ 0.2");
+
+  await input.fill("cg(4,1|1,3; 1,2; 0,0; 20)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("iterations = 2");
+
+  await input.fill("rayleighiter(2,1|1,2; 1,0.2; 50)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("λ ≈ 3");
+
+  await input.fill("odeorder(y; x; y; 0; 1; 1; 10; rk4)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("observed p");
+
+  await input.fill("absstability(rk4; -2; 0)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("stable");
+
+  // U3 command ownership remains intact after U6 adds absolute-stability tools.
+  await input.fill("stability(y,-x; x,y; 0,0)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("center (linearized)");
+
+  expect(errors).toEqual([]);
+});
+
 test("notebook read failure does not create replacement or recovery duplicates",async({page})=>{
   const errors=await openApp(page);
   const seeded=await page.evaluate(async()=>{
