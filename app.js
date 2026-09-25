@@ -10,6 +10,7 @@ const U=window.CalcUnits;
 const LA=window.CalcLinearAlgebra;
 const ALA=window.CalcAdvancedLinearAlgebra;
 const OPT=window.CalcOptimization;
+const NUM=window.CalcNumerical;
 const S=window.CalcStatistics;
 const G=window.CalcGraph;
 const T=window.CalcTools;
@@ -148,6 +149,8 @@ function backspaceExpression(){
 }
 function calcOptions(commit){return {angle:state.angle,precision:state.precision,complex:true,commit:commit};}
 function evaluateInput(raw,env,commit){
+  var numerical=NUM&&NUM.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
+  if(numerical)return numerical;
   var advancedLinear=ALA&&ALA.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
   if(advancedLinear)return advancedLinear;
   var optimization=OPT&&OPT.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
@@ -181,7 +184,7 @@ function setCalcResult(res,preview){
   $("#approxResult").textContent=res.approx||"";
   $("#calcStatus").textContent=preview?"Preview":(res.symbolic?"Symbolic":(res.quantity?"Quantity":(res.exact?"Exact":"Approximate")));
   var graphAction=$('[data-result-action="graph"]'),saveAction=$('[data-result-action="save"]'),op=res.metadata&&res.metadata.operation;
-  var graphBlocked=!!res.symbolic||!!res.quantity||!!(res.metadata&&(res.metadata.u2||res.metadata.u3||res.metadata.u4||res.metadata.u5))||["integral","nintegral","nderivative","root","limit"].indexOf(op)>=0;
+  var graphBlocked=!!res.symbolic||!!res.quantity||!!(res.metadata&&(res.metadata.u2||res.metadata.u3||res.metadata.u4||res.metadata.u5||res.metadata.u6))||["integral","nintegral","nderivative","root","limit"].indexOf(op)>=0;
   if(graphAction)graphAction.disabled=graphBlocked;
   if(saveAction)saveAction.disabled=!!res.symbolic;
 }
@@ -1530,6 +1533,15 @@ const commands=[
   {id:"u5.inertia",title:"U5: Inertia & signature",keywords:"advanced linear algebra quadratic form inertia signature sylvester",run:function(){switchView("calculate");$("#expressionInput").value="inertia(2,0|0,-3)";previewExpression();$("#expressionInput").focus();}},
   {id:"u5.svd",title:"U5: Low-rank SVD approximation",keywords:"advanced linear algebra svd low rank eckart young pseudoinverse",run:function(){switchView("calculate");$("#expressionInput").value="lowrank(3,0|0,2|0,0; 1)";previewExpression();$("#expressionInput").focus();}},
   {id:"u5.condition",title:"U5: Matrix conditioning report",keywords:"advanced linear algebra condition number singular values numerical stability",run:function(){switchView("calculate");$("#expressionInput").value="condreport(1,0|0,0.001)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u6.float",title:"U6: Floating-point spacing",keywords:"numerical analysis floating point ulp machine epsilon rounding",run:function(){switchView("calculate");$("#expressionInput").value="floatinfo(1)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u6.root",title:"U6: Root method comparison",keywords:"numerical analysis roots bisection newton secant hybrid convergence",run:function(){switchView("calculate");$("#expressionInput").value="rootcompare(cos(x)-x; x; 0,1; 0.5,1)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u6.interp",title:"U6: Interpolation",keywords:"numerical interpolation lagrange barycentric newton hermite spline",run:function(){switchView("calculate");$("#expressionInput").value="interp(0,1,2; 0,1,4; 1.5)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u6.diff",title:"U6: Finite difference diagnostic",keywords:"numerical differentiation finite difference richardson truncation error",run:function(){switchView("calculate");$("#expressionInput").value="fdiff(sin(x); x; 0; 0.1; fivepoint; 1)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u6.quad",title:"U6: Quadrature diagnostic",keywords:"numerical integration quadrature simpson trapezoid gauss adaptive richardson",run:function(){switchView("calculate");$("#expressionInput").value="quad(exp(x); x; 0; 1; 4; gauss5)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u6.linear",title:"U6: Iterative linear solve",keywords:"numerical linear algebra jacobi gauss seidel conjugate gradient residual",run:function(){switchView("calculate");$("#expressionInput").value="cg(4,1|1,3; 1,2; 0,0; 20)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u6.eigen",title:"U6: Eigenvalue iteration",keywords:"numerical eigenvalue power inverse rayleigh quotient iteration",run:function(){switchView("calculate");$("#expressionInput").value="rayleighiter(2,1|1,2; 1,0.2; 50)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u6.ode",title:"U6: ODE convergence order",keywords:"numerical ode euler heun midpoint rk4 convergence stability region",run:function(){switchView("calculate");$("#expressionInput").value="odeorder(y; x; y; 0; 1; 1; 10; rk4)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u6.stability",title:"U6: Absolute stability",keywords:"numerical ode stability function region rk4 euler implicit",run:function(){switchView("calculate");$("#expressionInput").value="stability(rk4; -2; 0)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.diff",title:"Differentiate expression",keywords:"calculus derivative diff",run:function(){switchView("calculate");$("#expressionInput").value="diff(x^3 + sin(x), x)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.gradient",title:"Gradient",keywords:"calculus multivariable gradient partial",run:function(){switchView("calculate");$("#expressionInput").value="gradient(x^2+y^2, x, y)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.jacobian",title:"Jacobian",keywords:"calculus multivariable jacobian derivatives",run:function(){switchView("calculate");$("#expressionInput").value="jacobian(x^2+y; x*y, x, y)";previewExpression();$("#expressionInput").focus();}},
