@@ -8,6 +8,7 @@ const MV=window.CalcMultivariable;
 const ODE=window.CalcODE;
 const U=window.CalcUnits;
 const LA=window.CalcLinearAlgebra;
+const ALA=window.CalcAdvancedLinearAlgebra;
 const OPT=window.CalcOptimization;
 const S=window.CalcStatistics;
 const G=window.CalcGraph;
@@ -15,7 +16,7 @@ const T=window.CalcTools;
 const CT=window.CalcCustomTools;
 const NB=window.CalcNotebook;
 const P=window.CalcPersistence;
-const APP_VERSION="2.3.0";
+const APP_VERSION="2.4.0";
 window.CalcAppVersion=APP_VERSION;
 const $=function(s,r){return (r||document).querySelector(s);};
 const $$=function(s,r){return Array.from((r||document).querySelectorAll(s));};
@@ -147,6 +148,8 @@ function backspaceExpression(){
 }
 function calcOptions(commit){return {angle:state.angle,precision:state.precision,complex:true,commit:commit};}
 function evaluateInput(raw,env,commit){
+  var advancedLinear=ALA&&ALA.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
+  if(advancedLinear)return advancedLinear;
   var optimization=OPT&&OPT.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
   if(optimization)return optimization;
   var ode=ODE&&ODE.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
@@ -178,7 +181,7 @@ function setCalcResult(res,preview){
   $("#approxResult").textContent=res.approx||"";
   $("#calcStatus").textContent=preview?"Preview":(res.symbolic?"Symbolic":(res.quantity?"Quantity":(res.exact?"Exact":"Approximate")));
   var graphAction=$('[data-result-action="graph"]'),saveAction=$('[data-result-action="save"]'),op=res.metadata&&res.metadata.operation;
-  var graphBlocked=!!res.symbolic||!!res.quantity||!!(res.metadata&&(res.metadata.u2||res.metadata.u3||res.metadata.u4))||["integral","nintegral","nderivative","root","limit"].indexOf(op)>=0;
+  var graphBlocked=!!res.symbolic||!!res.quantity||!!(res.metadata&&(res.metadata.u2||res.metadata.u3||res.metadata.u4||res.metadata.u5))||["integral","nintegral","nderivative","root","limit"].indexOf(op)>=0;
   if(graphAction)graphAction.disabled=graphBlocked;
   if(saveAction)saveAction.disabled=!!res.symbolic;
 }
@@ -459,7 +462,7 @@ function matrixResultSection(box,title,content){
   box.appendChild(section);
 }
 function renderDecomposition(box,d){
-  ["P","L","U","Q","R","S","V","D","J"].forEach(function(k){if(d[k] instanceof LA.Matrix)matrixResultSection(box,k,d[k]);});
+  ["P","L","U","Q","R","S","V","D","J","T","C"].forEach(function(k){if(d[k] instanceof LA.Matrix)matrixResultSection(box,k,d[k]);});
   if(d.singularValues)matrixResultSection(box,"Singular values","["+d.singularValues.map(function(x){return M.formatNumber(x,state.precision);}).join(", ")+"]");
   var meta=[];["rank","residual","residual1","residual2","orthogonalityResidual","threshold","method"].forEach(function(k){if(d[k]!==undefined)meta.push(k+": "+(typeof d[k]==="number"?M.formatNumber(d[k],state.precision):d[k]));});
   if(meta.length)matrixResultSection(box,"Diagnostics",meta.join("\n"));
@@ -481,7 +484,7 @@ function renderEigenResult(box,e){
 }
 function runMatrix(op){
   var box=$("#matrixResult");try{
-    var matrix=matrixValues(),result=LA.resultSummary(op,matrix,{relTol:1e-10,rankTol:1e-10,maxIterations:300});
+    var matrix=matrixValues(),result=(ALA&&ALA.supportsOperation(op)?ALA.resultSummary(op,matrix,{relTol:1e-10,rankTol:1e-10,maxIterations:3000}):LA.resultSummary(op,matrix,{relTol:1e-10,rankTol:1e-10,maxIterations:300}));
     box.innerHTML="";box.classList.remove("muted","ws-error");
     if(result.kind==="scalar")matrixResultSection(box,result.label,M.formatValue(result.value,state.precision));
     else if(result.kind==="matrix")matrixResultSection(box,result.label,result.value);
@@ -492,6 +495,7 @@ function runMatrix(op){
     }else if(result.kind==="polynomial")matrixResultSection(box,result.label,result.value.toString());
     else if(result.kind==="eigen")renderEigenResult(box,result.value);
     else if(result.kind==="decomposition")renderDecomposition(box,result.value);
+    else if(result.kind==="text")matrixResultSection(box,result.label,result.display||String(result.value));
     if(result.metadata){
       var meta=[];if(result.metadata.pivots)meta.push("pivot columns: "+result.metadata.pivots.map(function(x){return x+1;}).join(", "));
       if(result.metadata.operations)meta.push("row operations: "+result.metadata.operations.length);
@@ -1519,6 +1523,13 @@ const commands=[
   {id:"u4.kkt",title:"U4: KKT checker",keywords:"optimization kkt stationarity complementarity constraints multipliers",run:function(){switchView("calculate");$("#expressionInput").value="kktcheck(x^2+y^2; x,y; x+y-1; -x,-y; 0.5,0.5; -1; 0,0)";previewExpression();$("#expressionInput").focus();}},
   {id:"u4.lp",title:"U4: Linear program",keywords:"optimization linear programming simplex exact rational duality",run:function(){switchView("calculate");$("#expressionInput").value="lpmax(3,2; 1,1|1,0|0,1; 4,2,3)";previewExpression();$("#expressionInput").focus();}},
   {id:"u4.qp",title:"U4: Convex quadratic program",keywords:"optimization quadratic programming active set kkt convex",run:function(){switchView("calculate");$("#expressionInput").value="quadprog(x^2+y^2; x,y; x+y-1; -x,-y)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u5.jordan",title:"U5: Jordan chains V2",keywords:"advanced linear algebra jordan generalized eigenvectors chains canonical form",run:function(){switchView("calculate");$("#expressionInput").value="jordanv2(2,1,0|0,2,1|0,0,2)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u5.schur",title:"U5: Real Schur decomposition",keywords:"advanced linear algebra schur qr orthogonal triangular",run:function(){switchView("calculate");$("#expressionInput").value="schur(1,4,2|3,2,5|0,1,3)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u5.spectral",title:"U5: Spectral theorem",keywords:"advanced linear algebra symmetric spectral theorem eigen projectors",run:function(){switchView("calculate");$("#expressionInput").value="spectral(2,1|1,2)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u5.matrixfunc",title:"U5: Spectral matrix function",keywords:"advanced linear algebra matrix function exponential square root logarithm",run:function(){switchView("calculate");$("#expressionInput").value="matrixfunc(4,0|0,9; sqrt)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u5.inertia",title:"U5: Inertia & signature",keywords:"advanced linear algebra quadratic form inertia signature sylvester",run:function(){switchView("calculate");$("#expressionInput").value="inertia(2,0|0,-3)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u5.svd",title:"U5: Low-rank SVD approximation",keywords:"advanced linear algebra svd low rank eckart young pseudoinverse",run:function(){switchView("calculate");$("#expressionInput").value="lowrank(3,0|0,2|0,0; 1)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u5.condition",title:"U5: Matrix conditioning report",keywords:"advanced linear algebra condition number singular values numerical stability",run:function(){switchView("calculate");$("#expressionInput").value="condreport(1,0|0,0.001)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.diff",title:"Differentiate expression",keywords:"calculus derivative diff",run:function(){switchView("calculate");$("#expressionInput").value="diff(x^3 + sin(x), x)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.gradient",title:"Gradient",keywords:"calculus multivariable gradient partial",run:function(){switchView("calculate");$("#expressionInput").value="gradient(x^2+y^2, x, y)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.jacobian",title:"Jacobian",keywords:"calculus multivariable jacobian derivatives",run:function(){switchView("calculate");$("#expressionInput").value="jacobian(x^2+y; x*y, x, y)";previewExpression();$("#expressionInput").focus();}},

@@ -2,6 +2,32 @@
 
 All notable production changes to Calc are recorded here.
 
+## [2.4.0] — 2026-09-25
+
+### University Mathematics Workstation — Phase U5
+
+- Added the standalone `advanced-linear-algebra.js` runtime and routed it through Calculate, Worksheet Math, Worksheet Matrix blocks, and the Matrix workspace.
+- Added exact generalized-eigenvector Jordan chains and Jordan V2 beyond the previous non-diagonal 2×2 limit.
+- Added real Schur decomposition with Hessenberg reduction, shifted QR iteration, and residual/orthogonality certification.
+- Added real-symmetric spectral-theorem workflows and spectral projectors.
+- Added certified spectral matrix functions including square root, logarithm, inverse square root, exponential, trigonometric functions, sign/absolute value, and real powers.
+- Added complex Gram matrices and complex modified Gram–Schmidt.
+- Added certified orthogonal/Hermitian projectors.
+- Added bilinear, sesquilinear, and quadratic-form evaluation.
+- Added inertia, signature, definiteness, and Sylvester congruence canonical form.
+- Added truncated-SVD low-rank approximations with Eckart–Young error diagnostics.
+- Added all-four-Penrose pseudoinverse diagnostics and minimum-norm least-squares V2.
+- Added singular-value conditioning reports.
+- Added verified similarity transforms and basis-transition workflows.
+- Added `u5help()`, U5 command-palette templates, advanced Matrix buttons, offline caching, Worksheet coverage, browser regression tests, and release-gate enforcement.
+- Added `tests/advanced-linear-algebra.js` and `docs/math/ADVANCED_LINEAR_ALGEBRA_SEMANTICS.md`.
+
+### Compatibility
+
+- Existing Linear Algebra V2 remains the underlying stable Matrix/Vector kernel.
+- U1–U4 and all prior calculator subsystems remain intact.
+- Unsupported complex/general symbolic canonical-form and matrix-function problems fail explicitly rather than being represented as certified solutions.
+
 ## [2.3.0] — 2026-09-25
 
 ### University Mathematics Workstation — Phase U4

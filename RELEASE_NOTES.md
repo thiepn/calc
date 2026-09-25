@@ -1,54 +1,53 @@
-# Calc v2.3.0
+# Calc v2.4.0
 
-Calc v2.3.0 adds **Phase U4 — Optimization & Mathematical Programming** to the University Mathematics Workstation.
+Calc v2.4.0 adds **Phase U5 — Advanced Linear Algebra** to the University Mathematics Workstation.
 
-## Convexity & curvature
+## Canonical forms
 
-- Added constant-Hessian global convexity/concavity certification for quadratic and affine objectives.
-- Added pointwise Hessian-curvature analysis without overstating pointwise semidefiniteness as a convexity proof.
-- Added explicit affine/zero-Hessian classification.
+- Added Jordan V2 for exact matrices up to size 6 when all eigenvalues are certified by the exact solver.
+- Added generalized-eigenvector chain construction from nullity growth of `(A-λI)^k`.
+- Added multiple-block Jordan reconstruction and exact `AP=PJ` verification.
+- Added exact complex-eigenvalue Jordan workflows.
+- Added real Schur decomposition using Householder Hessenberg reduction plus shifted QR iteration.
+- Schur results require orthogonality, reconstruction, and quasi-upper-triangular certification.
 
-## Nonlinear optimization
+## Spectral theorem & matrix functions
 
-- Added BFGS with Armijo backtracking and inverse-Hessian reset safeguards.
-- Added Newton optimization with exact symbolic Hessians and descent fallback.
-- Added gradient descent with Armijo backtracking.
-- Added minimization and maximization workflows.
-- Added second-order verification after first-order convergence so saddles are not mislabeled as extrema.
-- Added global quadratic optimum labeling when a constant positive-definite/semidefinite Hessian provides the certificate.
+- Added real-symmetric spectral decompositions with orthonormal eigenvectors and spectral projectors.
+- Added spectral matrix functions: `exp`, `sqrt`, `log`, `sin`, `cos`, `abs`, `sign`, `invsqrt`, and real powers.
+- Added explicit domain checks for square roots, logarithms, inverse square roots, and fractional powers.
+- Added function-specific verification such as `sqrt(A)^2≈A` and whitening by `A^(-1/2)`.
 
-## Bound constraints & KKT
+## Inner-product spaces & forms
 
-- Added projected-gradient box minimization/maximization.
-- Added projected-gradient first-order convergence checks.
-- Added a general KKT checker for equality and `h(x)<=0` inequality constraints:
-  stationarity, primal feasibility, dual feasibility, and complementary slackness.
+- Added Gram matrices with conjugate-transpose semantics.
+- Added complex modified Gram–Schmidt with `Q*Q≈I` and `QR≈A` certification.
+- Added orthogonal/Hermitian projectors onto column spaces.
+- Added real bilinear, complex sesquilinear, and quadratic/Hermitian form evaluation.
+- Added inertia, signature, definiteness classification, and Sylvester congruence canonical forms.
 
-## Linear programming
+## SVD applications & numerical stability
 
-- Added exact Rational primal simplex for `Ax<=b, x>=0` with nonnegative RHS.
-- Added Bland-style pivot selection/tie breaking.
-- Added exact unboundedness detection.
-- Added primal feasibility, reduced-cost, dual feasibility, and strong-duality certificate checks before results are exposed.
-- Added both `lpmax(...)` and transformed `lpmin(...)`.
+- Added truncated-SVD low-rank approximation with Eckart–Young error reporting.
+- Added pseudoinverse diagnostics checking all four Moore–Penrose equations.
+- Added least-squares V2 with minimum-norm and normal-equation diagnostics.
+- Added 2-norm condition reports from singular values.
 
-## Convex quadratic programming
+## Basis and similarity workflows
 
-- Added exact active-set enumeration for convex quadratic objectives with affine equality/inequality constraints.
-- Added exact KKT linear-system solving.
-- Added active multiplier sign checks and full KKT re-verification.
-- Added strict-convexity/uniqueness metadata.
-- Nonconvex QPs are rejected explicitly.
+- Added verified similarity transforms `P^-1 A P`.
+- Added basis-transition matrices from column-basis matrices with reconstruction checks.
 
 ## Integration
 
-- U4 commands are available in Calculate and Worksheet Math blocks.
-- Added command-palette entries for convexity, local optimization, box constraints, KKT checks, LPs, and QPs.
-- Added `opthelp()`.
-- Added the U4 runtime to the offline PWA shell.
+- U5 commands are available in Calculate and Worksheet Math blocks.
+- Added Matrix-workspace buttons for Jordan V2, Schur, Spectral, Inertia, Projector, and Condition.
+- Worksheet Matrix blocks can use the same advanced operations.
+- Added command-palette entries and `u5help()`.
+- Added the U5 runtime to the offline PWA shell.
 
 ## Certification
 
-v2.3.0 adds a dedicated U4 deterministic suite, Worksheet regression coverage, browser-level Calculate coverage, primary-CI enforcement, release-gate assertions, and the full Chromium / Firefox / WebKit / mobile Chromium production soak.
+v2.4.0 adds a dedicated U5 deterministic suite, advanced Matrix-block regression coverage, browser-level Calculate + Matrix-workspace coverage, primary-CI enforcement, release-gate assertions, and the full Chromium / Firefox / WebKit / mobile Chromium production soak.
 
-U4 intentionally does not implement mixed-integer programming, a full Phase-I simplex, general nonlinear constrained optimization, interior-point methods, semidefinite programming, or universal global nonlinear optimization.
+U5 deliberately does not claim universal symbolic Jordan forms, general complex Schur iteration, arbitrary nonsymmetric matrix functions, symbolic SVD, generalized eigenvalue pencils, rational canonical forms, or Smith normal form.
