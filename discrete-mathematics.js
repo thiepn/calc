@@ -138,3 +138,81 @@ function starsAndBars(objects,boxes,positive){
   if(n+k-1>LIMITS.combinatorialN)throw new DiscreteComplexityError("objects + boxes - 1 exceeds the binomial safety limit");
   return chooseBig(BigInt(n+k-1),BigInt(k-1));
 }
+function pigeonholeMinimum(items,boxes){var n=parseInteger(items,"items"),k=parseInteger(boxes,"boxes");if(n<0n||k<=0n)throw new DiscreteMathError("DOMAIN_ERROR","Pigeonhole inputs require items >= 0 and boxes > 0");return (n+k-1n)/k;}
+function cayleyTreesBig(n){var nn=toBoundedInt(n,0,LIMITS.combinatorialN,"n");if(nn===0)return 0n;if(nn===1||nn===2)return 1n;return powBig(BigInt(nn),BigInt(nn-2));}
+function fibonacciBig(n){
+  var nn=toBoundedInt(n,0,100000,"n");
+  function fd(k){if(k===0)return [0n,1n];var q=fd(Math.floor(k/2)),a=q[0],b=q[1],c=a*(2n*b-a),d=a*a+b*b;return k%2?[d,c+d]:[c,d];}
+  return fd(nn)[0];
+}
+
+/* Modular arithmetic --------------------------------------------------- */
+function extendedGcd(a,b){
+  a=BigInt(a);b=BigInt(b);var aa=absBig(a),bb=absBig(b),oldR=aa,r=bb,oldS=1n,s=0n,oldT=0n,t=1n;
+  while(r!==0n){var q=oldR/r,tmp=oldR-q*r;oldR=r;r=tmp;tmp=oldS-q*s;oldS=s;s=tmp;tmp=oldT-q*t;oldT=t;t=tmp;}
+  if(a<0n)oldS=-oldS;if(b<0n)oldT=-oldT;return {gcd:oldR,x:oldS,y:oldT};
+}
+function modularInverse(a,m){m=BigInt(m);if(m<=0n)throw new DiscreteMathError("MODULUS_REQUIRED","Modulus must be positive");var e=extendedGcd(BigInt(a),m);if(e.gcd!==1n)throw new DiscreteMathError("NO_MODULAR_INVERSE","Modular inverse exists only when gcd(a,m)=1",{gcd:e.gcd.toString()});return mod(e.x,m);}
+function modularPower(a,e,m){a=BigInt(a);e=BigInt(e);m=BigInt(m);if(e<0n)throw new DiscreteMathError("NONNEGATIVE_REQUIRED","Modular exponent must be nonnegative");if(m<=0n)throw new DiscreteMathError("MODULUS_REQUIRED","Modulus must be positive");var r=1n%m,b=mod(a,m);while(e){if(e&1n)r=r*b%m;e>>=1n;if(e)b=b*b%m;}return r;}
+function crt(congruences){
+  if(!congruences.length)throw new DiscreteMathError("DATA_REQUIRED","CRT needs at least one congruence");
+  var x=mod(congruences[0][0],congruences[0][1]),m=congruences[0][1];if(m<=0n)throw new DiscreteMathError("MODULUS_REQUIRED","CRT moduli must be positive");
+  for(var i=1;i<congruences.length;i++){
+    var b=congruences[i][0],n=congruences[i][1];if(n<=0n)throw new DiscreteMathError("MODULUS_REQUIRED","CRT moduli must be positive");b=mod(b,n);
+    var g=gcdBig(m,n),delta=b-x;if(delta%g!==0n)throw new DiscreteMathError("INCONSISTENT_CONGRUENCES","Congruences have no simultaneous solution",{leftModulus:m.toString(),rightModulus:n.toString()});
+    var mr=m/g,nr=n/g,t=mod((delta/g)*modularInverse(mod(mr,nr),nr),nr),l=m*nr;x=mod(x+m*t,l);m=l;
+  }
+  return {residue:x,modulus:m};
+}
+function solveLinearCongruence(a,b,m){
+  a=BigInt(a);b=BigInt(b);m=BigInt(m);if(m<=0n)throw new DiscreteMathError("MODULUS_REQUIRED","Modulus must be positive");var g=gcdBig(a,m);
+  if(b%g!==0n)throw new DiscreteMathError("NO_CONGRUENCE_SOLUTION","Linear congruence has no solution",{gcd:g.toString()});
+  var ar=a/g,br=b/g,mr=m/g,base=mr===1n?0n:mod(modularInverse(mod(ar,mr),mr)*br,mr);
+  return {base:base,reducedModulus:mr,solutionCount:g,originalModulus:m};
+}
+
+/* Finite sets ----------------------------------------------------------- */
+function normalizeAtom(atom){
+  atom=String(atom).trim();if(!atom)throw new DiscreteMathError("EMPTY_ELEMENT","Set elements must not be empty");
+  if((atom[0]==='"'&&atom[atom.length-1]==='"')||(atom[0]==="'"&&atom[atom.length-1]==="'"))atom=atom.slice(1,-1);
+  if(!atom)throw new DiscreteMathError("EMPTY_ELEMENT","Set elements must not be empty");return atom;
+}
+function parseSet(source){
+  source=String(source).trim();if(source[0]==="{"&&source[source.length-1]==="}")source=source.slice(1,-1);if(!source.trim())return [];
+  var seen=new Set(),out=[];splitArgs(source).forEach(function(x){var a=normalizeAtom(x);if(!seen.has(a)){seen.add(a);out.push(a);}});return out;
+}
+function setUnion(a,b){var seen=new Set(a),out=a.slice();b.forEach(function(x){if(!seen.has(x)){seen.add(x);out.push(x);}});return out;}
+function setIntersection(a,b){var bs=new Set(b);return a.filter(function(x){return bs.has(x);});}
+function setDifference(a,b){var bs=new Set(b);return a.filter(function(x){return !bs.has(x);});}
+function setSymmetricDifference(a,b){return setUnion(setDifference(a,b),setDifference(b,a));}
+function cartesianProduct(a,b){if(a.length*b.length>LIMITS.cartesianPairs)throw new DiscreteComplexityError("Cartesian product exceeds "+LIMITS.cartesianPairs+" pairs");var out=[];a.forEach(function(x){b.forEach(function(y){out.push([x,y]);});});return out;}
+function powerSet(a){if(a.length>LIMITS.powerSetSize)throw new DiscreteComplexityError("Explicit powerset is limited to "+LIMITS.powerSetSize+" elements");var out=[[]];a.forEach(function(x){var n=out.length;for(var i=0;i<n;i++)out.push(out[i].concat([x]));});return out;}
+function formatSet(a){return "{"+a.join(", ")+"}";}
+function formatPairs(a,separator){separator=separator||",";return "{"+a.map(function(p){return "("+p[0]+separator+p[1]+")";}).join(", ")+"}";}
+
+/* Linear recurrences ---------------------------------------------------- */
+function validateRecurrence(coefficients,initials){
+  if(!coefficients.length||coefficients.length!==initials.length)throw new DiscreteMathError("RECURRENCE_SHAPE","Coefficient and initial-term lists must have the same nonzero length");
+  if(coefficients.length>LIMITS.recurrenceOrder)throw new DiscreteComplexityError("Recurrence order exceeds "+LIMITS.recurrenceOrder);
+}
+function linearRecurrenceTerm(coefficients,initials,n){
+  validateRecurrence(coefficients,initials);var nn=toBoundedInt(n,0,LIMITS.recurrenceIndex,"n");if(nn<initials.length)return initials[nn];var k=coefficients.length,window=initials.slice();
+  for(var index=k;index<=nn;index++){var next=0n;for(var j=0;j<k;j++)next+=coefficients[j]*window[k-1-j];window.shift();window.push(next);}return window[k-1];
+}
+function linearRecurrenceSequence(coefficients,initials,count){
+  validateRecurrence(coefficients,initials);var c=toBoundedInt(count,0,LIMITS.recurrenceSequence,"count"),out=initials.slice(0,c),k=coefficients.length;if(c<=k)return out;
+  while(out.length<c){var next=0n;for(var j=0;j<k;j++)next+=coefficients[j]*out[out.length-1-j];out.push(next);}return out;
+}
+function recurrenceGeneratingFunction(coefficients,initials){
+  validateRecurrence(coefficients,initials);var k=coefficients.length,num=[];
+  for(var j=0;j<k;j++){var v=initials[j];for(var i=1;i<=j;i++)v-=coefficients[i-1]*initials[j-i];num.push(v);}
+  var den=[1n].concat(coefficients.map(function(c){return -c;}));return {numerator:num,denominator:den};
+}
+function formatPolynomial(coeffs,variable){
+  variable=variable||"x";var parts=[];
+  coeffs.forEach(function(c,i){if(c===0n)return;var neg=c<0n,a=absBig(c),term;if(i===0)term=a.toString();else term=(a===1n?"":a.toString()+"*")+variable+(i===1?"":"^"+i);parts.push({neg:neg,term:term});});
+  if(!parts.length)return "0";var s=(parts[0].neg?"-":"")+parts[0].term;for(var i=1;i<parts.length;i++)s+=(parts[i].neg?" - ":" + ")+parts[i].term;return s;
+}
+
+/* Propositional logic --------------------------------------------------- */
+function tokenizeLogic(source){
