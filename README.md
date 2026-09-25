@@ -2,9 +2,9 @@
 
 A local-first universal calculator PWA and mathematical workstation.
 
-**Current stable release: v2.4.0** · IndexedDB schema v5 · production channel.
+**Current stable release: v2.5.0** · IndexedDB schema v5 · production channel.
 
-v2.4.0 adds Phase U5: advanced linear algebra on top of the U1–U4 university-mathematics foundation.
+v2.5.0 adds Phase U6: numerical mathematics on top of the U1–U5 university-mathematics foundation.
 
 ## Current implementation
 
@@ -12,7 +12,7 @@ Calc currently includes:
 
 - exact arbitrary-size Integer/Rational arithmetic;
 - finite Real and exact-capable Complex scalars;
-- symbolic algebra, advanced CAS/parameter solving, single- and multivariable calculus, vector analysis, differential equations, dynamical systems, optimization, mathematical programming, and numerical methods;
+- symbolic algebra, advanced CAS/parameter solving, single- and multivariable calculus, vector analysis, differential equations, dynamical systems, optimization, mathematical programming, and a dedicated numerical-analysis layer;
 - first-class physical quantities, units, constants and engineering relations;
 - canonical Matrix/Vector/subspace objects, certified numerical decompositions, advanced canonical forms, spectral calculus, inner-product workflows, and conditioning diagnostics;
 - typed Dataset/probability/inference/regression systems;
@@ -173,6 +173,55 @@ u5help()
 Jordan V2 is exact and chain-based when the exact eigenvalue solver certifies the complete spectrum. Schur, spectral functions, SVD applications, and conditioning workflows are numerical but expose reconstruction and orthogonality diagnostics before results are accepted.
 
 The Matrix workspace also gains first-class **Jordan V2, Schur, Spectral, Inertia, Projector, and Condition** operations. Full syntax and certification boundaries are documented in `docs/math/ADVANCED_LINEAR_ALGEBRA_SEMANTICS.md`.
+
+## Numerical Mathematics — v2.5 / U6
+
+U6 adds a dedicated numerical-analysis layer shared by Calculate and Worksheet Math blocks.
+
+Examples:
+
+```text
+floatinfo(1)
+numerror(1; 0.999)
+cancellation(1.000000000001; 1)
+scalarcond(exp(x); x; 1)
+
+richardson(1.04; 1.01; 2)
+convorder(1.1; 1.025; 1.00625)
+
+fixedpoint(cos(x); x; 0.5)
+rootcompare(cos(x)-x; x; 0,1; 0.5,1)
+
+interp(0,1,2; 0,1,4; 1.5)
+newtoninterp(0,1,2; 0,1,4; 1.5)
+hermite(0,1; 0,1; 0,2; 0.5)
+spline(0,1,2; 0,1,0; 0.5)
+
+fdiff(sin(x); x; 0; 0.1; fivepoint; 1)
+quad(exp(x); x; 0; 1; 4; gauss5)
+
+jacobi(4,1|2,3; 1,2; 0,0; 200)
+gaussseidel(4,1|2,3; 1,2; 0,0; 200)
+cg(4,1|1,3; 1,2; 0,0; 20)
+linsysdiag(4,1|1,3; 1,2; 0.0909090909,0.6363636364)
+
+poweriter(2,1|1,2; 1,0; 100)
+inverseiter(2,0|0,5; 1,1; 2.1; 100)
+rayleighiter(2,1|1,2; 1,0.2; 50)
+
+optcompare((x-1)^2+(y+2)^2; x,y; 3,3)
+
+odefixed(y; x; y; 0; 1; 1; 100; rk4)
+odeorder(y; x; y; 0; 1; 1; 10; rk4)
+absstability(rk4; -2; 0)
+stabinterval(rk4)
+
+numhelp()
+```
+
+U6 emphasizes numerical evidence: residuals, error estimates, observed convergence order, backward error, condition numbers, and absolute-stability diagnostics are carried with the result whenever applicable.
+
+The existing U3 `stability(...)` command remains unchanged; U6 uses `absstability(...)` to avoid command ambiguity. Full numerical semantics, assumptions, and unsupported boundaries are documented in `docs/math/NUMERICAL_MATHEMATICS_SEMANTICS.md`.
 
 ## Tools V2
 
