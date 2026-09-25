@@ -8,13 +8,13 @@ const read=p=>fs.readFileSync(path.join(root,p),"utf8");
 const exists=p=>fs.existsSync(path.join(root,p));
 
 const required=[
-  "index.html","styles.css","app.js","cas.js","multivariable.js","ode.js","optimization.js","advanced-linear-algebra.js","persistence.js","notebook.js","sw.js","manifest.webmanifest",
-  "package.json","release.json","playwright.config.js","tests/cas.js","tests/multivariable.js","tests/ode.js","tests/optimization.js","tests/advanced-linear-algebra.js","tests/release-soak.spec.js","docs/math/ADVANCED_CAS_SEMANTICS.md","docs/math/MULTIVARIABLE_VECTOR_SEMANTICS.md","docs/math/ODE_DYNAMICAL_SYSTEMS_SEMANTICS.md","docs/math/OPTIMIZATION_SEMANTICS.md","docs/math/ADVANCED_LINEAR_ALGEBRA_SEMANTICS.md",
+  "index.html","styles.css","app.js","cas.js","multivariable.js","ode.js","optimization.js","advanced-linear-algebra.js","numerical-mathematics.js","persistence.js","notebook.js","sw.js","manifest.webmanifest",
+  "package.json","release.json","playwright.config.js","tests/cas.js","tests/multivariable.js","tests/ode.js","tests/optimization.js","tests/advanced-linear-algebra.js","tests/numerical-mathematics.js","tests/release-soak.spec.js","docs/math/ADVANCED_CAS_SEMANTICS.md","docs/math/MULTIVARIABLE_VECTOR_SEMANTICS.md","docs/math/ODE_DYNAMICAL_SYSTEMS_SEMANTICS.md","docs/math/OPTIMIZATION_SEMANTICS.md","docs/math/ADVANCED_LINEAR_ALGEBRA_SEMANTICS.md","docs/math/NUMERICAL_MATHEMATICS_SEMANTICS.md",
   ".github/workflows/ci.yml",".github/workflows/release-soak.yml",".github/workflows/pages.yml","docs/release/IMPLEMENTATION_PHASE_13.md"
 ];
 required.forEach(p=>assert(exists(p),"Missing RC artifact: "+p));
 
-const index=read("index.html"),styles=read("styles.css"),sw=read("sw.js"),persistence=read("persistence.js"),app=read("app.js"),notebook=read("notebook.js"),cas=read("cas.js"),multivariable=read("multivariable.js"),ode=read("ode.js"),optimization=read("optimization.js"),advancedLinear=read("advanced-linear-algebra.js");
+const index=read("index.html"),styles=read("styles.css"),sw=read("sw.js"),persistence=read("persistence.js"),app=read("app.js"),notebook=read("notebook.js"),cas=read("cas.js"),multivariable=read("multivariable.js"),ode=read("ode.js"),optimization=read("optimization.js"),advancedLinear=read("advanced-linear-algebra.js"),numerical=read("numerical-mathematics.js");
 const pkg=JSON.parse(read("package.json")),manifest=JSON.parse(read("manifest.webmanifest")),release=JSON.parse(read("release.json"));
 const ciWorkflow=read(".github/workflows/ci.yml"),releaseWorkflow=read(".github/workflows/release-soak.yml"),pagesWorkflow=read(".github/workflows/pages.yml");
 const soak=read("tests/release-soak.spec.js"),phase=read("docs/release/IMPLEMENTATION_PHASE_13.md");
@@ -36,6 +36,13 @@ assert(index.indexOf('<script src="./optimization.js"></script>')>index.indexOf(
 assert(optimization.includes('VERSION:"2.3.0-u4"')&&optimization.includes("optimizeLocal")&&optimization.includes("simplexMax")&&optimization.includes("quadProg")&&optimization.includes("kktCheck"),"U4 optimization runtime incomplete");
 assert(index.indexOf('<script src="./advanced-linear-algebra.js"></script>')>index.indexOf('<script src="./linear-algebra.js"></script>')&&index.indexOf('<script src="./advanced-linear-algebra.js"></script>')<index.indexOf('<script src="./app.js"></script>'),"U5 runtime load order is invalid");
 assert(advancedLinear.includes('VERSION:"2.4.0-u5"')&&advancedLinear.includes("jordanFormV2")&&advancedLinear.includes("realSchur")&&advancedLinear.includes("matrixFunctionSymmetric")&&advancedLinear.includes("lowRankApproximation"),"U5 advanced linear algebra runtime incomplete");
+assert(index.indexOf('<script src="./numerical-mathematics.js"></script>')>index.indexOf('<script src="./optimization.js"></script>')&&index.indexOf('<script src="./numerical-mathematics.js"></script>')<index.indexOf('<script src="./app.js"></script>'),"U6 runtime load order is invalid");
+assert(numerical.includes('VERSION:"2.5.0-u6"')&&numerical.includes("barycentricInterpolation")&&numerical.includes("quadratureDiagnostic")&&numerical.includes("conjugateGradient")&&numerical.includes("rayleighQuotientIteration")&&numerical.includes("stabilityAmplification"),"U6 numerical mathematics runtime incomplete");
+assert(app.includes("NUM&&NUM.runCommand")&&notebook.includes("NUM&&NUM.runCommand"),"U6 router not wired into Calculate and Worksheet");
+assert(sw.includes('"./numerical-mathematics.js"'),"U6 runtime missing from service-worker asset shell");
+assert(app.includes("absstability(rk4; -2; 0)")&&notebook.includes('"absstability"'),"U6 absolute-stability command is not collision-safe");
+const u6Docs=read("docs/math/NUMERICAL_MATHEMATICS_SEMANTICS.md");
+assert(u6Docs.includes("Richardson extrapolation")&&u6Docs.includes("Conjugate gradient")&&u6Docs.includes("does **not** implement"),"U6 certification boundary is undocumented");
 assert(app.includes("ALA&&ALA.runCommand")&&notebook.includes("ALA&&ALA.runCommand"),"U5 router not wired into Calculate and Worksheet");
 assert(app.includes("ALA.supportsOperation(op)")&&notebook.includes("ALA.supportsOperation(op)"),"U5 Matrix operation routing is incomplete");
 assert(index.includes('data-matrix-op="schur"')&&index.includes('data-matrix-op="spectral"')&&index.includes('data-matrix-op="jordanv2"'),"U5 Matrix workspace controls are missing");
@@ -80,10 +87,12 @@ assert(ciWorkflow.includes("node --check multivariable.js")&&ciWorkflow.includes
 assert(ciWorkflow.includes("node --check ode.js")&&ciWorkflow.includes("node --check tests/ode.js")&&ciWorkflow.includes("node tests/ode.js"),"Primary CI does not certify U3 differential equations");
 assert(ciWorkflow.includes("node --check optimization.js")&&ciWorkflow.includes("node --check tests/optimization.js")&&ciWorkflow.includes("node tests/optimization.js"),"Primary CI does not certify U4 optimization");
 assert(ciWorkflow.includes("node --check advanced-linear-algebra.js")&&ciWorkflow.includes("node --check tests/advanced-linear-algebra.js")&&ciWorkflow.includes("node tests/advanced-linear-algebra.js"),"Primary CI does not certify U5 advanced linear algebra");
+assert(ciWorkflow.includes("node --check numerical-mathematics.js")&&ciWorkflow.includes("node --check tests/numerical-mathematics.js")&&ciWorkflow.includes("node tests/numerical-mathematics.js"),"Primary CI does not certify U6 numerical mathematics");
 assert(releaseWorkflow.includes("node --check multivariable.js")&&releaseWorkflow.includes("node tests/multivariable.js"),"Release soak does not certify U2 multivariable mathematics");
 assert(releaseWorkflow.includes("node --check ode.js")&&releaseWorkflow.includes("node tests/ode.js"),"Release soak does not certify U3 differential equations");
 assert(releaseWorkflow.includes("node --check optimization.js")&&releaseWorkflow.includes("node tests/optimization.js"),"Release soak does not certify U4 optimization");
 assert(releaseWorkflow.includes("node --check advanced-linear-algebra.js")&&releaseWorkflow.includes("node tests/advanced-linear-algebra.js"),"Release soak does not certify U5 advanced linear algebra");
+assert(releaseWorkflow.includes("node --check numerical-mathematics.js")&&releaseWorkflow.includes("node tests/numerical-mathematics.js"),"Release soak does not certify U6 numerical mathematics");
 assert(releaseWorkflow.includes("Calc Release Soak"),"Release soak workflow name missing");
 ["chromium","firefox","webkit","mobile-chromium"].forEach(name=>assert(releaseWorkflow.includes(name),"Browser/device matrix missing "+name));
 assert(releaseWorkflow.includes("tests/release-gate.js")&&releaseWorkflow.includes("release-soak.spec.js"),"RC gate stages missing");
@@ -106,6 +115,7 @@ const budgets={
   "ode.js":120*1024,
   "optimization.js":120*1024,
   "advanced-linear-algebra.js":140*1024,
+  "numerical-mathematics.js":170*1024,
   "persistence.js":110*1024,
   "styles.css":110*1024,
   "index.html":90*1024
