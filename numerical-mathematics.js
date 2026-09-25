@@ -368,8 +368,9 @@ function gaussianSolve(A,b){
 }
 function linearSystemDiagnostics(A,b,x){
   var mat=new LA.Matrix(A);if(mat.cols!==x.length||mat.rows!==b.length)throw new NumericalMathematicsError("MATRIX_SHAPE_ERROR","A, b, and approximate x dimensions must agree");
-  var res=residualVec(A,x,b),rn=norm2(res),an=mat.frobeniusNorm(),xn=norm2(x),bn=norm2(b),
-    backward=rn/Math.max(an*xn+bn,Number.MIN_VALUE),cond=ALA.conditionReport(mat).conditionNumber,
+  var report=ALA.conditionReport(mat),an=report.singularValues.length?report.singularValues[0]:0,
+    res=residualVec(A,x,b),rn=norm2(res),xn=norm2(x),bn=norm2(b),
+    backward=rn/Math.max(an*xn+bn,Number.MIN_VALUE),cond=report.conditionNumber,
     forwardBound=Number.isFinite(cond)?cond*backward:Infinity;
   return {residualNorm:rn,relativeResidual:rn/Math.max(bn,Number.MIN_VALUE),normwiseBackwardError:backward,conditionNumber:cond,forwardErrorBound:forwardBound,
     toString:function(){return "||r||2 = "+M.formatNumber(rn,8)+"; backward η ≈ "+M.formatNumber(backward,8)+"; κ2η ≈ "+(Number.isFinite(forwardBound)?M.formatNumber(forwardBound,8):"∞");}};
