@@ -179,7 +179,7 @@ assert(N.runCommand("rayleighiter(2,1|1,2; 1,0.2; 50)").display.includes("λ ≈
 assert(N.runCommand("optcompare((x-1)^2+(y+2)^2; x,y; 3,3)").display.includes("bfgs"),"optimization comparison command");
 assert(N.runCommand("odefixed(y; x; y; 0; 1; 1; 100; rk4)").display.includes("2.718"),"fixed ODE command");
 assert(N.runCommand("odeorder(y; x; y; 0; 1; 1; 10; rk4)").display.includes("observed p"),"ODE order command");
-assert(N.runCommand("stability(rk4; -2; 0)").display.includes("stable"),"stability command");
+assert(N.runCommand("absstability(rk4; -2; 0)").display.includes("stable"),"stability command");
 assert(N.runCommand("stabinterval(rk4)").display.includes("-2.785"),"stability interval command");
 assert(N.runCommand("numhelp()").display.includes("hermite")&&N.runCommand("numhelp()").display.includes("rayleighiter"),"U6 help");
 eq(N.runCommand("2+2"),null,"ordinary expression ignored by U6 router");
