@@ -111,6 +111,10 @@ let cg=N.conjugateGradient([[4,1],[1,3]],[1,2],[0,0],{maxIterations:20});
 approx(cg.solution[0],1/11,1e-12,"CG x1");
 approx(cg.solution[1],7/11,1e-12,"CG x2");
 eq(cg.iterations,2,"CG terminates in dimension");
+
+const A3=[[10,-1,2],[-1,11,-1],[2,-1,10]],x3=[1,2,-1],b3=A3.map(r=>r[0]-2*r[2]+2*r[1]);
+const cg3=N.conjugateGradient(A3,b3,[0,0,0],{maxIterations:20});
+cg3.solution.forEach((x,i)=>approx(x,x3[i],1e-10,"3x3 CG solution"));
 throwsCode(()=>N.conjugateGradient([[1,2],[2,1]],[1,1],[0,0],{}),"UNSUPPORTED_NUMERICAL_METHOD","CG SPD requirement");
 throwsCode(()=>N.stationarySolve([[1,2],[2,1]],[1,1],[0,0],"jacobi",{maxIterations:20}),"NUMERICAL_CONVERGENCE","Jacobi divergence");
 
@@ -123,6 +127,9 @@ throwsCode(()=>N.linearSystemDiagnostics([[1,2],[3,4]],[1,2],[1]),"MATRIX_SHAPE_
 let pw=N.powerIteration([[2,1],[1,2]],[1,0],{tol:1e-11,maxIterations:100});
 approx(pw.eigenvalue,3,1e-9,"power dominant eigenvalue");
 assert(pw.residual<1e-9,"power residual");
+
+pw=N.powerIteration([[-5,0],[0,2]],[1,1],{tol:1e-11,maxIterations:100});
+approx(pw.eigenvalue,-5,1e-9,"power handles negative dominant eigenvalue");
 
 let inv=N.inverseIteration([[2,0],[0,5]],[1,1],2.1,{tol:1e-11,maxIterations:100});
 approx(inv.eigenvalue,2,1e-9,"inverse shifted eigenvalue");
@@ -150,6 +157,11 @@ eq(eu.formalOrder,1,"Euler formal order");
 let odo=N.odeOrderDiagnostic("y","x","y",0,1,1,10,"rk4");
 assert(odo.observedOrder>3.7&&odo.observedOrder<4.2,"RK4 observed order");
 assert(odo.errorEstimate>0,"RK4 Richardson error estimate");
+
+let oh=N.odeOrderDiagnostic("y","x","y",0,1,1,20,"heun");
+assert(oh.observedOrder>1.8&&oh.observedOrder<2.2,"Heun observed order");
+let om=N.odeOrderDiagnostic("y","x","y",0,1,1,20,"midpoint");
+assert(om.observedOrder>1.8&&om.observedOrder<2.2,"midpoint observed order");
 
 // Absolute stability.
 let st=N.stabilityAmplification("euler",-2,0);
