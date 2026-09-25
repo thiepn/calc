@@ -1,41 +1,45 @@
-# Calc v2.6.0
+# Calc v2.7.0
 
-Calc v2.6.0 adds **Phase U7 — Discrete Mathematics & Combinatorics** to the University Mathematics Workstation.
+Calc v2.7.0 completes **Phase U8 — Final University-Workload Audit & Certification**.
 
-## Exact combinatorics
+## What U8 changes
 
-- Added exact binomial, permutation, and multinomial counts.
-- Added Catalan, Stirling first/second kind, Bell, derangement, integer-partition, and Fibonacci sequences.
-- Added stars-and-bars, pigeonhole lower bounds, and Cayley labeled-tree counts.
+U8 is a consolidation release. It does not add another mathematics engine or alter the established U1–U7 command contracts.
 
-## Modular arithmetic & recurrences
+It adds:
 
-- Added extended Euclid with Bézout certificates.
-- Added exact modular inverses, modular exponentiation, generalized CRT, and linear congruence solving.
-- Added constant-coefficient linear recurrence terms, bounded sequences, and ordinary generating functions.
+- a deterministic cross-module university certification suite;
+- a browser-level U1–U7 workload suite;
+- exact/symbolic/approximate semantics checks;
+- router-collision and command-ownership checks;
+- independent-engine agreement checks;
+- mixed Worksheet serialization/reference/cache certification;
+- unsupported-case and complexity-bound checks;
+- final compatibility checks for statistics, units, graphing, linear algebra and specialized tools;
+- accessibility/mobile/PWA presentation-contract checks;
+- explicit final university-workload documentation;
+- CI, release-soak and release-gate enforcement.
 
-## Finite sets, logic & relations
+## Certified university stack
 
-- Added deterministic finite-set union/intersection/difference/symmetric difference, Cartesian products, and powersets.
-- Added propositional parsing, truth tables, tautology/contradiction/contingency classification, equivalence witnesses, and canonical CNF/DNF.
-- Added finite relation property analysis, closures, equivalence classes, partial-order checks, and Hasse covers.
+- U1 — Advanced CAS & Symbolic Mathematics
+- U2 — Multivariable Calculus & Vector Analysis
+- U3 — Differential Equations & Dynamical Systems
+- U4 — Optimization & Mathematical Programming
+- U5 — Advanced Linear Algebra
+- U6 — Numerical Mathematics
+- U7 — Discrete Mathematics & Combinatorics
 
-## Finite graph algorithms
+These are certified together with Calc's foundational exact arithmetic, Linear Algebra V2, probability/statistics, units, graphing, tools, Worksheets, persistence and PWA shell.
 
-- Added connectedness/component, cycle, degree, bipartite, tree/forest, SCC, and DAG diagnostics.
-- Added Dijkstra shortest paths for nonnegative exact integer weights.
-- Added Kruskal minimum spanning trees.
-- Added topological sorting, Euler trail/circuit construction, exact bounded chromatic number, and Prüfer decoding.
+## Release boundary
 
-## Safety & semantics
+The target is a coherent, bounded computational workstation for undergraduate Wirtschaftsmathematik / applied-mathematics workloads. Calc still does not claim universal theorem proving, unrestricted symbolic integration, PDE/DAE platforms, industrial sparse solvers, mixed-integer global optimization, unrestricted SAT/SMT, or unbounded exponential graph/combinatorial algorithms.
 
-- U7 uses exact integer arithmetic wherever the mathematical result is integral.
-- Truth tables are capped at 8 variables, powersets at 12 elements, and exact chromatic number at 12 vertices.
-- Large/materializing requests fail with explicit complexity errors instead of freezing the local-first PWA.
-- U7 does not consume ordinary arithmetic expressions, preserving the existing U1–U6 routing surface.
+The full certification contract is documented in `docs/release/UNIVERSITY_WORKLOAD_CERTIFICATION.md`.
 
-## Certification
+## Data compatibility
 
-v2.6.0 adds a dedicated deterministic U7 suite, Worksheet routing coverage, browser-level Calculate coverage, command-palette integration, offline asset caching, primary-CI enforcement, and release-soak enforcement.
-
-Full semantics and deliberate boundaries are documented in `docs/math/DISCRETE_MATHEMATICS_SEMANTICS.md`.
+- IndexedDB remains schema v5.
+- Existing notebooks, history, custom tools, backups and sync metadata require no migration.
+- The service-worker cache advances to `calc-shell-v2.7.0`.

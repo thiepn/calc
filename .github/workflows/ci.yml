@@ -69,6 +69,8 @@ jobs:
           node --check tests/advanced-linear-algebra.js
           node --check tests/numerical-mathematics.js
           node --check tests/discrete-mathematics.js
+          node --check tests/university-workload.js
+          node --check tests/university-workload.spec.js
           node --check tests/units.js
           node --check tests/linear-algebra.js
           node --check tests/statistics.js
@@ -112,6 +114,8 @@ jobs:
         run: node tests/numerical-mathematics.js
       - name: Discrete Mathematics & Combinatorics U7 certification
         run: node tests/discrete-mathematics.js
+      - name: Final university-workload U8 certification
+        run: node tests/university-workload.js
       - name: Probability Statistics and Data V2 certification
         run: node tests/statistics.js
       - name: Graphing V2 certification

@@ -3,7 +3,7 @@ const {defineConfig,devices}=require("@playwright/test");
 
 module.exports=defineConfig({
   testDir:"./tests",
-  testMatch:["release-soak.spec.js","bug-sweep.spec.js"],
+  testMatch:["release-soak.spec.js","bug-sweep.spec.js","university-workload.spec.js"],
   timeout:90000,
   expect:{timeout:12000},
   fullyParallel:false,
