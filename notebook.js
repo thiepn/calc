@@ -11,10 +11,11 @@ const U=global.CalcUnits;
 const LA=global.CalcLinearAlgebra;
 const ALA=global.CalcAdvancedLinearAlgebra;
 const OPT=global.CalcOptimization;
+const NUM=global.CalcNumerical;
 const S=global.CalcStatistics;
 const G=global.CalcGraph;
 const T=global.CalcTools;
-if(!M||!A||!C||!CAS||!MV||!ODE||!U||!LA||!ALA||!OPT||!S||!G||!T)throw new Error("Calc notebook dependencies must load before CalcNotebook");
+if(!M||!A||!C||!CAS||!MV||!ODE||!U||!LA||!ALA||!OPT||!NUM||!S||!G||!T)throw new Error("Calc notebook dependencies must load before CalcNotebook");
 
 const SCHEMA="calc.notebook/v2";
 const MAX_BLOCKS=500;
@@ -100,7 +101,7 @@ function usedIdentifiers(source){
   const info=assignmentInfo(source),exclude=new Set((info.parameters||[]).concat(info.symbols)),out=[],tokens=String(info.rhs||"").match(/[A-Za-z_][A-Za-z0-9_]*/g)||[];
   for(const name of tokens){
     if(exclude.has(name))continue;
-    if(["simplify","expand","collect","factor","solve","system","psystem","inequality","substitute","assume","assuming","cashelp","diff","partial","gradient","jacobian","hessian","integrate","integral","nintegral","limit","taylor","nderivative","root","gradat","jacobianat","hessianat","totaldiff","directional","implicitdiff","tangentplane","mtaylor","mlimit","critical","classify","lagrange","div","curl","potential","conservative","lineint","arclength","scalarline","doubleint","tripleint","surfacearea","flux","green","stokes","gauss","mvhelp","separable","linearode","exactode","bernoulli","ode2hom","seriesivp","laplace","invlaplace","convolution","ivp","ivp2","ivpsystem","rk4","trajectory","equilibria","linearize","stability","directionfield","phase2","matrixexp2","linearflow2","odehelp","convexity","goldenmin","goldenmax","optmin","optmax","boxmin","boxmax","kktcheck","lpmax","lpmin","quadprog","opthelp","jordanv2","jordanchains","schur","spectral","matrixfunc","gram","orthonormalize","projector","project","bilinear","sesquilinear","quadratic","inertia","congruence","lowrank","pinvdiag","lstsqv2","condreport","similarity","basischange","u5help"].includes(name))continue;
+    if(["simplify","expand","collect","factor","solve","system","psystem","inequality","substitute","assume","assuming","cashelp","diff","partial","gradient","jacobian","hessian","integrate","integral","nintegral","limit","taylor","nderivative","root","gradat","jacobianat","hessianat","totaldiff","directional","implicitdiff","tangentplane","mtaylor","mlimit","critical","classify","lagrange","div","curl","potential","conservative","lineint","arclength","scalarline","doubleint","tripleint","surfacearea","flux","green","stokes","gauss","mvhelp","separable","linearode","exactode","bernoulli","ode2hom","seriesivp","laplace","invlaplace","convolution","ivp","ivp2","ivpsystem","rk4","trajectory","equilibria","linearize","stability","directionfield","phase2","matrixexp2","linearflow2","odehelp","convexity","goldenmin","goldenmax","optmin","optmax","boxmin","boxmax","kktcheck","lpmax","lpmin","quadprog","opthelp","jordanv2","jordanchains","schur","spectral","matrixfunc","gram","orthonormalize","projector","project","bilinear","sesquilinear","quadratic","inertia","congruence","lowrank","pinvdiag","lstsqv2","condreport","similarity","basischange","u5help","floatinfo","numerror","cancellation","scalarcond","richardson","convorder","fixedpoint","rootcompare","interp","newtoninterp","hermite","spline","fdiff","quad","jacobi","gaussseidel","cg","linsysdiag","poweriter","inverseiter","rayleighiter","optcompare","odefixed","odeorder","stability","absstability","stabinterval","numhelp"].includes(name))continue;
     if(M.FUNCTION_REGISTRY&&Object.prototype.hasOwnProperty.call(M.FUNCTION_REGISTRY,name))continue;
     if(M.CONSTANT_REGISTRY&&Object.prototype.hasOwnProperty.call(M.CONSTANT_REGISTRY,name))continue;
     if(U.CONSTANT_REGISTRY&&Object.prototype.hasOwnProperty.call(U.CONSTANT_REGISTRY,name))continue;
@@ -176,7 +177,8 @@ function resolveConfigRefs(value,blockMap){
 }
 
 function evaluateMath(raw,env,options){
-  options=options||{};let advancedLinear=ALA&&ALA.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(advancedLinear)return advancedLinear;
+  options=options||{};let numerical=NUM&&NUM.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(numerical)return numerical;
+  let advancedLinear=ALA&&ALA.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(advancedLinear)return advancedLinear;
   let optimization=OPT&&OPT.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(optimization)return optimization;
   let ode=ODE&&ODE.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(ode)return ode;
   let multivariable=MV&&MV.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(multivariable)return multivariable;

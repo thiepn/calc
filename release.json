@@ -1,8 +1,8 @@
 {
   "schema": "calc.release/v1",
   "name": "Calc",
-  "version": "2.4.0",
-  "tag": "v2.4.0",
+  "version": "2.5.0",
+  "tag": "v2.5.0",
   "channel": "stable",
   "status": "production",
   "releaseDate": "2026-09-25",
@@ -17,7 +17,7 @@
     "sync": "calc.sync/v1"
   },
   "pwa": {
-    "cache": "calc-shell-v2.4.0",
+    "cache": "calc-shell-v2.5.0",
     "display": "standalone"
   },
   "certification": {

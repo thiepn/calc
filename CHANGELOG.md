@@ -2,6 +2,31 @@
 
 All notable production changes to Calc are recorded here.
 
+## [2.5.0] — 2026-09-25
+
+### University Mathematics Workstation — Phase U6
+
+- Added the standalone `numerical-mathematics.js` runtime and routed it through Calculate and Worksheet Math evaluation.
+- Added IEEE-754 ULP/neighbor inspection, numerical error metrics, cancellation diagnostics, and scalar conditioning.
+- Added Richardson extrapolation and observed-order estimation.
+- Added fixed-point iteration and four-way root-method comparison.
+- Added barycentric Lagrange, Newton divided-difference, Hermite, and natural cubic-spline interpolation.
+- Added first/second finite differences with Richardson diagnostics.
+- Added composite midpoint/trapezoid/Simpson and 2–5 point Gauss–Legendre quadrature.
+- Added Jacobi, Gauss–Seidel, and conjugate-gradient linear solves.
+- Added residual/backward-error/condition diagnostics with consistent 2-norm semantics.
+- Added power, shifted inverse, and Rayleigh quotient eigenvalue iteration.
+- Added U4 optimization-method comparison.
+- Added Euler/Heun/midpoint/RK4 fixed-step ODEs with observed-order diagnostics.
+- Added one-step absolute-stability functions and negative-real stability intervals.
+- Preserved the existing U3 `stability(...)` command by naming the U6 command `absstability(...)`.
+- Added `numhelp()`, command-palette templates, offline caching, Worksheet/browser coverage, CI/release-soak enforcement, and `docs/math/NUMERICAL_MATHEMATICS_SEMANTICS.md`.
+
+### Compatibility
+
+- U1–U5 and all existing calculator subsystems remain intact.
+- U6 is an additive numerical-analysis layer over the existing calculus, ODE, linear-algebra, and optimization kernels.
+
 ## [2.4.0] — 2026-09-25
 
 ### University Mathematics Workstation — Phase U5
