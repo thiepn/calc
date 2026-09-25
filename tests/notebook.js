@@ -161,6 +161,19 @@ assert(nb.blocks[3].result.display.includes("iterations = 2"),"U6 CG result");
 assert(nb.blocks[4].result.display.includes("observed p"),"U6 ODE convergence result");
 assert(!nb.blocks[0].dependencies.includes("floatinfo")&&!nb.blocks[1].dependencies.includes("rootcompare")&&!nb.blocks[2].dependencies.includes("quad")&&!nb.blocks[3].dependencies.includes("cg")&&!nb.blocks[4].dependencies.includes("odeorder"),"U6 command names are not notebook dependencies");
 
+// Approximate numerical block references must remain approximate instead of
+// being promoted to exact Rational values from their decimal string.
+nb=doc([
+  block("u6ref1","math","interp(0,1,2; 0,1,4; 1.5)"),
+  block("u6ref2","math","{{block:u6ref1}} + 1/4")
+]);
+run=N.evaluateNotebook(nb,{precision:12,angle:"RAD"});nb=run.document;
+eq(nb.blocks[0].result.metadata.exact,false,"U6 source result remains approximate");
+eq(nb.blocks[1].result.metadata.exact,false,"approximate block reference preserves provenance");
+eq(nb.blocks[1].result.serialized.type,"primitive","approximate downstream result stays a real primitive");
+approx(N.deserializeValue(nb.blocks[1].result.serialized),2.5,1e-12,"approximate reference arithmetic");
+assert(!nb.blocks[1].result.display.includes("/2500000000000000"),"approximate reference is not exposed as a false exact rational");
+
 // Quantity assignment + typed reference preserves units.
 nb=doc([
   block("q1","math","d = 5 km"),

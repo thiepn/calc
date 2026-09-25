@@ -43,7 +43,7 @@ U8 explicitly verifies the distinction that Calc uses throughout the product:
 - exact matrix operations preserve exact scalar values when supported;
 - U6 numerical methods are marked approximate even when a displayed decimal happens to be simple;
 - symbolic U1 output remains symbolically typed instead of being mislabeled exact numeric output;
-- Worksheet references preserve exact Rational values and safely canonicalize finite numerical results.
+- Worksheet references preserve exact Rational values **and preserve approximate provenance for numerical results**; an approximate floating-point result is never re-labeled as an exact Rational merely because it is referenced by another block.
 
 The certification suite checks these state flags as well as displayed answers.
 
@@ -97,7 +97,7 @@ choose(10; 3)
 
 interp(0,1,2; 0,1,4; 1.5)
 → {{block:...}} + 1/4
-→ canonical 5/2
+→ approximate 2.5, with approximate provenance retained
 ```
 
 ## Malformed and unsupported input honesty

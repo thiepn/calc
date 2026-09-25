@@ -14,6 +14,7 @@ It adds:
 - router-collision and command-ownership checks;
 - independent-engine agreement checks;
 - mixed Worksheet serialization/reference/cache certification;
+- preservation of numerical provenance across Worksheet references, preventing approximate results from being mislabeled as exact Rationals;
 - unsupported-case and complexity-bound checks;
 - final compatibility checks for statistics, units, graphing, linear algebra and specialized tools;
 - accessibility/mobile/PWA presentation-contract checks;

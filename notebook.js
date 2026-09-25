@@ -160,7 +160,7 @@ function deserializeValue(s){
 }
 function referenceValue(block){if(!block||block.status!=="clean")throw new NotebookReferenceError("Referenced block is not clean",{blockId:block&&block.id,status:block&&block.status});return deserializeValue(block.result.serialized);}
 function scalarRefValue(v){
-  if(v instanceof M.Rational)return v;if(v instanceof M.Complex){if(!M.isZero(v.im))throw new NotebookReferenceError("Complex block reference cannot be inserted into a real expression");return v.re;}if(typeof v==="number")return M.Rational.fromDecimal(String(v));if(v instanceof U.Quantity)return v;
+  if(v instanceof M.Rational)return v;if(v instanceof M.Complex){if(!M.isZero(v.im))throw new NotebookReferenceError("Complex block reference cannot be inserted into a real expression");return v.re;}if(typeof v==="number"){if(!Number.isFinite(v))throw new NotebookReferenceError("Referenced numerical value is not finite");return v;}if(v instanceof U.Quantity)return v;
   throw new NotebookReferenceError("This block result cannot be embedded in a scalar expression");
 }
 function preprocessRefs(text,blockMap,env){

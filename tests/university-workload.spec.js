@@ -61,13 +61,19 @@ test("U8 university workload composes U1 through U7 in one browser session",asyn
     return {
       statuses:run.document.blocks.map(x=>x.status),
       displays:run.document.blocks.map(x=>x.result.display),
+      exact:run.document.blocks.map(x=>x.result.metadata&&x.result.metadata.exact),
+      serializedTypes:run.document.blocks.map(x=>x.result.serialized&&x.result.serialized.type),
+      referencedValue:N.deserializeValue(run.document.blocks[3].result.serialized),
       cached:rerun.evaluations.map(x=>!!x.cached),
       jsonSafe:serialized.length>0
     };
   });
   expect(worksheet.statuses).toEqual(["clean","clean","clean","clean"]);
   expect(worksheet.displays[1]).toBe("12");
-  expect(worksheet.displays[3]).toContain("5/2");
+  expect(worksheet.referencedValue).toBeCloseTo(2.5,12);
+  expect(worksheet.exact[3]).toBe(false);
+  expect(worksheet.serializedTypes[3]).toBe("primitive");
+  expect(worksheet.displays[3]).not.toContain("/2500000000000000");
   expect(worksheet.cached).toEqual([true,true,true,true]);
   expect(worksheet.jsonSafe).toBeTruthy();
 
