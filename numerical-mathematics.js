@@ -94,7 +94,8 @@ function nextDown(x){
 }
 function ulp(x){
   x=Number(x);if(!Number.isFinite(x))return Infinity;
-  return Math.min(Math.abs(nextUp(x)-x),Math.abs(x-nextDown(x)));
+  var ax=Math.abs(x);if(ax===0||ax<Math.pow(2,-1022))return Number.MIN_VALUE;
+  return Math.pow(2,Math.floor(Math.log2(ax))-52);
 }
 function floatInfo(x){
   x=Number(x);if(!Number.isFinite(x))throw new NumericalMathematicsError("FINITE_REQUIRED","floatinfo requires a finite number");
@@ -286,12 +287,16 @@ function compositeQuadrature(source,variable,a,b,n,method){
   }else throw new UnsupportedNumericalMethodError("Composite quadrature methods: midpoint, trapezoid, simpson");
   return {value:sum,method:method,n:n,formalOrder:formalOrder,evaluations:fn.evaluations};
 }
-function gaussLegendre(source,variable,a,b,points){
-  points=Number(points);var rule=GAUSS[points];if(!rule)throw new UnsupportedNumericalMethodError("Gauss-Legendre supports 2, 3, 4, or 5 points");
-  a=Number(a);b=Number(b);if(!Number.isFinite(a)||!Number.isFinite(b))throw new NumericalMathematicsError("FINITE_REQUIRED","Gauss-Legendre bounds must be finite");
-  var fn=evaluator(source,variable),mid=(a+b)/2,half=(b-a)/2,sum=0;
-  for(var i=0;i<rule.x.length;i++)sum+=rule.w[i]*fn.evaluate(mid+half*rule.x[i]);
-  return {value:half*sum,points:points,evaluations:fn.evaluations,method:"gauss-legendre-"+points};
+function gaussLegendre(source,variable,a,b,points,panels){
+  points=Number(points);panels=panels===undefined?1:Number(panels);var rule=GAUSS[points];if(!rule)throw new UnsupportedNumericalMethodError("Gauss-Legendre supports 2, 3, 4, or 5 points");
+  a=Number(a);b=Number(b);if(!Number.isFinite(a)||!Number.isFinite(b)||!Number.isInteger(panels)||panels<1||panels>100000)throw new NumericalMathematicsError("INVALID_GRID","Gauss-Legendre requires finite bounds and 1–100000 panels");
+  var fn=evaluator(source,variable),h=(b-a)/panels,sum=0;
+  for(var panel=0;panel<panels;panel++){
+    var left=a+panel*h,right=left+h,mid=(left+right)/2,half=h/2,local=0;
+    for(var i=0;i<rule.x.length;i++)local+=rule.w[i]*fn.evaluate(mid+half*rule.x[i]);
+    sum+=half*local;
+  }
+  return {value:sum,points:points,panels:panels,formalOrder:2*points,evaluations:fn.evaluations,method:"composite-gauss-legendre-"+points};
 }
 function quadratureDiagnostic(source,variable,a,b,n,method){
   method=String(method||"simpson").toLowerCase();
@@ -300,8 +305,10 @@ function quadratureDiagnostic(source,variable,a,b,n,method){
     return {value:ad.value,errorEstimate:ad.errorEstimate,method:ad.method,evaluations:ad.evaluations,toString:function(){return "I ≈ "+M.formatNumber(ad.value,14)+"; estimated error ≈ "+M.formatNumber(ad.errorEstimate,6);}};
   }
   if(method.indexOf("gauss")===0){
-    var p=Number(method.replace("gauss",""))||Number(n),g=gaussLegendre(source,variable,a,b,p);
-    return Object.assign(g,{errorEstimate:null,toString:function(){return "I ≈ "+M.formatNumber(g.value,14)+"; "+g.method;}});
+    var p=Number(method.replace("gauss",""));if(!p)throw new UnsupportedNumericalMethodError("Use gauss2, gauss3, gauss4, or gauss5");
+    var gc=gaussLegendre(source,variable,a,b,p,n),gf=gaussLegendre(source,variable,a,b,p,2*n),gr=richardsonExtrapolation(gc.value,gf.value,2*p,2);
+    return {value:gr.extrapolated,coarse:gc.value,fine:gf.value,errorEstimate:gr.errorEstimate,formalOrder:2*p,method:"composite-gauss-legendre-"+p+"-richardson",evaluations:gc.evaluations+gf.evaluations,
+      toString:function(){return "I ≈ "+M.formatNumber(gr.extrapolated,14)+"; estimated error ≈ "+M.formatNumber(gr.errorEstimate,6)+"; Gauss-"+p;}};
   }
   var coarse=compositeQuadrature(source,variable,a,b,n,method),fine=compositeQuadrature(source,variable,a,b,2*n,method),
     r=richardsonExtrapolation(coarse.value,fine.value,coarse.formalOrder,2);
