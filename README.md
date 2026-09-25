@@ -2,9 +2,9 @@
 
 A local-first universal calculator PWA and mathematical workstation.
 
-**Current stable release: v2.6.0** · IndexedDB schema v5 · production channel.
+**Current stable release: v2.7.0** · IndexedDB schema v5 · production channel.
 
-v2.6.0 adds Phase U7: discrete mathematics and combinatorics on top of the U1–U6 university-mathematics foundation.
+v2.7.0 completes Phase U8: final university-workload audit and certification across the U1–U7 mathematics stack.
 
 ## Current implementation
 
@@ -271,6 +271,28 @@ discretehelp()
 Counting, congruences, recurrences, graph weights, and scalar outputs remain exact integers. Exhaustive operations such as truth tables, powersets, relation closure, and exact coloring have explicit safety limits so local execution stays predictable.
 
 Graph algorithms use simple finite graphs: Dijkstra rejects negative weights, MST uses Kruskal on connected undirected graphs, topological sorting rejects cycles, and exact chromatic number is bounded to 12 vertices. Full syntax, guarantees, and deliberate unsupported boundaries are documented in `docs/math/DISCRETE_MATHEMATICS_SEMANTICS.md`.
+
+## Final University-Workload Certification — v2.7 / U8
+
+U8 is the consolidation release for the University Mathematics Workstation. It adds no new mathematical engine; it certifies that U1–U7 compose correctly as one application.
+
+The final certification covers:
+
+- cross-module routing and command ownership;
+- exact vs symbolic vs approximate result semantics;
+- cross-checks where independent engines overlap;
+- mixed U1–U7 Worksheet execution, serialization, block references and cached re-evaluation;
+- unsupported-case and complexity-limit honesty;
+- probability/statistics, units, graphing and specialized-tool compatibility;
+- command-palette discoverability;
+- Chromium, Firefox, WebKit and mobile Chromium;
+- mobile containment, keyboard-focus styling, reduced-motion handling and accessible result/graph labeling;
+- PWA/offline asset and release-version integrity;
+- production bundle budgets and the existing persistence/recovery release gate.
+
+The deterministic entry point is `tests/university-workload.js`; browser certification is in `tests/university-workload.spec.js`.
+
+The complete target, guarantees, and deliberate boundaries are documented in `docs/release/UNIVERSITY_WORKLOAD_CERTIFICATION.md`.
 
 ## Tools V2
 

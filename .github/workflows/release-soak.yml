@@ -53,6 +53,8 @@ jobs:
           node --check tests/advanced-linear-algebra.js
           node --check tests/numerical-mathematics.js
           node --check tests/discrete-mathematics.js
+          node --check tests/university-workload.js
+          node --check tests/university-workload.spec.js
           node --check tests/release-gate.js
           node --check tests/production-release-gate.js
           node --check tests/generate-release-artifacts.js
@@ -74,6 +76,7 @@ jobs:
           node tests/advanced-linear-algebra.js
           node tests/numerical-mathematics.js
           node tests/discrete-mathematics.js
+          node tests/university-workload.js
           node tests/statistics.js
           node tests/graph.js
           node tests/tools.js
@@ -113,7 +116,7 @@ jobs:
       - name: Install browser
         run: npx playwright install --with-deps ${{ matrix.browser }}
       - name: Run production soak
-        run: npx playwright test tests/release-soak.spec.js tests/bug-sweep.spec.js --project=${{ matrix.project }}
+        run: npx playwright test tests/release-soak.spec.js tests/bug-sweep.spec.js tests/university-workload.spec.js --project=${{ matrix.project }}
       - name: Upload failure evidence
         if: failure()
         uses: actions/upload-artifact@v4

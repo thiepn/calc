@@ -2,6 +2,25 @@
 
 All notable production changes to Calc are recorded here.
 
+## [2.7.0] — 2026-09-25
+
+### University Mathematics Workstation — Phase U8
+
+- Added final cross-module university-workload certification across U1–U7.
+- Added deterministic checks for router ownership, exact/symbolic/approximate semantics, overlapping-engine agreement, malformed/unsupported-case honesty, and university command boundaries.
+- Added mixed Worksheet certification covering U1/U2/U4/U6/U7 execution, exact and numerical block references, JSON persistence safety, normalization, and cached re-evaluation.
+- Added final compatibility checks for probability/statistics, units, graph parsing, the specialized Tool Registry, and the foundational exact Linear Algebra kernel.
+- Added `tests/university-workload.spec.js` to execute U1–U7 sequentially in each release-soak browser and verify command discovery, Worksheet composition, mobile containment, accessibility contracts, and PWA/version integrity.
+- Added `docs/release/UNIVERSITY_WORKLOAD_CERTIFICATION.md` with the certified undergraduate workload, exactness contract, safety limits, browser matrix, and deliberate unsupported boundaries.
+- Added U8 to primary CI, deterministic release-soak gates, static release certification, and the Playwright browser matrix.
+- Bumped the production release/cache version to v2.7.0 without changing IndexedDB schema v5.
+
+### Compatibility
+
+- U1–U7 mathematics engines retain their existing public command contracts and version identifiers.
+- No new mathematical router is inserted in U8; the phase is certification and consolidation only.
+- Existing local data, backup, sync, PWA, graph, statistics, tools, and notebook schemas remain unchanged.
+
 ## [2.6.0] — 2026-09-25
 
 ### University Mathematics Workstation — Phase U7

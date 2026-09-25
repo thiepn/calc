@@ -28,6 +28,8 @@ assert(phase.includes("immutable Calc v1.0.0 production baseline"),"Phase 14 bas
 assert(soakWorkflow.includes("tests/production-release-gate.js"),"production release gate is not part of release soak");
 assert(soakWorkflow.includes('calc-release-soak-v14-${{ github.sha }}'),"release soak must be SHA-scoped");
 assert(soakWorkflow.includes("tests/bug-sweep.spec.js"),"runtime bug sweep is not part of release soak");
+assert(soakWorkflow.includes("tests/university-workload.spec.js"),"U8 university browser certification is not part of release soak");
+assert(exists("tests/university-workload.js")&&exists("docs/release/UNIVERSITY_WORKLOAD_CERTIFICATION.md"),"U8 final certification artifacts missing");
 assert(soakTests.includes("clean-device production install"),"clean-device production test missing");
 assert(soakTests.includes("pre-upgrade v4 backup restores into production release"),"backup compatibility test missing");
 assert(soakTests.includes('"calc-shell-v"+version.appVersion'),"service-worker handshake test is not version-dynamic");

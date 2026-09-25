@@ -9,15 +9,15 @@ const exists=p=>fs.existsSync(path.join(root,p));
 
 const required=[
   "index.html","styles.css","app.js","cas.js","multivariable.js","ode.js","optimization.js","advanced-linear-algebra.js","numerical-mathematics.js","discrete-mathematics.js","persistence.js","notebook.js","sw.js","manifest.webmanifest",
-  "package.json","release.json","playwright.config.js","tests/cas.js","tests/multivariable.js","tests/ode.js","tests/optimization.js","tests/advanced-linear-algebra.js","tests/numerical-mathematics.js","tests/discrete-mathematics.js","tests/release-soak.spec.js","docs/math/ADVANCED_CAS_SEMANTICS.md","docs/math/MULTIVARIABLE_VECTOR_SEMANTICS.md","docs/math/ODE_DYNAMICAL_SYSTEMS_SEMANTICS.md","docs/math/OPTIMIZATION_SEMANTICS.md","docs/math/ADVANCED_LINEAR_ALGEBRA_SEMANTICS.md","docs/math/NUMERICAL_MATHEMATICS_SEMANTICS.md","docs/math/DISCRETE_MATHEMATICS_SEMANTICS.md",
-  ".github/workflows/ci.yml",".github/workflows/release-soak.yml",".github/workflows/pages.yml","docs/release/IMPLEMENTATION_PHASE_13.md"
+  "package.json","release.json","playwright.config.js","tests/cas.js","tests/multivariable.js","tests/ode.js","tests/optimization.js","tests/advanced-linear-algebra.js","tests/numerical-mathematics.js","tests/discrete-mathematics.js","tests/university-workload.js","tests/university-workload.spec.js","tests/release-soak.spec.js","docs/math/ADVANCED_CAS_SEMANTICS.md","docs/math/MULTIVARIABLE_VECTOR_SEMANTICS.md","docs/math/ODE_DYNAMICAL_SYSTEMS_SEMANTICS.md","docs/math/OPTIMIZATION_SEMANTICS.md","docs/math/ADVANCED_LINEAR_ALGEBRA_SEMANTICS.md","docs/math/NUMERICAL_MATHEMATICS_SEMANTICS.md","docs/math/DISCRETE_MATHEMATICS_SEMANTICS.md",
+  ".github/workflows/ci.yml",".github/workflows/release-soak.yml",".github/workflows/pages.yml","docs/release/IMPLEMENTATION_PHASE_13.md","docs/release/UNIVERSITY_WORKLOAD_CERTIFICATION.md"
 ];
 required.forEach(p=>assert(exists(p),"Missing RC artifact: "+p));
 
 const index=read("index.html"),styles=read("styles.css"),sw=read("sw.js"),persistence=read("persistence.js"),app=read("app.js"),notebook=read("notebook.js"),cas=read("cas.js"),multivariable=read("multivariable.js"),ode=read("ode.js"),optimization=read("optimization.js"),advancedLinear=read("advanced-linear-algebra.js"),numerical=read("numerical-mathematics.js"),discrete=read("discrete-mathematics.js");
 const pkg=JSON.parse(read("package.json")),manifest=JSON.parse(read("manifest.webmanifest")),release=JSON.parse(read("release.json"));
 const ciWorkflow=read(".github/workflows/ci.yml"),releaseWorkflow=read(".github/workflows/release-soak.yml"),pagesWorkflow=read(".github/workflows/pages.yml");
-const soak=read("tests/release-soak.spec.js"),phase=read("docs/release/IMPLEMENTATION_PHASE_13.md");
+const soak=read("tests/release-soak.spec.js"),phase=read("docs/release/IMPLEMENTATION_PHASE_13.md"),university=read("tests/university-workload.js"),universityBrowser=read("tests/university-workload.spec.js"),universityDocs=read("docs/release/UNIVERSITY_WORKLOAD_CERTIFICATION.md");
 
 assert(pkg.private===true,"Release tooling package must remain private");
 assert(pkg.devDependencies&&pkg.devDependencies["@playwright/test"]==="1.63.0","Playwright must be pinned for deterministic RC runs");
@@ -50,6 +50,12 @@ assert(sw.includes('"./discrete-mathematics.js"'),"U7 runtime missing from servi
 assert(app.includes("shortest(a,b,c,d; a-b:1,b-c:2,a-c:5,c-d:1; a; d)")&&notebook.includes('"discretehelp"'),"U7 command surface is not wired");
 const u7Docs=read("docs/math/DISCRETE_MATHEMATICS_SEMANTICS.md");
 assert(u7Docs.includes("generalized Chinese remainder theorem")&&u7Docs.includes("Dijkstra")&&u7Docs.includes("does **not** implement"),"U7 certification boundary is undocumented");
+assert(university.includes("U8 final university-workload deterministic certification passed"),"U8 deterministic certification suite missing completion contract");
+assert(university.includes('eq(CAS.VERSION,"2.0.0-u1"')&&university.includes('eq(DISC.VERSION,"2.6.0-u7"'),"U8 does not cover the complete U1-U7 versioned stack");
+assert(university.includes("JSON.stringify(doc)")&&university.includes("cached===true"),"U8 Worksheet persistence/cache certification missing");
+assert(universityBrowser.includes("U8 university workload composes U1 through U7")&&universityBrowser.includes("mobile-chromium"),"U8 browser certification coverage missing");
+assert(universityDocs.includes("Exact vs approximate semantics")&&universityDocs.includes("Deliberate boundaries")&&universityDocs.includes("Chromium")&&universityDocs.includes("Firefox")&&universityDocs.includes("WebKit"),"U8 final certification report incomplete");
+assert(pkg.scripts&&pkg.scripts["test:university"]==="node tests/university-workload.js","U8 package certification script missing");
 assert(app.includes("ALA&&ALA.runCommand")&&notebook.includes("ALA&&ALA.runCommand"),"U5 router not wired into Calculate and Worksheet");
 assert(app.includes("ALA.supportsOperation(op)")&&notebook.includes("ALA.supportsOperation(op)"),"U5 Matrix operation routing is incomplete");
 assert(index.includes('data-matrix-op="schur"')&&index.includes('data-matrix-op="spectral"')&&index.includes('data-matrix-op="jordanv2"'),"U5 Matrix workspace controls are missing");
@@ -96,12 +102,14 @@ assert(ciWorkflow.includes("node --check optimization.js")&&ciWorkflow.includes(
 assert(ciWorkflow.includes("node --check advanced-linear-algebra.js")&&ciWorkflow.includes("node --check tests/advanced-linear-algebra.js")&&ciWorkflow.includes("node tests/advanced-linear-algebra.js"),"Primary CI does not certify U5 advanced linear algebra");
 assert(ciWorkflow.includes("node --check numerical-mathematics.js")&&ciWorkflow.includes("node --check tests/numerical-mathematics.js")&&ciWorkflow.includes("node tests/numerical-mathematics.js"),"Primary CI does not certify U6 numerical mathematics");
 assert(ciWorkflow.includes("node --check discrete-mathematics.js")&&ciWorkflow.includes("node --check tests/discrete-mathematics.js")&&ciWorkflow.includes("node tests/discrete-mathematics.js"),"Primary CI does not certify U7 discrete mathematics");
+assert(ciWorkflow.includes("node --check tests/university-workload.js")&&ciWorkflow.includes("node tests/university-workload.js"),"Primary CI does not certify U8 university workload");
 assert(releaseWorkflow.includes("node --check multivariable.js")&&releaseWorkflow.includes("node tests/multivariable.js"),"Release soak does not certify U2 multivariable mathematics");
 assert(releaseWorkflow.includes("node --check ode.js")&&releaseWorkflow.includes("node tests/ode.js"),"Release soak does not certify U3 differential equations");
 assert(releaseWorkflow.includes("node --check optimization.js")&&releaseWorkflow.includes("node tests/optimization.js"),"Release soak does not certify U4 optimization");
 assert(releaseWorkflow.includes("node --check advanced-linear-algebra.js")&&releaseWorkflow.includes("node tests/advanced-linear-algebra.js"),"Release soak does not certify U5 advanced linear algebra");
 assert(releaseWorkflow.includes("node --check numerical-mathematics.js")&&releaseWorkflow.includes("node tests/numerical-mathematics.js"),"Release soak does not certify U6 numerical mathematics");
 assert(releaseWorkflow.includes("node --check discrete-mathematics.js")&&releaseWorkflow.includes("node tests/discrete-mathematics.js"),"Release soak does not certify U7 discrete mathematics");
+assert(releaseWorkflow.includes("node --check tests/university-workload.js")&&releaseWorkflow.includes("node tests/university-workload.js")&&releaseWorkflow.includes("tests/university-workload.spec.js"),"Release soak does not certify U8 university workload");
 assert(releaseWorkflow.includes("Calc Release Soak"),"Release soak workflow name missing");
 ["chromium","firefox","webkit","mobile-chromium"].forEach(name=>assert(releaseWorkflow.includes(name),"Browser/device matrix missing "+name));
 assert(releaseWorkflow.includes("tests/release-gate.js")&&releaseWorkflow.includes("release-soak.spec.js"),"RC gate stages missing");
