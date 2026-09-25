@@ -2,9 +2,9 @@
 
 A local-first universal calculator PWA and mathematical workstation.
 
-**Current stable release: v2.3.0** · IndexedDB schema v5 · production channel.
+**Current stable release: v2.4.0** · IndexedDB schema v5 · production channel.
 
-v2.3.0 adds Phase U4: optimization and mathematical programming on top of the U1–U3 university-mathematics foundation.
+v2.4.0 adds Phase U5: advanced linear algebra on top of the U1–U4 university-mathematics foundation.
 
 ## Current implementation
 
@@ -14,7 +14,7 @@ Calc currently includes:
 - finite Real and exact-capable Complex scalars;
 - symbolic algebra, advanced CAS/parameter solving, single- and multivariable calculus, vector analysis, differential equations, dynamical systems, optimization, mathematical programming, and numerical methods;
 - first-class physical quantities, units, constants and engineering relations;
-- canonical Matrix/Vector/subspace objects and certified numerical decompositions;
+- canonical Matrix/Vector/subspace objects, certified numerical decompositions, advanced canonical forms, spectral calculus, inner-product workflows, and conditioning diagnostics;
 - typed Dataset/probability/inference/regression systems;
 - Graph V2 with explicit, piecewise, parametric, polar, implicit and inequality plots;
 - a registry-driven specialized calculator system with finance, geometry, date, programmer and number-theory tools;\n- a safe declarative Custom Formula Builder with Draft/Active/Archived lifecycle, tests, quantities, relations, revision history, and strict `.calctool.json` import/export;\n- typed Worksheets & Notebooks V2 with Math/Text/Tool/Matrix/Data/Graph blocks, dependencies, stale tracking, version restore, import/export, and recovery mode;\n- a versioned persistence/backup layer with chunked large-notebook storage, streamed plaintext backups, encrypted backups, selective atomic restore, recoverable Trash, optimistic multi-tab writes, storage diagnostics, controlled PWA updates, and provider-neutral sync architecture;
@@ -132,6 +132,47 @@ opthelp()
 Numerical stationary points are checked against second-order curvature before Calc labels them as extrema. Standard-form LPs use exact Rational simplex arithmetic plus primal–dual certificate verification. Convex QPs use exact active-set KKT systems and re-check every candidate.
 
 Full syntax, guarantees, and explicit unsupported boundaries are documented in `docs/math/OPTIMIZATION_SEMANTICS.md`.
+
+## Advanced Linear Algebra — v2.4 / U5
+
+U5 adds a separate advanced linear-algebra layer on top of the existing Matrix/Vector kernel.
+
+Examples:
+
+```text
+jordanv2(2,1,0|0,2,1|0,0,2)
+jordanchains(2,1,0|0,2,1|0,0,2)
+
+schur(1,4,2|3,2,5|0,1,3)
+spectral(2,1|1,2)
+
+matrixfunc(4,0|0,9; sqrt)
+matrixfunc(2,1|1,2; exp)
+
+gram(1,i|i,1)
+orthonormalize(1,i|i,1)
+projector(1,0|1,0|0,1)
+
+bilinear(2,1|1,3; 1,2; 3,4)
+sesquilinear(1,i|-i,2; 1,i; 2,-i)
+quadratic(2,1|1,3; 1,2)
+
+inertia(2,0|0,-3)
+congruence(2,0|0,-3)
+
+lowrank(3,0|0,2|0,0; 1)
+pinvdiag(1,0|0,0)
+lstsqv2(1,0|0,1|1,1; 1,2,3)
+condreport(1,0|0,0.001)
+
+similarity(2,1|0,3; 1,1|0,1)
+basischange(1,0|0,1; 1,1|0,1)
+u5help()
+```
+
+Jordan V2 is exact and chain-based when the exact eigenvalue solver certifies the complete spectrum. Schur, spectral functions, SVD applications, and conditioning workflows are numerical but expose reconstruction and orthogonality diagnostics before results are accepted.
+
+The Matrix workspace also gains first-class **Jordan V2, Schur, Spectral, Inertia, Projector, and Condition** operations. Full syntax and certification boundaries are documented in `docs/math/ADVANCED_LINEAR_ALGEBRA_SEMANTICS.md`.
 
 ## Tools V2
 
