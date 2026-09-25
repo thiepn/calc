@@ -162,6 +162,12 @@ eq(pd.rank,1,"pseudoinverse diagnostic rank");
 assert(pd.penroseResiduals.every(x=>x<1e-10),"all four Penrose equations");
 assert(!Number.isFinite(pd.conditionNumber),"rank deficient condition number infinite");
 
+const dependent=new L.Matrix([[1,2,3],[2,4,6],[1,1,2],[0,1,1]]);
+pd=U.pseudoinverseDiagnostics(dependent);
+eq(pd.rank,2,"certified SVD drops numerical null-direction noise");
+assert(pd.penroseResiduals.every(x=>x<1e-8),"rank-deficient Penrose equations remain certified");
+assert(!Number.isFinite(pd.conditionNumber),"exactly dependent columns report infinite condition number");
+
 // Least-squares V2.
 let ls=U.leastSquaresV2(new L.Matrix([[1,0],[0,1],[1,1]]),new L.Vector([1,2,4]));
 approx(ls.solution.values[0],4/3,1e-9,"least squares x1");
@@ -180,6 +186,9 @@ eq(cr.rank,2,"condition rank");
 assert(cr.classification.includes("ill-conditioned"),"condition classification");
 cr=U.conditionReport(new L.Matrix([[1,0],[0,0]]));
 assert(!Number.isFinite(cr.conditionNumber)&&cr.rank===1,"singular condition report");
+cr=U.conditionReport(dependent);
+eq(cr.rank,2,"dependent-column condition rank");
+assert(!Number.isFinite(cr.conditionNumber),"dependent-column condition infinite");
 
 // Similarity and basis transitions.
 const sim=U.similarityTransform(exact([[2,1],[0,3]]),exact([[1,1],[0,1]]));
