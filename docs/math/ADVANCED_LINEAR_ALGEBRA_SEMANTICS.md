@@ -480,6 +480,8 @@ U5 reports:
 
 The qualitative labels are diagnostic, not mathematical discontinuities.
 
+U5's SVD-backed diagnostics enforce a conservative numerical-rank floor of `rankTol >= 1e-9`. This is intentionally stricter than the older low-level default because the current SVD is obtained from an eigenproblem for (A^T A), where squaring the condition number can turn exact null directions into small positive floating-point singular values. U5 prefers reporting a numerically unresolved direction as rank deficient rather than certifying a spurious tiny singular direction.
+
 Rank-deficient matrices report infinite 2-norm condition number.
 
 ## Similarity and change of basis
