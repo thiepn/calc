@@ -9,11 +9,12 @@ const MV=global.CalcMultivariable;
 const ODE=global.CalcODE;
 const U=global.CalcUnits;
 const LA=global.CalcLinearAlgebra;
+const ALA=global.CalcAdvancedLinearAlgebra;
 const OPT=global.CalcOptimization;
 const S=global.CalcStatistics;
 const G=global.CalcGraph;
 const T=global.CalcTools;
-if(!M||!A||!C||!CAS||!MV||!ODE||!U||!LA||!OPT||!S||!G||!T)throw new Error("Calc notebook dependencies must load before CalcNotebook");
+if(!M||!A||!C||!CAS||!MV||!ODE||!U||!LA||!ALA||!OPT||!S||!G||!T)throw new Error("Calc notebook dependencies must load before CalcNotebook");
 
 const SCHEMA="calc.notebook/v2";
 const MAX_BLOCKS=500;
@@ -99,7 +100,7 @@ function usedIdentifiers(source){
   const info=assignmentInfo(source),exclude=new Set((info.parameters||[]).concat(info.symbols)),out=[],tokens=String(info.rhs||"").match(/[A-Za-z_][A-Za-z0-9_]*/g)||[];
   for(const name of tokens){
     if(exclude.has(name))continue;
-    if(["simplify","expand","collect","factor","solve","system","psystem","inequality","substitute","assume","assuming","cashelp","diff","partial","gradient","jacobian","hessian","integrate","integral","nintegral","limit","taylor","nderivative","root","gradat","jacobianat","hessianat","totaldiff","directional","implicitdiff","tangentplane","mtaylor","mlimit","critical","classify","lagrange","div","curl","potential","conservative","lineint","arclength","scalarline","doubleint","tripleint","surfacearea","flux","green","stokes","gauss","mvhelp","separable","linearode","exactode","bernoulli","ode2hom","seriesivp","laplace","invlaplace","convolution","ivp","ivp2","ivpsystem","rk4","trajectory","equilibria","linearize","stability","directionfield","phase2","matrixexp2","linearflow2","odehelp","convexity","goldenmin","goldenmax","optmin","optmax","boxmin","boxmax","kktcheck","lpmax","lpmin","quadprog","opthelp"].includes(name))continue;
+    if(["simplify","expand","collect","factor","solve","system","psystem","inequality","substitute","assume","assuming","cashelp","diff","partial","gradient","jacobian","hessian","integrate","integral","nintegral","limit","taylor","nderivative","root","gradat","jacobianat","hessianat","totaldiff","directional","implicitdiff","tangentplane","mtaylor","mlimit","critical","classify","lagrange","div","curl","potential","conservative","lineint","arclength","scalarline","doubleint","tripleint","surfacearea","flux","green","stokes","gauss","mvhelp","separable","linearode","exactode","bernoulli","ode2hom","seriesivp","laplace","invlaplace","convolution","ivp","ivp2","ivpsystem","rk4","trajectory","equilibria","linearize","stability","directionfield","phase2","matrixexp2","linearflow2","odehelp","convexity","goldenmin","goldenmax","optmin","optmax","boxmin","boxmax","kktcheck","lpmax","lpmin","quadprog","opthelp","jordanv2","jordanchains","schur","spectral","matrixfunc","gram","orthonormalize","projector","project","bilinear","sesquilinear","quadratic","inertia","congruence","lowrank","pinvdiag","lstsqv2","condreport","similarity","basischange","u5help"].includes(name))continue;
     if(M.FUNCTION_REGISTRY&&Object.prototype.hasOwnProperty.call(M.FUNCTION_REGISTRY,name))continue;
     if(M.CONSTANT_REGISTRY&&Object.prototype.hasOwnProperty.call(M.CONSTANT_REGISTRY,name))continue;
     if(U.CONSTANT_REGISTRY&&Object.prototype.hasOwnProperty.call(U.CONSTANT_REGISTRY,name))continue;
@@ -175,7 +176,8 @@ function resolveConfigRefs(value,blockMap){
 }
 
 function evaluateMath(raw,env,options){
-  options=options||{};let optimization=OPT&&OPT.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(optimization)return optimization;
+  options=options||{};let advancedLinear=ALA&&ALA.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(advancedLinear)return advancedLinear;
+  let optimization=OPT&&OPT.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(optimization)return optimization;
   let ode=ODE&&ODE.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(ode)return ode;
   let multivariable=MV&&MV.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(multivariable)return multivariable;
   let advanced=CAS&&CAS.runCommand(raw,{angle:options.angle||"RAD",precision:options.precision||12,domain:"real"});if(advanced)return advanced;
@@ -189,7 +191,7 @@ function evaluateMath(raw,env,options){
 function matrixResultDisplay(r,precision){
   if(r.kind==="scalar")return M.formatValue(r.value,precision||12);if(r.kind==="matrix")return r.value.toString(precision||12);if(r.kind==="basis")return r.value.toString(precision||12);if(r.kind==="polynomial")return r.value.toString();
   if(r.kind==="eigen")return r.value.mode==="exact"?r.value.solutions.toString():"eigenvalues: ["+r.value.values.map(x=>M.formatNumber(x,precision||12)).join(", ")+"]";
-  if(r.kind==="decomposition")return r.label+" · "+(r.value.method||"decomposition")+(r.value.residual!==undefined?" · residual "+M.formatNumber(r.value.residual,8):"");return r.label||"Matrix result";
+  if(r.kind==="decomposition")return r.label+" · "+(r.value.method||"decomposition")+(r.value.residual!==undefined?" · residual "+M.formatNumber(r.value.residual,8):"");if(r.kind==="text")return r.display||r.label||"Matrix result";return r.label||"Matrix result";
 }
 function evaluateBlock(block,ctx){
   const blockMap=ctx.blockMap,options=ctx.options||{},env=ctx.env;if(block.type==="text")return {kind:"text",value:null,display:"",approx:"",metadata:{}};
@@ -205,7 +207,7 @@ function evaluateBlock(block,ctx){
   }
   if(block.type==="matrix"){
     const config=resolveConfigRefs(block.config,blockMap),rows=config.rows;if(!Array.isArray(rows)||!rows.length)throw new NotebookSchemaError("Matrix block needs rows");
-    const matrix=LA.Matrix.fromStrings(rows,env,{angle:options.angle||"RAD",symbolic:true}),r=LA.resultSummary(config.operation||"det",matrix,{relTol:1e-10,rankTol:1e-10,maxIterations:300});
+    const matrix=LA.Matrix.fromStrings(rows,env,{angle:options.angle||"RAD",symbolic:true}),op=config.operation||"det",r=(ALA&&ALA.supportsOperation(op)?ALA.resultSummary(op,matrix,{relTol:1e-10,rankTol:1e-10,maxIterations:3000}):LA.resultSummary(op,matrix,{relTol:1e-10,rankTol:1e-10,maxIterations:300}));
     return {kind:"matrix-"+r.kind,value:r.value,display:matrixResultDisplay(r,options.precision),approx:"",metadata:{operation:config.operation||"det",summaryKind:r.kind}};
   }
   if(block.type==="data"){
