@@ -10,6 +10,7 @@ require("../units.js");
 require("../linear-algebra.js");
 require("../advanced-linear-algebra.js");
 require("../optimization.js");
+require("../numerical-mathematics.js");
 require("../statistics.js");
 require("../graph.js");
 require("../tools.js");
@@ -141,6 +142,23 @@ eq(nb.blocks[0].status,"clean","U5 spectral matrix block clean");
 assert(nb.blocks[0].result.display.includes("real-symmetric-spectral-theorem"),"U5 spectral matrix-block display");
 assert(nb.blocks[1].result.display.includes("inertia = (1, 1, 0)"),"U5 inertia matrix-block display");
 assert(nb.blocks[2].result.display.includes("cond2 = 1000"),"U5 condition matrix-block display");
+
+// U6 numerical-analysis commands share the Worksheet Math evaluator.
+nb=doc([
+  block("u6a","math","floatinfo(1)"),
+  block("u6b","math","rootcompare(cos(x)-x; x; 0,1; 0.5,1)"),
+  block("u6c","math","quad(x^4; x; 0; 1; 10; simpson)"),
+  block("u6d","math","cg(4,1|1,3; 1,2; 0,0; 20)"),
+  block("u6e","math","odeorder(y; x; y; 0; 1; 1; 10; rk4)")
+]);
+run=N.evaluateNotebook(nb,{precision:12,angle:"RAD"});nb=run.document;
+eq(nb.blocks[0].status,"clean","U6 float block clean");
+assert(nb.blocks[0].result.display.includes("2.22044604925031308e-16"),"U6 float result");
+assert(nb.blocks[1].result.display.includes("hybrid"),"U6 root comparison result");
+assert(nb.blocks[2].result.display.includes("I ≈ 0.2"),"U6 quadrature result");
+assert(nb.blocks[3].result.display.includes("iterations = 2"),"U6 CG result");
+assert(nb.blocks[4].result.display.includes("observed p"),"U6 ODE convergence result");
+assert(!nb.blocks[0].dependencies.includes("floatinfo")&&!nb.blocks[1].dependencies.includes("rootcompare")&&!nb.blocks[2].dependencies.includes("quad")&&!nb.blocks[3].dependencies.includes("cg")&&!nb.blocks[4].dependencies.includes("odeorder"),"U6 command names are not notebook dependencies");
 
 // Quantity assignment + typed reference preserves units.
 nb=doc([
