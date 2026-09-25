@@ -146,7 +146,7 @@ test("U5 advanced linear algebra executes through Calculate and Matrix workspace
   await input.press("Enter");
   await expect(page.locator("#exactResult")).toContainText("cond2 = 1000");
 
-  await page.locator('[data-view="matrix"]').click();
+  await goView(page,"matrix");
   await expect(page.locator('[data-matrix-op="spectral"]')).toBeVisible();
   await page.locator('[data-matrix-op="spectral"]').click();
   await expect(page.locator("#matrixResult")).toContainText("Q");
