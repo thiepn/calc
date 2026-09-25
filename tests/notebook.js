@@ -11,6 +11,7 @@ require("../linear-algebra.js");
 require("../advanced-linear-algebra.js");
 require("../optimization.js");
 require("../numerical-mathematics.js");
+require("../discrete-mathematics.js");
 require("../statistics.js");
 require("../graph.js");
 require("../tools.js");

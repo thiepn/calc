@@ -196,6 +196,34 @@ test("U6 numerical mathematics executes through the Calculate UI",async({page})=
   expect(errors).toEqual([]);
 });
 
+test("U7 discrete mathematics and combinatorics executes through the Calculate UI",async({page})=>{
+  const errors=await openApp(page);
+  expect(await page.evaluate(()=>window.CalcDiscrete&&window.CalcDiscrete.VERSION)).toBe("2.6.0-u7");
+  const input=page.locator("#expressionInput");
+
+  await input.fill("choose(52; 5)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("2598960");
+
+  await input.fill("crt(2,3; 3,5; 2,7)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("23");
+
+  await input.fill("truth(p -> q)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("3/4");
+
+  await input.fill("shortest(a,b,c,d; a-b:1,b-c:2,a-c:5,c-d:1; a; d)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("distance = 4");
+
+  await input.fill("chromatic(a,b,c; a-b,b-c,c-a)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("χ = 3");
+
+  expect(errors).toEqual([]);
+});
+
 test("notebook read failure does not create replacement or recovery duplicates",async({page})=>{
   const errors=await openApp(page);
   const seeded=await page.evaluate(async()=>{

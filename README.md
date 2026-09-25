@@ -2,9 +2,9 @@
 
 A local-first universal calculator PWA and mathematical workstation.
 
-**Current stable release: v2.5.0** · IndexedDB schema v5 · production channel.
+**Current stable release: v2.6.0** · IndexedDB schema v5 · production channel.
 
-v2.5.0 adds Phase U6: numerical mathematics on top of the U1–U5 university-mathematics foundation.
+v2.6.0 adds Phase U7: discrete mathematics and combinatorics on top of the U1–U6 university-mathematics foundation.
 
 ## Current implementation
 
@@ -12,7 +12,7 @@ Calc currently includes:
 
 - exact arbitrary-size Integer/Rational arithmetic;
 - finite Real and exact-capable Complex scalars;
-- symbolic algebra, advanced CAS/parameter solving, single- and multivariable calculus, vector analysis, differential equations, dynamical systems, optimization, mathematical programming, and a dedicated numerical-analysis layer;
+- symbolic algebra, advanced CAS/parameter solving, single- and multivariable calculus, vector analysis, differential equations, dynamical systems, optimization, mathematical programming, numerical analysis, and exact discrete mathematics/combinatorics;
 - first-class physical quantities, units, constants and engineering relations;
 - canonical Matrix/Vector/subspace objects, certified numerical decompositions, advanced canonical forms, spectral calculus, inner-product workflows, and conditioning diagnostics;
 - typed Dataset/probability/inference/regression systems;
@@ -222,6 +222,55 @@ numhelp()
 U6 emphasizes numerical evidence: residuals, error estimates, observed convergence order, backward error, condition numbers, and absolute-stability diagnostics are carried with the result whenever applicable.
 
 The existing U3 `stability(...)` command remains unchanged; U6 uses `absstability(...)` to avoid command ambiguity. Full numerical semantics, assumptions, and unsupported boundaries are documented in `docs/math/NUMERICAL_MATHEMATICS_SEMANTICS.md`.
+
+## Discrete Mathematics & Combinatorics — v2.6 / U7
+
+U7 adds a bounded exact discrete-mathematics layer shared by Calculate and Worksheet Math blocks.
+
+Examples:
+
+```text
+choose(52; 5)
+multinomial(10; 2,3,5)
+catalan(10)
+stirling2(8; 3)
+partitioncount(100)
+
+egcd(240; 46)
+modinv(3; 11)
+modpow(2; 1000; 1009)
+crt(2,3; 3,5; 2,7)
+lincong(14; 30; 100)
+
+linrec(1,1; 0,1; 20)
+recseq(1,1; 0,1; 15)
+recgf(1,1; 0,1)
+
+setunion(a,b,c; b,c,d)
+powerset(a,b,c)
+
+truth((p -> q) & (q -> r))
+equiv(!(p & q); !p | !q)
+cnf(p -> q)
+dnf(p ^ q)
+
+relation(1,2,4; 1>1,2>2,4>4,1>2,1>4,2>4)
+hasse(1,2,4; 1>1,2>2,4>4,1>2,1>4,2>4)
+
+graphinfo(a,b,c; a-b,b-c,c-a)
+shortest(a,b,c,d; a-b:1,b-c:2,a-c:5,c-d:1; a; d)
+mst(a,b,c,d; a-b:1,b-c:2,a-c:5,c-d:1)
+toposort(a,b,c,d; a>b,a>c,b>d,c>d)
+eulertrail(a,b,c; a-b,b-c,c-a)
+chromatic(a,b,c; a-b,b-c,c-a)
+pruferdecode(4,4,4)
+
+discretehelp()
+```
+
+Counting, congruences, recurrences, graph weights, and scalar outputs remain exact integers. Exhaustive operations such as truth tables, powersets, relation closure, and exact coloring have explicit safety limits so local execution stays predictable.
+
+Graph algorithms use simple finite graphs: Dijkstra rejects negative weights, MST uses Kruskal on connected undirected graphs, topological sorting rejects cycles, and exact chromatic number is bounded to 12 vertices. Full syntax, guarantees, and deliberate unsupported boundaries are documented in `docs/math/DISCRETE_MATHEMATICS_SEMANTICS.md`.
 
 ## Tools V2
 

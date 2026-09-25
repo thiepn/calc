@@ -1,53 +1,41 @@
-# Calc v2.5.0
+# Calc v2.6.0
 
-Calc v2.5.0 adds **Phase U6 — Numerical Mathematics** to the University Mathematics Workstation.
+Calc v2.6.0 adds **Phase U7 — Discrete Mathematics & Combinatorics** to the University Mathematics Workstation.
 
-## Floating-point & error analysis
+## Exact combinatorics
 
-- Added IEEE-754 neighbor/ULP diagnostics.
-- Added absolute/relative/percentage error metrics and cancellation diagnostics.
-- Added scalar absolute/relative conditioning estimates.
-- Added Richardson extrapolation and observed convergence-order estimation.
+- Added exact binomial, permutation, and multinomial counts.
+- Added Catalan, Stirling first/second kind, Bell, derangement, integer-partition, and Fibonacci sequences.
+- Added stars-and-bars, pigeonhole lower bounds, and Cayley labeled-tree counts.
 
-## Root finding & interpolation
+## Modular arithmetic & recurrences
 
-- Added fixed-point iteration with local contraction diagnostics.
-- Added four-way root-method comparison across bisection, Newton, secant, and hybrid Newton/bisection.
-- Added barycentric Lagrange interpolation.
-- Added Newton divided differences.
-- Added first-derivative Hermite interpolation.
-- Added natural cubic splines.
+- Added extended Euclid with Bézout certificates.
+- Added exact modular inverses, modular exponentiation, generalized CRT, and linear congruence solving.
+- Added constant-coefficient linear recurrence terms, bounded sequences, and ordinary generating functions.
 
-## Differentiation & quadrature
+## Finite sets, logic & relations
 
-- Added forward/backward/central/five-point finite differences with Richardson error estimates.
-- Added first- and second-derivative numerical diagnostics.
-- Added composite midpoint, trapezoid, and Simpson quadrature.
-- Added composite 2–5 point Gauss–Legendre quadrature.
-- Added adaptive-Simpson bridge and panel-refinement error diagnostics.
+- Added deterministic finite-set union/intersection/difference/symmetric difference, Cartesian products, and powersets.
+- Added propositional parsing, truth tables, tautology/contradiction/contingency classification, equivalence witnesses, and canonical CNF/DNF.
+- Added finite relation property analysis, closures, equivalence classes, partial-order checks, and Hasse covers.
 
-## Numerical linear algebra
+## Finite graph algorithms
 
-- Added Jacobi and Gauss–Seidel iterative linear solves.
-- Added conjugate gradient with symmetric-positive-definite certification.
-- Added residual, relative-residual, normwise backward-error, conditioning, and forward-error-bound diagnostics.
-- Added power iteration, shifted inverse iteration, and Rayleigh quotient iteration.
+- Added connectedness/component, cycle, degree, bipartite, tree/forest, SCC, and DAG diagnostics.
+- Added Dijkstra shortest paths for nonnegative exact integer weights.
+- Added Kruskal minimum spanning trees.
+- Added topological sorting, Euler trail/circuit construction, exact bounded chromatic number, and Prüfer decoding.
 
-## Optimization & ODE analysis
+## Safety & semantics
 
-- Added U4 optimizer comparison across BFGS, Newton, and gradient descent.
-- Added fixed-step Euler, Heun, explicit midpoint, and RK4 scalar IVPs.
-- Added observed ODE convergence-order diagnostics using N/2N/4N grids.
-- Added absolute-stability functions and negative-real stability intervals for explicit and implicit one-step methods.
-
-## Compatibility & semantics
-
-- U3 retains ownership of `stability(...)` for dynamical systems.
-- U6 uses the collision-free command `absstability(...)` for numerical ODE stability.
-- Unsupported or non-convergent numerical methods fail explicitly rather than returning a guessed result.
+- U7 uses exact integer arithmetic wherever the mathematical result is integral.
+- Truth tables are capped at 8 variables, powersets at 12 elements, and exact chromatic number at 12 vertices.
+- Large/materializing requests fail with explicit complexity errors instead of freezing the local-first PWA.
+- U7 does not consume ordinary arithmetic expressions, preserving the existing U1–U6 routing surface.
 
 ## Certification
 
-v2.5.0 adds a dedicated U6 deterministic suite, Worksheet coverage, browser-level Calculate coverage, primary-CI enforcement, static release-gate assertions, and the Chromium / Firefox / WebKit / mobile Chromium production soak.
+v2.6.0 adds a dedicated deterministic U7 suite, Worksheet routing coverage, browser-level Calculate coverage, command-palette integration, offline asset caching, primary-CI enforcement, and release-soak enforcement.
 
-U6 intentionally does not implement arbitrary-precision floating point, interval arithmetic, sparse Krylov methods, preconditioners, stiff BDF/Radau solvers, PDE discretization, or universal convergence proofs.
+Full semantics and deliberate boundaries are documented in `docs/math/DISCRETE_MATHEMATICS_SEMANTICS.md`.

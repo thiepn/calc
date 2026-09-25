@@ -43,6 +43,7 @@ jobs:
           node --check optimization.js
           node --check advanced-linear-algebra.js
           node --check numerical-mathematics.js
+          node --check discrete-mathematics.js
           node --check calculus-worker.js
           node --check units.js
           node --check linear-algebra.js
@@ -67,6 +68,7 @@ jobs:
           node --check tests/optimization.js
           node --check tests/advanced-linear-algebra.js
           node --check tests/numerical-mathematics.js
+          node --check tests/discrete-mathematics.js
           node --check tests/units.js
           node --check tests/linear-algebra.js
           node --check tests/statistics.js
@@ -108,6 +110,8 @@ jobs:
         run: node tests/advanced-linear-algebra.js
       - name: Numerical Mathematics U6 certification
         run: node tests/numerical-mathematics.js
+      - name: Discrete Mathematics & Combinatorics U7 certification
+        run: node tests/discrete-mathematics.js
       - name: Probability Statistics and Data V2 certification
         run: node tests/statistics.js
       - name: Graphing V2 certification

@@ -2,6 +2,27 @@
 
 All notable production changes to Calc are recorded here.
 
+## [2.6.0] — 2026-09-25
+
+### University Mathematics Workstation — Phase U7
+
+- Added the standalone `discrete-mathematics.js` runtime and routed it through Calculate and Worksheet Math evaluation.
+- Added exact binomial/permutation/multinomial counts, Catalan numbers, Stirling numbers, Bell numbers, derangements, integer partitions, stars-and-bars, pigeonhole bounds, Cayley tree counts, and fast-doubling Fibonacci.
+- Added extended Euclid, modular inverses/powers, generalized Chinese remainder theorem, and linear congruence solving.
+- Added bounded finite-set algebra, Cartesian products, and powersets.
+- Added exact constant-coefficient linear recurrence terms/sequences and ordinary generating functions.
+- Added propositional parsing, truth-table classification, equivalence counterexamples, and canonical CNF/DNF generation.
+- Added finite relation analysis, closures, equivalence classes, partial-order certification, and Hasse cover extraction.
+- Added finite graph analysis, Dijkstra shortest paths, Kruskal minimum spanning trees, topological sorting, Euler trails/circuits, exact bounded chromatic number, and Prüfer decoding.
+- Added explicit complexity limits for exponential/materializing operations so the local-first PWA remains responsive.
+- Added `discretehelp()`, U7 command-palette templates, offline caching, Worksheet integration, deterministic certification, browser regression coverage, and `docs/math/DISCRETE_MATHEMATICS_SEMANTICS.md`.
+
+### Compatibility
+
+- U1–U6 and all existing calculator subsystems remain intact.
+- U7 is additive and does not consume ordinary arithmetic expressions.
+- Unsupported large/exponential discrete problems fail explicitly rather than returning heuristic results.
+
 ## [2.5.0] — 2026-09-25
 
 ### University Mathematics Workstation — Phase U6
