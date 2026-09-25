@@ -554,14 +554,14 @@ function runCommand(raw,options){
   p=parseSemicolon(raw,"odeorder");
   if(p){if(p.length!==8)throw new NumericalMathematicsError("ARITY_ERROR","odeorder expects rhs; x; y; x0; y0; x1; steps; method");var od=odeOrderDiagnostic(p[0],p[1],p[2],numberConstant(p[3]),numberConstant(p[4]),numberConstant(p[5]),Number(p[6]),p[7]);return commandResult(od.toString(),"ode-order",{value:od.extrapolated,metadata:{observedOrder:od.observedOrder,formalOrder:od.formalOrder,errorEstimate:od.errorEstimate,method:p[7]}});}
 
-  p=parseSemicolon(raw,"stability");
-  if(p){if(p.length!==3)throw new NumericalMathematicsError("ARITY_ERROR","stability expects method; Re(z); Im(z)");var st=stabilityAmplification(p[0],numberConstant(p[1]),numberConstant(p[2]));return commandResult(st.toString(),"stability-function",{value:st.magnitude,metadata:{method:st.method,z:st.z,amplification:st.amplification,stable:st.stable}});}
+  p=parseSemicolon(raw,"absstability");
+  if(p){if(p.length!==3)throw new NumericalMathematicsError("ARITY_ERROR","absstability expects method; Re(z); Im(z)");var st=stabilityAmplification(p[0],numberConstant(p[1]),numberConstant(p[2]));return commandResult(st.toString(),"stability-function",{value:st.magnitude,metadata:{method:st.method,z:st.z,amplification:st.amplification,stable:st.stable}});}
 
   p=parseSemicolon(raw,"stabinterval");
   if(p){if(p.length!==1)throw new NumericalMathematicsError("ARITY_ERROR","stabinterval expects method");var si=negativeRealStabilityLimit(p[0]);return commandResult("negative-real stability interval: ["+(Number.isFinite(si.left)?M.formatNumber(si.left,12):"-∞")+", 0]","stability-interval",{value:si.left,metadata:si});}
 
   if(/^numhelp\s*\(\s*\)$/i.test(raw)){
-    return commandResult("U6: floatinfo · numerror · cancellation · scalarcond · richardson · convorder · fixedpoint · rootcompare · interp · newtoninterp · hermite · spline · fdiff · quad · jacobi · gaussseidel · cg · linsysdiag · poweriter · inverseiter · rayleighiter · optcompare · odefixed · odeorder · stability · stabinterval","numerical-help",{metadata:{operation:"numhelp"}});
+    return commandResult("U6: floatinfo · numerror · cancellation · scalarcond · richardson · convorder · fixedpoint · rootcompare · interp · newtoninterp · hermite · spline · fdiff · quad · jacobi · gaussseidel · cg · linsysdiag · poweriter · inverseiter · rayleighiter · optcompare · odefixed · odeorder · absstability · stabinterval","numerical-help",{metadata:{operation:"numhelp"}});
   }
   return null;
 }
