@@ -112,7 +112,7 @@ approx(cg.solution[0],1/11,1e-12,"CG x1");
 approx(cg.solution[1],7/11,1e-12,"CG x2");
 eq(cg.iterations,2,"CG terminates in dimension");
 
-const A3=[[10,-1,2],[-1,11,-1],[2,-1,10]],x3=[1,2,-1],b3=A3.map(r=>r[0]-2*r[2]+2*r[1]);
+const A3=[[10,-1,2],[-1,11,-1],[2,-1,10]],x3=[1,2,-1],b3=A3.map(r=>r[0]+2*r[1]-r[2]);
 const cg3=N.conjugateGradient(A3,b3,[0,0,0],{maxIterations:20});
 cg3.solution.forEach((x,i)=>approx(x,x3[i],1e-10,"3x3 CG solution"));
 throwsCode(()=>N.conjugateGradient([[1,2],[2,1]],[1,1],[0,0],{}),"UNSUPPORTED_NUMERICAL_METHOD","CG SPD requirement");
