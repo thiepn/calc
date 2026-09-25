@@ -8,6 +8,7 @@ require("../multivariable.js");
 require("../ode.js");
 require("../units.js");
 require("../linear-algebra.js");
+require("../advanced-linear-algebra.js");
 require("../optimization.js");
 require("../statistics.js");
 require("../graph.js");
@@ -113,6 +114,33 @@ assert(nb.blocks[1].result.display.includes("optimum"),"U4 local optimization re
 assert(nb.blocks[2].result.display.includes("objective = 10"),"U4 LP result");
 assert(nb.blocks[3].result.display.includes("f = 0.5"),"U4 QP result");
 assert(!nb.blocks[0].dependencies.includes("convexity")&&!nb.blocks[1].dependencies.includes("optmin")&&!nb.blocks[2].dependencies.includes("lpmax")&&!nb.blocks[3].dependencies.includes("quadprog"),"U4 command names are not notebook dependencies");
+
+// U5 advanced linear-algebra commands share the Worksheet Math evaluator.
+nb=doc([
+  block("u5a","math","jordanv2(2,1,0|0,2,1|0,0,2)"),
+  block("u5b","math","spectral(2,1|1,2)"),
+  block("u5c","math","inertia(2,0|0,-3)"),
+  block("u5d","math","condreport(1,0|0,0.001)")
+]);
+run=N.evaluateNotebook(nb,{precision:12,angle:"RAD"});nb=run.document;
+eq(nb.blocks[0].status,"clean","U5 Jordan block clean");
+assert(nb.blocks[0].result.display.includes("block sizes = [3]"),"U5 Jordan result");
+assert(nb.blocks[1].result.display.includes("eigenvalues"),"U5 spectral result");
+assert(nb.blocks[2].result.display.includes("inertia = (1, 1, 0)"),"U5 inertia result");
+assert(nb.blocks[3].result.display.includes("cond2 = 1000"),"U5 condition result");
+assert(!nb.blocks[0].dependencies.includes("jordanv2")&&!nb.blocks[1].dependencies.includes("spectral")&&!nb.blocks[2].dependencies.includes("inertia")&&!nb.blocks[3].dependencies.includes("condreport"),"U5 command names are not notebook dependencies");
+
+// U5 Matrix-block operations route through the advanced matrix layer.
+nb=doc([
+  block("u5m1","matrix","",{rows:[["2","1"],["1","2"]],operation:"spectral"}),
+  block("u5m2","matrix","",{rows:[["2","0"],["0","-3"]],operation:"inertia"}),
+  block("u5m3","matrix","",{rows:[["1","0"],["0","0.001"]],operation:"cond"})
+]);
+run=N.evaluateNotebook(nb,{precision:12,angle:"RAD"});nb=run.document;
+eq(nb.blocks[0].status,"clean","U5 spectral matrix block clean");
+assert(nb.blocks[0].result.display.includes("real-symmetric-spectral-theorem"),"U5 spectral matrix-block display");
+assert(nb.blocks[1].result.display.includes("inertia = (1, 1, 0)"),"U5 inertia matrix-block display");
+assert(nb.blocks[2].result.display.includes("cond2 = 1000"),"U5 condition matrix-block display");
 
 // Quantity assignment + typed reference preserves units.
 nb=doc([
