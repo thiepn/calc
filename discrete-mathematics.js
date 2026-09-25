@@ -216,3 +216,54 @@ function formatPolynomial(coeffs,variable){
 
 /* Propositional logic --------------------------------------------------- */
 function tokenizeLogic(source){
+  source=String(source);var out=[],i=0;
+  while(i<source.length){
+    if(/\s/.test(source[i])){i++;continue;}
+    var rest=source.slice(i),op=null;
+    [["<=>","IFF"],["<->","IFF"],["=>","IMP"],["->","IMP"],["&&","AND"],["||","OR"]].some(function(pair){if(rest.startsWith(pair[0])){op=pair;return true;}return false;});
+    if(op){out.push({type:op[1],text:op[0]});i+=op[0].length;continue;}
+    var ch=source[i];if(ch==="("){out.push({type:"LP",text:ch});i++;continue;}if(ch===")"){out.push({type:"RP",text:ch});i++;continue;}
+    if(ch==="!"||ch==="~"){out.push({type:"NOT",text:ch});i++;continue;}if(ch==="&"){out.push({type:"AND",text:ch});i++;continue;}if(ch==="|"){out.push({type:"OR",text:ch});i++;continue;}if(ch==="^"){out.push({type:"XOR",text:ch});i++;continue;}
+    var m=rest.match(/^[A-Za-z_][A-Za-z0-9_]*/);if(m){var word=m[0],low=word.toLowerCase(),type=({and:"AND",or:"OR",not:"NOT",xor:"XOR"})[low];if(type)out.push({type:type,text:word});else if(low==="true"||word==="T")out.push({type:"CONST",value:true,text:word});else if(low==="false"||word==="F")out.push({type:"CONST",value:false,text:word});else out.push({type:"VAR",name:word,text:word});i+=word.length;continue;}
+    if(ch==="1"||ch==="0"){out.push({type:"CONST",value:ch==="1",text:ch});i++;continue;}
+    throw new DiscreteMathError("LOGIC_PARSE_ERROR","Unexpected logic token near '"+rest.slice(0,12)+"'",{offset:i});
+  }
+  out.push({type:"EOF",text:""});return out;
+}
+function parseLogic(source){
+  var tokens=tokenizeLogic(source),i=0;function peek(t){return tokens[i].type===t;}function take(t){if(!peek(t))throw new DiscreteMathError("LOGIC_PARSE_ERROR","Expected "+t+" but found '"+tokens[i].text+"'");return tokens[i++];}
+  function primary(){if(peek("CONST")){var t=take("CONST");return {type:"const",value:t.value};}if(peek("VAR")){var v=take("VAR");return {type:"var",name:v.name};}if(peek("LP")){take("LP");var e=iff();take("RP");return e;}throw new DiscreteMathError("LOGIC_PARSE_ERROR","Expected proposition near '"+tokens[i].text+"'");}
+  function unary(){if(peek("NOT")){take("NOT");return {type:"not",child:unary()};}return primary();}
+  function and(){var n=unary();while(peek("AND")){take("AND");n={type:"and",left:n,right:unary()};}return n;}
+  function xor(){var n=and();while(peek("XOR")){take("XOR");n={type:"xor",left:n,right:and()};}return n;}
+  function or(){var n=xor();while(peek("OR")){take("OR");n={type:"or",left:n,right:xor()};}return n;}
+  function imp(){var n=or();if(peek("IMP")){take("IMP");n={type:"imp",left:n,right:imp()};}return n;}
+  function iff(){var n=imp();while(peek("IFF")){take("IFF");n={type:"iff",left:n,right:imp()};}return n;}
+  var ast=iff();if(!peek("EOF"))throw new DiscreteMathError("LOGIC_PARSE_ERROR","Unexpected trailing token '"+tokens[i].text+"'");return ast;
+}
+function logicVariables(ast,set){set=set||new Set();if(ast.type==="var")set.add(ast.name);if(ast.child)logicVariables(ast.child,set);if(ast.left){logicVariables(ast.left,set);logicVariables(ast.right,set);}return Array.from(set).sort();}
+function evaluateLogic(ast,env){switch(ast.type){case"const":return ast.value;case"var":return !!env[ast.name];case"not":return !evaluateLogic(ast.child,env);case"and":return evaluateLogic(ast.left,env)&&evaluateLogic(ast.right,env);case"or":return evaluateLogic(ast.left,env)||evaluateLogic(ast.right,env);case"xor":return evaluateLogic(ast.left,env)!==evaluateLogic(ast.right,env);case"imp":return !evaluateLogic(ast.left,env)||evaluateLogic(ast.right,env);case"iff":return evaluateLogic(ast.left,env)===evaluateLogic(ast.right,env);default:throw new DiscreteMathError("LOGIC_EVAL_ERROR","Unknown logic AST node");}}
+function truthTable(source){
+  var ast=parseLogic(source),vars=logicVariables(ast);if(vars.length>LIMITS.truthVariables)throw new DiscreteComplexityError("Truth tables are limited to "+LIMITS.truthVariables+" variables");
+  var rows=[],total=1<<vars.length,trueCount=0;
+  for(var mask=0;mask<total;mask++){var env={};vars.forEach(function(v,j){env[v]=!!(mask&(1<<(vars.length-j-1)));});var value=evaluateLogic(ast,env);if(value)trueCount++;rows.push({assignment:env,value:value});}
+  return {source:String(source),ast:ast,variables:vars,rows:rows,trueCount:trueCount,falseCount:total-trueCount,classification:trueCount===total?"tautology":(trueCount===0?"contradiction":"contingency")};
+}
+function logicEquivalent(a,b){
+  var aa=parseLogic(a),bb=parseLogic(b),vars=Array.from(new Set(logicVariables(aa).concat(logicVariables(bb)))).sort();if(vars.length>LIMITS.truthVariables)throw new DiscreteComplexityError("Equivalence checking is limited to "+LIMITS.truthVariables+" variables");var total=1<<vars.length;
+  for(var mask=0;mask<total;mask++){var env={};vars.forEach(function(v,j){env[v]=!!(mask&(1<<(vars.length-j-1)));});var av=evaluateLogic(aa,env),bv=evaluateLogic(bb,env);if(av!==bv)return {equivalent:false,variables:vars,counterexample:env,left:av,right:bv};}
+  return {equivalent:true,variables:vars,counterexample:null};
+}
+function canonicalDNF(source){var t=truthTable(source),terms=t.rows.filter(function(r){return r.value;}).map(function(r){return "("+t.variables.map(function(v){return r.assignment[v]?v:"!"+v;}).join(" & ")+")";});return {form:terms.length?terms.join(" | "):"F",truth:t};}
+function canonicalCNF(source){var t=truthTable(source),clauses=t.rows.filter(function(r){return !r.value;}).map(function(r){return "("+t.variables.map(function(v){return r.assignment[v]?"!"+v:v;}).join(" | ")+")";});return {form:clauses.length?clauses.join(" & "):"T",truth:t};}
+
+/* Relations and posets ------------------------------------------------- */
+function relationPairKey(a,b){return a+"\u0000"+b;}
+function parseRelationPairs(universe,source){
+  var allowed=new Set(universe),pairs=[],seen=new Set();source=String(source).trim();if(!source)return pairs;
+  splitArgs(source).forEach(function(item){var idx=item.indexOf(">");if(idx<1||idx===item.length-1)throw new DiscreteMathError("RELATION_PARSE_ERROR","Relation pairs use a>b syntax",{pair:item});var a=normalizeAtom(item.slice(0,idx)),b=normalizeAtom(item.slice(idx+1));if(!allowed.has(a)||!allowed.has(b))throw new DiscreteMathError("RELATION_OUTSIDE_UNIVERSE","Relation endpoint is outside the universe",{pair:[a,b]});var key=relationPairKey(a,b);if(!seen.has(key)){seen.add(key);pairs.push([a,b]);}});return pairs;
+}
+function relationSet(pairs){var s=new Set();pairs.forEach(function(p){s.add(relationPairKey(p[0],p[1]));});return s;}
+function analyzeRelation(universe,pairs){
+  if(universe.length>LIMITS.relationSize)throw new DiscreteComplexityError("Relation analysis is limited to "+LIMITS.relationSize+" universe elements");var R=relationSet(pairs),reflexive=true,irreflexive=true,symmetric=true,antisymmetric=true,transitive=true,total=true;
+  universe.forEach(function(a){if(!R.has(relationPairKey(a,a)))reflexive=false;else irreflexive=false;});
