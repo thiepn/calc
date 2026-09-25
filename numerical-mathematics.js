@@ -324,6 +324,7 @@ function diagonalDominance(A){
 }
 function stationarySolve(A,b,x0,method,options){
   options=Object.assign({absTol:1e-10,relTol:1e-9,maxIterations:10000},options||{});
+  method=String(method||"").toLowerCase();if(method!=="jacobi"&&method!=="gauss-seidel")throw new UnsupportedNumericalMethodError("Stationary linear methods: jacobi, gauss-seidel");
   var n=A.length;if(!n||A.some(function(r){return r.length!==n;})||b.length!==n||x0.length!==n)throw new NumericalMathematicsError("MATRIX_SHAPE_ERROR","Iterative linear solve dimensions must agree");
   for(var i=0;i<n;i++)if(Math.abs(A[i][i])<1e-15)throw new NumericalMathematicsError("ZERO_DIAGONAL","Jacobi/Gauss-Seidel require nonzero diagonal entries");
   var x=x0.slice(),history=[],bn=Math.max(norm2(b),1),dom=diagonalDominance(A);
@@ -366,7 +367,8 @@ function gaussianSolve(A,b){
   return x;
 }
 function linearSystemDiagnostics(A,b,x){
-  var mat=new LA.Matrix(A),res=residualVec(A,x,b),rn=norm2(res),an=mat.frobeniusNorm(),xn=norm2(x),bn=norm2(b),
+  var mat=new LA.Matrix(A);if(mat.cols!==x.length||mat.rows!==b.length)throw new NumericalMathematicsError("MATRIX_SHAPE_ERROR","A, b, and approximate x dimensions must agree");
+  var res=residualVec(A,x,b),rn=norm2(res),an=mat.frobeniusNorm(),xn=norm2(x),bn=norm2(b),
     backward=rn/Math.max(an*xn+bn,Number.MIN_VALUE),cond=ALA.conditionReport(mat).conditionNumber,
     forwardBound=Number.isFinite(cond)?cond*backward:Infinity;
   return {residualNorm:rn,relativeResidual:rn/Math.max(bn,Number.MIN_VALUE),normwiseBackwardError:backward,conditionNumber:cond,forwardErrorBound:forwardBound,
@@ -378,7 +380,8 @@ function normalize(v){var n=norm2(v);if(!(n>0))throw new NumericalMathematicsErr
 function rayleigh(A,x){var Ax=matVec(A,x);return dot(x,Ax)/dot(x,x);}
 function eigenResidual(A,x,lambda){return norm2(addv(matVec(A,x),x,-lambda));}
 function powerIteration(A,x0,options){
-  options=Object.assign({tol:1e-10,maxIterations:5000},options||{});var x=normalize(x0),lambda=rayleigh(A,x),history=[];
+  options=Object.assign({tol:1e-10,maxIterations:5000},options||{});if(!A.length||A.some(function(r){return r.length!==A.length;})||x0.length!==A.length)throw new NumericalMathematicsError("MATRIX_SHAPE_ERROR","Power iteration requires a square matrix and matching initial vector");
+  var x=normalize(x0),lambda=rayleigh(A,x),history=[];
   for(var k=1;k<=options.maxIterations;k++){
     var y=matVec(A,x),xn=normalize(y),ln=rayleigh(A,xn),res=eigenResidual(A,xn,ln);history.push({iteration:k,eigenvalue:ln,residual:res});
     if(res<=options.tol*Math.max(1,Math.abs(ln)))return {eigenvalue:ln,eigenvector:xn,residual:res,iterations:k,history:history,method:"power-iteration"};
@@ -387,7 +390,8 @@ function powerIteration(A,x0,options){
   throw new NumericalConvergenceError("Power iteration exceeded its iteration budget",{lastEigenvalue:lambda});
 }
 function inverseIteration(A,x0,shift,options){
-  options=Object.assign({tol:1e-10,maxIterations:1000},options||{});var n=A.length,x=normalize(x0),I=Array.from({length:n},function(_,i){return Array.from({length:n},function(_,j){return i===j?1:0;});}),history=[];
+  options=Object.assign({tol:1e-10,maxIterations:1000},options||{});if(!A.length||A.some(function(r){return r.length!==A.length;})||x0.length!==A.length)throw new NumericalMathematicsError("MATRIX_SHAPE_ERROR","Inverse iteration requires a square matrix and matching initial vector");
+  var n=A.length,x=normalize(x0),I=Array.from({length:n},function(_,i){return Array.from({length:n},function(_,j){return i===j?1:0;});}),history=[];
   for(var k=1;k<=options.maxIterations;k++){
     var B=A.map(function(r,i){return r.map(function(v,j){return v-shift*I[i][j];});}),y;
     try{y=gaussianSolve(B,x);}catch(e){
@@ -400,7 +404,8 @@ function inverseIteration(A,x0,shift,options){
   throw new NumericalConvergenceError("Inverse iteration exceeded its iteration budget",{shift:shift});
 }
 function rayleighQuotientIteration(A,x0,options){
-  options=Object.assign({tol:1e-12,maxIterations:100},options||{});var x=normalize(x0),mu=rayleigh(A,x),history=[];
+  options=Object.assign({tol:1e-12,maxIterations:100},options||{});if(!A.length||A.some(function(r){return r.length!==A.length;})||x0.length!==A.length)throw new NumericalMathematicsError("MATRIX_SHAPE_ERROR","Rayleigh iteration requires a square matrix and matching initial vector");
+  var x=normalize(x0),mu=rayleigh(A,x),history=[];
   for(var k=1;k<=options.maxIterations;k++){
     var res=eigenResidual(A,x,mu);if(res<=options.tol*Math.max(1,Math.abs(mu)))return {eigenvalue:mu,eigenvector:x,residual:res,iterations:k-1,history:history,method:"rayleigh-quotient-iteration"};
     var B=A.map(function(r,i){return r.map(function(v,j){return v-(i===j?mu:0);});}),y;
@@ -448,7 +453,7 @@ function odeOrderDiagnostic(rhsSource,xVar,yVar,x0,y0,x1,steps,method){
 function cmul(a,b){return {re:a.re*b.re-a.im*b.im,im:a.re*b.im+a.im*b.re};}
 function cadd(a,b){return {re:a.re+b.re,im:a.im+b.im};}
 function cscale(a,s){return {re:a.re*s,im:a.im*s};}
-function cdiv(a,b){var d=b.re*b.re+b.im*b.im;return {re:(a.re*b.re+a.im*b.im)/d,im:(a.im*b.re-a.re*b.im)/d};}
+function cdiv(a,b){var d=b.re*b.re+b.im*b.im;if(d===0)return {re:Infinity,im:0};return {re:(a.re*b.re+a.im*b.im)/d,im:(a.im*b.re-a.re*b.im)/d};}
 function cpow(z,n){var r={re:1,im:0};for(var i=0;i<n;i++)r=cmul(r,z);return r;}
 function cabs(z){return Math.hypot(z.re,z.im);}
 function stabilityAmplification(method,re,im){
