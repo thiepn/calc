@@ -101,7 +101,7 @@ function floatInfo(x){
   var up=nextUp(x),down=nextDown(x),spacing=ulp(x);
   return {value:x,nextUp:up,nextDown:down,ulp:spacing,machineEpsilon:Number.EPSILON,
     relativeSpacing:spacing/Math.max(Math.abs(x),Number.MIN_VALUE),
-    toString:function(){return "x = "+M.formatNumber(x,17)+"; ulp = "+M.formatNumber(spacing,8)+"; next = "+M.formatNumber(up,17);}};
+    toString:function(){return "x = "+x.toPrecision(17)+"; ulp = "+spacing.toExponential(17)+"; next = "+up.toPrecision(17);}};
 }
 function errorMetrics(reference,approximation){
   reference=Number(reference);approximation=Number(approximation);
@@ -491,7 +491,7 @@ function runCommand(raw,options){
   if(p){if(p.length!==3)throw new NumericalMathematicsError("ARITY_ERROR","fixedpoint expects g(x); x; x0");var fp=fixedPoint(p[0],p[1],numberConstant(p[2]),options);return commandResult(fp.toString(),"fixed-point",{value:fp.fixedPoint,metadata:{iterations:fp.iterations,step:fp.step,localContraction:fp.localContraction}});}
 
   p=parseSemicolon(raw,"rootcompare");
-  if(p){if(p.length!==5)throw new NumericalMathematicsError("ARITY_ERROR","rootcompare expects f; x; a,b; x0,x1");var br=splitArgs(p[2]),gu=splitArgs(p[3]+","+p[4]);if(br.length!==2||gu.length!==2)throw new NumericalMathematicsError("ARITY_ERROR","rootcompare needs bracket a,b and guesses x0,x1");var rc=rootComparison(p[0],p[1],numberConstant(br[0]),numberConstant(br[1]),numberConstant(gu[0]),numberConstant(gu[1]),options);return commandResult(rc.toString(),"root-comparison",{value:rc.reference,metadata:{results:rc.results}});}
+  if(p){if(p.length!==4)throw new NumericalMathematicsError("ARITY_ERROR","rootcompare expects f; x; a,b; x0,x1");var br=splitArgs(p[2]),gu=splitArgs(p[3]);if(br.length!==2||gu.length!==2)throw new NumericalMathematicsError("ARITY_ERROR","rootcompare needs bracket a,b and guesses x0,x1");var rc=rootComparison(p[0],p[1],numberConstant(br[0]),numberConstant(br[1]),numberConstant(gu[0]),numberConstant(gu[1]),options);return commandResult(rc.toString(),"root-comparison",{value:rc.reference,metadata:{results:rc.results}});}
 
   p=parseSemicolon(raw,"interp");
   if(p){if(p.length!==3)throw new NumericalMathematicsError("ARITY_ERROR","interp expects x-list; y-list; target");var ix=parseNumberList(p[0]),iy=parseNumberList(p[1]),iv=barycentricInterpolation(ix,iy,numberConstant(p[2]));return commandResult("p(x) ≈ "+M.formatNumber(iv.value,14),"interpolation",{value:iv.value,metadata:{method:iv.method,weights:iv.weights,nodes:iv.nodes}});}
