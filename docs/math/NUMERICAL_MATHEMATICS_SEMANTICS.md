@@ -336,7 +336,7 @@ reports:
 - normwise backward error
 
 ```text
-η = ||r|| / (||A||_F ||x|| + ||b||)
+η = ||r||_2 / (||A||_2 ||x||_2 + ||b||_2)
 ```
 
 - U5 2-norm condition number;
