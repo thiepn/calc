@@ -11,13 +11,14 @@ const LA=window.CalcLinearAlgebra;
 const ALA=window.CalcAdvancedLinearAlgebra;
 const OPT=window.CalcOptimization;
 const NUM=window.CalcNumerical;
+const DISC=window.CalcDiscrete;
 const S=window.CalcStatistics;
 const G=window.CalcGraph;
 const T=window.CalcTools;
 const CT=window.CalcCustomTools;
 const NB=window.CalcNotebook;
 const P=window.CalcPersistence;
-const APP_VERSION="2.5.0";
+const APP_VERSION="2.6.0";
 window.CalcAppVersion=APP_VERSION;
 const $=function(s,r){return (r||document).querySelector(s);};
 const $$=function(s,r){return Array.from((r||document).querySelectorAll(s));};
@@ -149,6 +150,8 @@ function backspaceExpression(){
 }
 function calcOptions(commit){return {angle:state.angle,precision:state.precision,complex:true,commit:commit};}
 function evaluateInput(raw,env,commit){
+  var discrete=DISC&&DISC.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
+  if(discrete)return discrete;
   var numerical=NUM&&NUM.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
   if(numerical)return numerical;
   var advancedLinear=ALA&&ALA.runCommand(raw,{angle:state.angle,precision:state.precision,domain:"real"});
@@ -184,7 +187,7 @@ function setCalcResult(res,preview){
   $("#approxResult").textContent=res.approx||"";
   $("#calcStatus").textContent=preview?"Preview":(res.symbolic?"Symbolic":(res.quantity?"Quantity":(res.exact?"Exact":"Approximate")));
   var graphAction=$('[data-result-action="graph"]'),saveAction=$('[data-result-action="save"]'),op=res.metadata&&res.metadata.operation;
-  var graphBlocked=!!res.symbolic||!!res.quantity||!!(res.metadata&&(res.metadata.u2||res.metadata.u3||res.metadata.u4||res.metadata.u5||res.metadata.u6))||["integral","nintegral","nderivative","root","limit"].indexOf(op)>=0;
+  var graphBlocked=!!res.symbolic||!!res.quantity||!!(res.metadata&&(res.metadata.u2||res.metadata.u3||res.metadata.u4||res.metadata.u5||res.metadata.u6||res.metadata.u7))||["integral","nintegral","nderivative","root","limit"].indexOf(op)>=0;
   if(graphAction)graphAction.disabled=graphBlocked;
   if(saveAction)saveAction.disabled=!!res.symbolic;
 }
@@ -1542,6 +1545,13 @@ const commands=[
   {id:"u6.eigen",title:"U6: Eigenvalue iteration",keywords:"numerical eigenvalue power inverse rayleigh quotient iteration",run:function(){switchView("calculate");$("#expressionInput").value="rayleighiter(2,1|1,2; 1,0.2; 50)";previewExpression();$("#expressionInput").focus();}},
   {id:"u6.ode",title:"U6: ODE convergence order",keywords:"numerical ode euler heun midpoint rk4 convergence stability region",run:function(){switchView("calculate");$("#expressionInput").value="odeorder(y; x; y; 0; 1; 1; 10; rk4)";previewExpression();$("#expressionInput").focus();}},
   {id:"u6.stability",title:"U6: Absolute stability",keywords:"numerical ode stability function region rk4 euler implicit",run:function(){switchView("calculate");$("#expressionInput").value="absstability(rk4; -2; 0)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u7.count",title:"U7: Exact combinatorics",keywords:"discrete mathematics combinatorics binomial counting permutations catalan",run:function(){switchView("calculate");$("#expressionInput").value="choose(52; 5)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u7.modular",title:"U7: Chinese remainder theorem",keywords:"discrete mathematics modular arithmetic congruence crt number theory",run:function(){switchView("calculate");$("#expressionInput").value="crt(2,3; 3,5; 2,7)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u7.recurrence",title:"U7: Linear recurrence",keywords:"discrete mathematics recurrence sequence generating function fibonacci",run:function(){switchView("calculate");$("#expressionInput").value="linrec(1,1; 0,1; 20)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u7.logic",title:"U7: Propositional logic",keywords:"discrete mathematics truth table logic proposition implication equivalence",run:function(){switchView("calculate");$("#expressionInput").value="truth((p -> q) & (q -> r))";previewExpression();$("#expressionInput").focus();}},
+  {id:"u7.relation",title:"U7: Relations & Hasse cover",keywords:"discrete mathematics relations equivalence poset partial order hasse",run:function(){switchView("calculate");$("#expressionInput").value="hasse(1,2,4; 1>1,2>2,4>4,1>2,1>4,2>4)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u7.graph",title:"U7: Shortest path",keywords:"discrete mathematics graph dijkstra shortest path weighted graph",run:function(){switchView("calculate");$("#expressionInput").value="shortest(a,b,c,d; a-b:1,b-c:2,a-c:5,c-d:1; a; d)";previewExpression();$("#expressionInput").focus();}},
+  {id:"u7.coloring",title:"U7: Exact graph coloring",keywords:"discrete mathematics graph coloring chromatic number",run:function(){switchView("calculate");$("#expressionInput").value="chromatic(a,b,c; a-b,b-c,c-a)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.diff",title:"Differentiate expression",keywords:"calculus derivative diff",run:function(){switchView("calculate");$("#expressionInput").value="diff(x^3 + sin(x), x)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.gradient",title:"Gradient",keywords:"calculus multivariable gradient partial",run:function(){switchView("calculate");$("#expressionInput").value="gradient(x^2+y^2, x, y)";previewExpression();$("#expressionInput").focus();}},
   {id:"calculus.jacobian",title:"Jacobian",keywords:"calculus multivariable jacobian derivatives",run:function(){switchView("calculate");$("#expressionInput").value="jacobian(x^2+y; x*y, x, y)";previewExpression();$("#expressionInput").focus();}},
