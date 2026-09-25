@@ -407,7 +407,7 @@ function runCommand(raw,options){
   if(p){
     if(p.length!==1)throw new AdvancedLinearAlgebraError("ARITY_ERROR","jordanchains expects jordanchains(matrix)");
     var jc=jordanFormV2(parseMatrix(p[0]),options);
-    return commandResult(jc.chains.map(function(ch,i){return "chain "+(i+1)+": λ="+ch.eigenvalueDisplay+", length "+ch.length;}).join("; "),"jordan-chains",{value:jc.J,metadata:{operation:"jordanchains",chains:jc.chains.map(function(ch){return {eigenvalue:ch.eigenvalueDisplay,length:ch.length,vectors:ch.vectors.map(function(v){return v.toJSON();});};})}});
+    return commandResult(jc.chains.map(function(ch,i){return "chain "+(i+1)+": λ="+ch.eigenvalueDisplay+", length "+ch.length;}).join("; "),"jordan-chains",{value:jc.J,metadata:{operation:"jordanchains",chains:jc.chains.map(function(ch){return {eigenvalue:ch.eigenvalueDisplay,length:ch.length,vectors:ch.vectors.map(function(v){return v.toJSON();})};})}});
   }
 
   p=parseSemicolon(raw,"schur");
