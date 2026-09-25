@@ -319,11 +319,19 @@ function congruenceCanonical(A,options){
   return {S:S,C:C,canonical:expected,inertia:it,residual:res,method:"spectral-congruence-canonical-form"};
 }
 
+
+function certifiedSvdOptions(options){
+  var o=Object.assign({absTol:1e-12,relTol:1e-10,rankTol:1e-9,maxIterations:500},options||{});
+  o.rankTol=Math.max(1e-9,Number(o.rankTol)||1e-9);
+  o.maxIterations=Math.max(500,Number(o.maxIterations)||500);
+  return o;
+}
+
 /* SVD applications and conditioning ------------------------------------ */
 function lowRankApproximation(A,k,options){
   if(!(A instanceof LA.Matrix))A=new LA.Matrix(A);k=Number(k);
   if(!Number.isInteger(k)||k<0||k>Math.min(A.rows,A.cols))throw new AdvancedLinearAlgebraError("INVALID_RANK","Low-rank approximation k must be an integer from 0 to min(rows,cols)");
-  var N=numericMatrix(numericRows(A)),d=LA.svd(N,options),use=Math.min(k,d.singularValues.length),approx;
+  var N=numericMatrix(numericRows(A)),svdOpts=certifiedSvdOptions(options),d=LA.svd(N,svdOpts),use=Math.min(k,d.singularValues.length),approx;
   if(use===0)approx=LA.Matrix.zeros(A.rows,A.cols);
   else{
     var U=LA.Matrix.fromColumns(Array.from({length:use},function(_,i){return d.U.col(i);})),
@@ -336,26 +344,26 @@ function lowRankApproximation(A,k,options){
   return {approximation:approx,k:k,effectiveRank:use,singularValues:d.singularValues,frobeniusError:froError,spectralError:spectralError,actualFrobeniusError:actual,method:"truncated-svd-eckart-young"};
 }
 function pseudoinverseDiagnostics(A,options){
-  if(!(A instanceof LA.Matrix))A=new LA.Matrix(A);var N=numericMatrix(numericRows(A)),p=LA.pseudoinverse(N,options),P=p.matrix,
+  if(!(A instanceof LA.Matrix))A=new LA.Matrix(A);var N=numericMatrix(numericRows(A)),svdOpts=certifiedSvdOptions(options),p=LA.pseudoinverse(N,svdOpts),P=p.matrix,
     aa=N.multiply(P),bb=P.multiply(N),
     r1=N.multiply(P).multiply(N).sub(N).frobeniusNorm(),
     r2=P.multiply(N).multiply(P).sub(P).frobeniusNorm(),
     r3=aa.transpose().sub(aa).frobeniusNorm(),
     r4=bb.transpose().sub(bb).frobeniusNorm(),
-    cond=LA.conditionNumber(N,options);
+    cond=LA.conditionNumber(N,svdOpts);
   return {matrix:P,rank:p.rank,singularValues:p.singularValues,conditionNumber:cond,penroseResiduals:[r1,r2,r3,r4],method:"svd-moore-penrose-diagnostics",
     toString:function(){return "rank = "+p.rank+"; cond2 = "+(Number.isFinite(cond)?M.formatNumber(cond,8):"∞")+"; Penrose residuals = ["+[r1,r2,r3,r4].map(function(x){return M.formatNumber(x,4);}).join(", ")+"]";}};
 }
 function leastSquaresV2(A,b,options){
   if(!(A instanceof LA.Matrix))A=new LA.Matrix(A);if(!(b instanceof LA.Vector))b=new LA.Vector(b);
-  var N=numericMatrix(numericRows(A)),bn=new LA.Vector(b.values.map(realNumber)),d=LA.leastSquares(N,bn,options),normal=N.transpose().multiply(d.residualVector),normalResidual=normal.norm(),
-    ns=LA.nullSpace(N,options),minNormResidual=0;
+  var N=numericMatrix(numericRows(A)),bn=new LA.Vector(b.values.map(realNumber)),svdOpts=certifiedSvdOptions(options),d=LA.leastSquares(N,bn,svdOpts),normal=N.transpose().multiply(d.residualVector),normalResidual=normal.norm(),
+    ns=LA.nullSpace(N,svdOpts),minNormResidual=0;
   ns.vectors.forEach(function(v){minNormResidual=Math.max(minNormResidual,Math.abs(M.toNumber(v.dot(d.solution))));});
   return {solution:d.solution,residualVector:d.residualVector,residualNorm:d.residualNorm,normalEquationResidual:normalResidual,minNormOrthogonalityResidual:minNormResidual,rank:d.rank,method:"svd-minimum-norm-least-squares",
     toString:function(){return "x = "+d.solution.toString(10)+"; ||Ax-b|| = "+M.formatNumber(d.residualNorm,8)+"; ||A^T r|| = "+M.formatNumber(normalResidual,4);}};
 }
 function conditionReport(A,options){
-  if(!(A instanceof LA.Matrix))A=new LA.Matrix(A);var N=numericMatrix(numericRows(A)),d=LA.svd(N,options),cond=LA.conditionNumber(N,options),
+  if(!(A instanceof LA.Matrix))A=new LA.Matrix(A);var N=numericMatrix(numericRows(A)),svdOpts=certifiedSvdOptions(options),d=LA.svd(N,svdOpts),cond=LA.conditionNumber(N,svdOpts),
     reciprocal=Number.isFinite(cond)&&cond>0?1/cond:0,classification=!Number.isFinite(cond)?"singular / rank deficient":cond<1e3?"well-conditioned":cond<1e8?"moderately ill-conditioned":"severely ill-conditioned";
   return {rank:d.rank,singularValues:d.singularValues,conditionNumber:cond,reciprocalCondition:reciprocal,threshold:d.threshold,classification:classification,
     toString:function(){return "rank = "+d.rank+"; cond2 = "+(Number.isFinite(cond)?M.formatNumber(cond,8):"∞")+"; "+classification;}};
