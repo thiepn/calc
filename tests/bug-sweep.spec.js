@@ -125,6 +125,36 @@ test("U4 optimization and mathematical programming execute through the Calculate
   expect(errors).toEqual([]);
 });
 
+test("U5 advanced linear algebra executes through Calculate and Matrix workspace",async({page})=>{
+  const errors=await openApp(page);
+  expect(await page.evaluate(()=>window.CalcAdvancedLinearAlgebra&&window.CalcAdvancedLinearAlgebra.VERSION)).toBe("2.4.0-u5");
+  const input=page.locator("#expressionInput");
+
+  await input.fill("jordanv2(2,1,0|0,2,1|0,0,2)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("block sizes = [3]");
+
+  await input.fill("matrixfunc(4,0|0,9; sqrt)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toHaveText("[[2, 0], [0, 3]]");
+
+  await input.fill("inertia(2,0|0,-3)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("inertia = (1, 1, 0)");
+
+  await input.fill("condreport(1,0|0,0.001)");
+  await input.press("Enter");
+  await expect(page.locator("#exactResult")).toContainText("cond2 = 1000");
+
+  await page.locator('[data-view="matrix"]').click();
+  await expect(page.locator('[data-matrix-op="spectral"]')).toBeVisible();
+  await page.locator('[data-matrix-op="spectral"]').click();
+  await expect(page.locator("#matrixResult")).toContainText("Q");
+  await expect(page.locator("#matrixResult")).toContainText("D");
+
+  expect(errors).toEqual([]);
+});
+
 test("notebook read failure does not create replacement or recovery duplicates",async({page})=>{
   const errors=await openApp(page);
   const seeded=await page.evaluate(async()=>{
