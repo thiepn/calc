@@ -41,6 +41,7 @@ jobs:
           node --check multivariable.js
           node --check ode.js
           node --check optimization.js
+          node --check advanced-linear-algebra.js
           node --check calculus-worker.js
           node --check units.js
           node --check linear-algebra.js
@@ -63,6 +64,7 @@ jobs:
           node --check tests/multivariable.js
           node --check tests/ode.js
           node --check tests/optimization.js
+          node --check tests/advanced-linear-algebra.js
           node --check tests/units.js
           node --check tests/linear-algebra.js
           node --check tests/statistics.js
@@ -100,6 +102,8 @@ jobs:
         run: node tests/units.js
       - name: Linear Algebra V2 certification
         run: node tests/linear-algebra.js
+      - name: Advanced Linear Algebra U5 certification
+        run: node tests/advanced-linear-algebra.js
       - name: Probability Statistics and Data V2 certification
         run: node tests/statistics.js
       - name: Graphing V2 certification
